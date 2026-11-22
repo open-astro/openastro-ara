@@ -165,6 +165,21 @@ void main() {
     expect(find.textContaining('confirm by eye'), findsNothing);
   });
 
+  // #2173 — a mount whose driver says its Find Home is a real sensor search:
+  // Home clears the warning by itself, after a power loss too.
+  testWidgets('Simple: a sensor-search mount says Home clears the warning by itself (#2173)', (tester) async {
+    final en = lookupAppLocalizations(const Locale('en'));
+    final w = _unverified(atHome: false);
+    w['capabilities'] = {
+      ...w['capabilities'] as Map<String, dynamic>,
+      'can_find_home': true,
+      'home_is_sensor_search': true,
+    };
+    await _pump(tester, w);
+    expect(find.text(en.mountPositionSensorSearchPressHome), findsOneWidget);
+    expect(find.textContaining('confirm by eye'), findsNothing);
+  });
+
   testWidgets('an unverified mount off Home is told to run its zero search, with no confirm (#2070)', (tester) async {
     await _pump(tester, _unverified(atHome: false));
     expect(find.byKey(const Key('simple-mount-run-zero-search')), findsOneWidget);

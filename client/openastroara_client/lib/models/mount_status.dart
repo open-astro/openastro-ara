@@ -14,6 +14,12 @@ class MountCapabilities {
   final bool canFindHome;
   final bool canMoveAxis;
 
+  /// #2173 — the driver says its Find Home is a real home-sensor search
+  /// (AlpacaBridge's `findhomeissensorsearch`, read once per connect): a Home
+  /// seen to run that ends at Home then clears an unverified position by
+  /// itself, for every reason. False when the daemon or driver does not say.
+  final bool homeIsSensorSearch;
+
   /// The drive rates the mount offers, by their ASCOM names ("Sidereal",
   /// "Lunar", "Solar", "King"); empty when it didn't say (#1649).
   final List<String> trackingRates;
@@ -46,6 +52,7 @@ class MountCapabilities {
     required this.canSetTracking,
     required this.canFindHome,
     this.canMoveAxis = false,
+    this.homeIsSensorSearch = false,
     this.trackingRates = const [],
     this.axisRatesDegPerSec = const [],
     this.axisRateBands = const [],
@@ -71,6 +78,7 @@ class MountCapabilities {
         canSetTracking: json['can_set_tracking'] as bool? ?? false,
         canFindHome: json['can_find_home'] as bool? ?? false,
         canMoveAxis: json['can_move_axis'] as bool? ?? false,
+        homeIsSensorSearch: json['home_is_sensor_search'] as bool? ?? false,
         trackingRates: [
           for (final r in json['supported_sidereal_rates'] as List<dynamic>? ?? const [])
             if (r is String) r,
@@ -117,6 +125,7 @@ class MountCapabilities {
           other.canSetTracking == canSetTracking &&
           other.canFindHome == canFindHome &&
           other.canMoveAxis == canMoveAxis &&
+          other.homeIsSensorSearch == homeIsSensorSearch &&
           _listEq(other.trackingRates, trackingRates) &&
           _listEq(other.axisRatesDegPerSec, axisRatesDegPerSec) &&
           _listEq(other.axisRateBands, axisRateBands) &&
@@ -132,7 +141,8 @@ class MountCapabilities {
 
   @override
   int get hashCode => Object.hash(canSlew, canSync, canPark, canUnpark,
-      canSetTracking, canFindHome, canMoveAxis, Object.hashAll(trackingRates),
+      canSetTracking, canFindHome, canMoveAxis, homeIsSensorSearch,
+      Object.hashAll(trackingRates),
       Object.hashAll(axisRatesDegPerSec),
       Object.hashAll(axisRateBands), specs);
 }

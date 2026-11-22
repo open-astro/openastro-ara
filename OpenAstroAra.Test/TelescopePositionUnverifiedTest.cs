@@ -149,6 +149,7 @@ namespace OpenAstroAra.Test {
 
             Assert.That(refusal.Cause, Is.EqualTo(RefusalCatalog.MountPositionUnverified));
             Assert.That(refusal.Parameters["position_unverified_reason"], Is.EqualTo(MountPoseTrust.AtHomeOnConnect));
+            Assert.That(refusal.Parameters["home_is_sensor_search"], Is.EqualTo(false), "always sent (#2173)");
             await Task.Delay(100);
             Assert.That(Current.Slews, Is.Zero);
         }
@@ -340,6 +341,184 @@ namespace OpenAstroAra.Test {
             await Task.Delay(400);
 
             Assert.That(Runtime(svc)!.PositionUnverifiedReason, Is.EqualTo(MountPoseTrust.PoseJumpInSession));
+        }
+
+        // #2173 — the same pad-then-Home from a false zero, on a mount whose driver says its FindHome is a real home-sensor
+        // search (AlpacaBridge's capability): the search finds the physical Home whatever the model said, so the Home seen
+        // to run that ends at Home trusts the position by itself, with no eye check.
+        private async Task<TelescopeService> SensorSearchPadThenHomeAsync(TelescopeService svc) {
+            await svc.MoveAxisAsync(0, 1.0, null, CancellationToken.None); // the pad nudge
+            Current.ReportsAtHome = false;
+            Current.Dec = 60;
+            await svc.MoveAxisAsync(0, 0, null, CancellationToken.None);
+            await Task.Delay(100);
+            Current.IsSlewing = true; // the sensor search runs
+            await svc.FindHomeAsync(null, CancellationToken.None);
+            await WaitForAsync(() => Current.Homes == 1, "the Home");
+            await Task.Delay(100);
+            return svc;
+        }
+
+        private void LandsAtHome() {
+            Current.Dec = 90.71;
+            Current.ReportsAtHome = true;
+            Current.IsSlewing = false;
+        }
+
+        [Test]
+        public async Task A_sensor_search_Home_after_the_pad_from_a_false_zero_trusts_the_position() {
+            using var svc = await ConnectedAtFalseZeroAsync(also: f => f.SaysHomeIsSensorSearch());
+            Assert.That((await svc.GetAsync(CancellationToken.None))!.Capabilities!.HomeIsSensorSearch, Is.True);
+            await SensorSearchPadThenHomeAsync(svc);
+            LandsAtHome();
+
+            await WaitForAsync(() => Runtime(svc)?.PositionUnverified == false, "the position trusted after the sensor search");
+            await svc.SlewAsync(new SlewRequestDto(5.0, 30.0), null, CancellationToken.None);
+            await WaitForAsync(() => Current.Slews == 1, "a GoTo goes again");
+        }
+
+        [Test]
+        public async Task A_sensor_search_Home_after_an_in_session_jump_trusts_the_position() {
+            _configure = f => { f.ReportsAtHome = false; f.Dec = 23.52; f.SaysHomeIsSensorSearch(); };
+            using var svc = Build();
+            await ConnectAsync(svc);
+            await WaitForAsync(() => Runtime(svc)?.DeclinationDegrees is 23.52, "a position");
+            svc.MarkPositionUnverified(MountPoseTrust.PoseJumpInSession);
+            await svc.MoveAxisAsync(1, 1.0, null, CancellationToken.None);
+            Current.Dec = 40;
+            await svc.MoveAxisAsync(1, 0, null, CancellationToken.None);
+
+            Current.IsSlewing = true;
+            await svc.FindHomeAsync(null, CancellationToken.None);
+            await WaitForAsync(() => Current.Homes == 1, "the Home");
+            await Task.Delay(100);
+            LandsAtHome();
+
+            await WaitForAsync(() => Runtime(svc)?.PositionUnverified == false, "the position trusted after the sensor search");
+        }
+
+        // #2173 — no start means no trust, even on a sensor-search mount (the HAE29C has ignored its search command over
+        // Wi-Fi): a Home that never leaves Home and moves clears nothing.
+        [Test]
+        public async Task A_sensor_search_Home_that_never_moves_clears_nothing() {
+            using var svc = await ConnectedAtFalseZeroAsync(also: f => f.SaysHomeIsSensorSearch());
+
+            await svc.FindHomeAsync(null, CancellationToken.None);
+            await WaitForAsync(() => Current.Homes == 1, "the Home");
+            await Task.Delay(400); // many watch polls at Home and still
+
+            Assert.That(Runtime(svc)!.PositionUnverifiedReason, Is.EqualTo(MountPoseTrust.AtHomeOnConnect));
+        }
+
+        // #2173 — a sensor-search mount whose reads fail in the middle of the search (it may have lost power and woken at a
+        // false zero): what was seen before the gap no longer counts, so the Home it reports after it is not trusted.
+        [Test]
+        public async Task A_sensor_search_Home_with_a_failed_read_mid_search_is_not_trusted() {
+            using var svc = await ConnectedAtFalseZeroAsync(also: f => f.SaysHomeIsSensorSearch());
+            await SensorSearchPadThenHomeAsync(svc);
+            Current.AtHomeReadFails = true;
+            await Task.Delay(100);
+            LandsAtHome();
+            Current.AtHomeReadFails = false;
+            await Task.Delay(400);
+
+            Assert.That(Runtime(svc)!.PositionUnverifiedReason, Is.EqualTo(MountPoseTrust.AtHomeOnConnect));
+        }
+
+        // #2173 — a FindHome that fails is no Home: on a sensor-search mount that lands at Home anyway, the reason stays.
+        [Test]
+        public async Task A_sensor_search_Home_whose_FindHome_fails_is_not_trusted() {
+            using var svc = await ConnectedAtFalseZeroAsync(also: f => {
+                f.SaysHomeIsSensorSearch();
+                f.FindHomeThrows = new ASCOM.DriverException("FindHome failed");
+            });
+            await SensorSearchPadThenHomeAsync(svc);
+            await Task.Delay(100);
+            LandsAtHome();
+            await Task.Delay(400);
+
+            Assert.That(Runtime(svc)!.PositionUnverifiedReason, Is.EqualTo(MountPoseTrust.AtHomeOnConnect));
+        }
+
+        // #2173 — a reconnect between the FindHome and the check voids the search: the watch ends, and the Home the old
+        // session's mount reports afterwards trusts nothing in the new session.
+        [Test]
+        public async Task A_reconnect_in_the_middle_of_a_sensor_search_Home_trusts_nothing() {
+            using var svc = await ConnectedAtFalseZeroAsync(also: f => f.SaysHomeIsSensorSearch());
+            await SensorSearchPadThenHomeAsync(svc);
+            var searching = Current;
+
+            _configure = f => { f.ReportsAtHome = true; f.Dec = 90.71; f.SaysHomeIsSensorSearch(); };
+            await svc.DisconnectAsync(null, CancellationToken.None);
+            await ConnectAsync(svc);
+            searching.Dec = 90.71; // the old session's search lands at Home after the reconnect
+            searching.ReportsAtHome = true;
+            searching.IsSlewing = false;
+            await Task.Delay(400);
+
+            Assert.That(Runtime(svc)!.PositionUnverifiedReason, Is.EqualTo(MountPoseTrust.AtHomeOnConnect));
+        }
+
+        // #2173 — a refusal on a sensor-search mount carries the capability and says Home clears it by itself.
+        [Test]
+        public async Task A_refusal_on_a_sensor_search_mount_says_Home_clears_it_by_itself() {
+            using var svc = await ConnectedAtFalseZeroAsync(also: f => f.SaysHomeIsSensorSearch());
+
+            var goTo = await RefusedAsync(() => svc.SlewAsync(new SlewRequestDto(5.0, 30.0), null, CancellationToken.None));
+
+            Assert.That(goTo.Parameters["home_is_sensor_search"], Is.EqualTo(true));
+            Assert.That(goTo.Message, Does.Contain("trusted again once the mount is seen to move"));
+            Assert.That(goTo.Message, Does.Not.Contain("confirm by eye"));
+        }
+
+        // #2173 — the capability read: listed (case-insensitive) and answered sensor_search true is a sensor search;
+        // anything else, a failed read included, is not (fail safe).
+        [Test]
+        public void The_sensor_search_capability_needs_the_action_listed_and_a_true_reply() {
+            using var listed = new FakeTelescopeDevice();
+            listed.SaysHomeIsSensorSearch();
+            listed.Actions[0] = "FindHomeIsSensorSearch";
+            Assert.That(TelescopeService.ReadHomeIsSensorSearch(listed), Is.True);
+
+            using var unlisted = new FakeTelescopeDevice { ActionResponder = (_, _) => "{\"sensor_search\": true}" };
+            Assert.That(TelescopeService.ReadHomeIsSensorSearch(unlisted), Is.False, "the action is not listed");
+            Assert.That(unlisted.ActionCalls, Is.Empty);
+        }
+
+        [Test]
+        public void A_failed_supported_actions_read_means_not_a_sensor_search() {
+            using var mount = new FakeTelescopeDevice { SupportedActionsReadFails = true };
+            mount.SaysHomeIsSensorSearch();
+            Assert.That(TelescopeService.ReadHomeIsSensorSearch(mount), Is.False);
+        }
+
+        [Test]
+        public void A_not_connected_action_reply_means_not_a_sensor_search() {
+            using var mount = new FakeTelescopeDevice();
+            mount.SaysHomeIsSensorSearch();
+            mount.ActionResponder = (_, _) => throw new ASCOM.NotConnectedException("not connected");
+            Assert.That(TelescopeService.ReadHomeIsSensorSearch(mount), Is.False);
+        }
+
+        [Test]
+        public void The_sensor_search_reply_true_is_a_sensor_search() =>
+            Assert.That(TelescopeService.ParseHomeIsSensorSearchReply("{\"sensor_search\": true, \"method\": \"zero_sensor_search\", \"model\": \"0036\"}"), Is.True);
+
+        [Test]
+        public void The_sensor_search_reply_false_is_not_a_sensor_search() =>
+            Assert.That(TelescopeService.ParseHomeIsSensorSearchReply("{\"sensor_search\": false, \"method\": \"goto_stored_home\", \"model\": \"\"}"), Is.False);
+
+        [Test]
+        public void A_malformed_sensor_search_reply_is_not_a_sensor_search() {
+            Assert.That(TelescopeService.ParseHomeIsSensorSearchReply("{\"sensor_search\": tru"), Is.False);
+            Assert.That(TelescopeService.ParseHomeIsSensorSearchReply("true"), Is.False, "not an object");
+            Assert.That(TelescopeService.ParseHomeIsSensorSearchReply(""), Is.False);
+        }
+
+        [Test]
+        public void A_sensor_search_reply_without_the_field_is_not_a_sensor_search() {
+            Assert.That(TelescopeService.ParseHomeIsSensorSearchReply("{\"method\": \"zero_sensor_search\", \"model\": \"0036\"}"), Is.False);
+            Assert.That(TelescopeService.ParseHomeIsSensorSearchReply("{\"sensor_search\": \"true\"}"), Is.False, "a string is not the literal");
         }
 
         // #2173 (Joey, 2026-11-21) — "If we drove it home, shouldn't it say: yes, I am home?" Polar alignment could not
@@ -769,6 +948,43 @@ namespace OpenAstroAra.Test {
 
             await Assert.ThrowsAsync<InvalidOperationException>(() => svc.ConfirmHomeAsync(CancellationToken.None));
             Assert.That(Runtime(svc)!.PositionUnverified, Is.True);
+        }
+
+        // #2173 — confirm-home on a sensor-search mount that does not report Home: the error names Home as clearing the
+        // flag by itself, not an eye check, even after a power loss.
+        [Test]
+        public async Task Confirm_home_off_home_on_a_sensor_search_mount_says_Home_clears_it_by_itself() {
+            using var svc = await ConnectedAtFalseZeroAsync(also: f => f.SaysHomeIsSensorSearch());
+            Current.ReportsAtHome = false;
+
+            var error = (await Assert.ThrowsAsync<InvalidOperationException>(() => svc.ConfirmHomeAsync(CancellationToken.None)))!;
+
+            Assert.That(error.Message, Does.Contain("trusted again once the mount is seen to move"));
+            Assert.That(error.Message, Does.Not.Contain("confirm by eye"));
+        }
+
+        // #2173 — the reverse: a mount whose driver does not say its Home is a sensor search keeps the eye check.
+        [Test]
+        public async Task Confirm_home_off_home_on_a_model_home_mount_asks_for_the_eye_check() {
+            using var svc = await ConnectedAtFalseZeroAsync();
+            Current.ReportsAtHome = false;
+
+            var error = (await Assert.ThrowsAsync<InvalidOperationException>(() => svc.ConfirmHomeAsync(CancellationToken.None)))!;
+
+            Assert.That(error.Message, Does.Contain("confirm by eye"));
+        }
+
+        // #2173 — a sequence GoTo refused on a sensor-search mount fails the instruction with words that name Home as
+        // clearing the flag by itself.
+        [Test]
+        public async Task A_sequence_goto_refused_on_a_sensor_search_mount_says_Home_clears_it_by_itself() {
+            using var svc = await ConnectedAtFalseZeroAsync(also: f => f.SaysHomeIsSensorSearch());
+
+            var failed = (await Assert.ThrowsAsync<SequenceEntityFailedException>(() => ((ITelescopeMediator)svc).SlewToCoordinatesAsync(Target, CancellationToken.None)))!;
+
+            Assert.That(failed.Message, Does.Contain("trusted again once the mount is seen to move"));
+            Assert.That(failed.Message, Does.Not.Contain("confirm by eye"));
+            Assert.That(Current.Slews, Is.Zero);
         }
 
         [Test]

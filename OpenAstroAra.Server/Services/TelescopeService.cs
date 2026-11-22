@@ -558,6 +558,7 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
             _ = Task.Run(async () => {
                 var sent = false;
                 PoseReading atSend = default;
+                long homeEpoch = 0;
                 var poseMove = BeginPoseMove(); // #2173 — the search's own motion, until it ends or is given up on
                 try {
                     using (dispatch) {
@@ -571,12 +572,13 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
                                 return;
                             }
                             atSend = canFindHome ? ReadPoseBestEffort(c) : default; // #2173 — where the search starts
+                            homeEpoch = SessionEpoch; // #2173 — a reconnect after this voids the search
                             SendMotion(motion, c, c.FindHome);
                             sent = true;
                         });
                     }
                     if (sent && canFindHome) {
-                        await TrustPoseAfterHomeSearchAsync(client, fence, atSend).ConfigureAwait(false);
+                        await TrustPoseAfterHomeSearchAsync(client, fence, homeEpoch, atSend).ConfigureAwait(false);
                     } else if (sent) {
                         // #2173 review — a Home on a mount that says it cannot find Home (sent only from a trusted
                         // position) whose call returned at once may still move: it stays Ara's own until the mount
@@ -1839,7 +1841,9 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
             MoveAxisRatesDegPerSec: [.. EndpointsOf(padBands)],
             MoveAxisRateBandsDegPerSec: BandDtosOf(padBands),
             // #1264 — the bridge's spec sheet rides the same once-per-connect read; null without one.
-            MountSpecs: MountSpecSheet.TryRead(c));
+            MountSpecs: MountSpecSheet.TryRead(c),
+            // #2173 — the same once-per-connect read: does the driver's FindHome search a home sensor?
+            HomeIsSensorSearch: ReadHomeIsSensorSearch(c));
     }
 
     /// <summary>#1971 — the connected mount's driver actions, or null when it is not connected.</summary>

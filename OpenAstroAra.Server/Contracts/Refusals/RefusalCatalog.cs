@@ -59,7 +59,7 @@ public static class RefusalCatalog {
     public static readonly RefusalCause EndNightInProgress = new("end-night-in-progress", 409, "End Night is already running");
 
     // Slice 2: a mount whose reported position is not trusted after a power loss (#2070).
-    public static readonly RefusalCause MountPositionUnverified = new("mount-position-unverified", 409, "The mount's position is unverified", "position_unverified_reason");
+    public static readonly RefusalCause MountPositionUnverified = new("mount-position-unverified", 409, "The mount's position is unverified", "position_unverified_reason", "home_is_sensor_search");
 
     // #2048 — Polar Align starts like NINA's: from where the user pointed the mount, never from a parked mount, and only
     // after the user confirmed the start and its RA turn direction (direction = the way the run would turn now).

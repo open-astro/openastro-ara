@@ -48,7 +48,7 @@ namespace OpenAstroAra.Test {
             new object[] { "below-horizon-limit", 409, new[] { "altitude_deg", "limit_deg" } },
             new object[] { "counterweight-limit", 409, new[] { "hour_angle_hours", "counterweight_angle_deg", "limit_deg" } },
             new object[] { "end-night-in-progress", 409, Array.Empty<string>() },
-            new object[] { "mount-position-unverified", 409, new[] { "position_unverified_reason" } },
+            new object[] { "mount-position-unverified", 409, new[] { "position_unverified_reason", "home_is_sensor_search" } },
             new object[] { "polar-align-mount-parked", 409, Array.Empty<string>() },
             new object[] { "polar-align-unconfirmed", 409, new[] { "direction" } },
             new object[] { "polar-align-sweep-limit", 409, new[] { "offset_deg", "limit_deg" } },
