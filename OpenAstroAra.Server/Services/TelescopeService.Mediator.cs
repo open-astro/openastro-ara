@@ -580,6 +580,7 @@ public sealed partial class TelescopeService : ITelescopeMediator {
         // however long a slew, park or Home runs, and the quiet window counts from its end. A GoTo's target Dec stays
         // its own after that too (a re-center after a resume that outlasts the window with no Slewing read).
         var poseMove = BeginPoseMove(gotoTargetDecDeg);
+        var arrived = false;
         try {
             // §42.2 — note the command before dispatch so the tracking watch's grace window is
             // armed by the time any refresh tick can observe the op's effect. Park/home end with
@@ -621,6 +622,7 @@ public sealed partial class TelescopeService : ITelescopeMediator {
                 PublishOpFault(client, EquipmentFaultKind.StallTimeout, msg);
                 throw new SequenceEntityFailedException(msg);
             }
+            arrived = true;
             return true;
         } catch (OperationCanceledException) when (ct.IsCancellationRequested) {
             throw; // genuine sequencer cancellation — propagate so the run aborts
@@ -638,7 +640,8 @@ public sealed partial class TelescopeService : ITelescopeMediator {
             PublishOpFault(client, EquipmentFaultKind.OpError, $"{op} failed: {ex.Message}");
             throw new SequenceEntityFailedException($"{op} failed: {ex.Message}", ex);
         } finally {
-            EndPoseMove(poseMove);
+            // #2173 review — a move that failed or timed out: a GoTo's target no longer explains a later Dec.
+            EndPoseMove(poseMove, arrived);
         }
     }
 

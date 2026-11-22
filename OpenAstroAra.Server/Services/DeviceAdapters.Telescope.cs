@@ -63,6 +63,9 @@ internal interface ITelescopeDevice : IDeviceAdapter {
     /// <summary>The driver's description (#2167): Polar Align keys its saved RA motor direction by it too, so another
     /// driver set up behind the same Alpaca device (same UniqueID, same bridge version) is tested again.</summary>
     string DriverInfo { get; }
+    /// <summary>The driver's device name (#2173 review): with DriverInfo and DriverVersion it tells whether FindHome is
+    /// the mount's home-sensor search (<see cref="TelescopeService.HomeIsSensorSearch"/>).</summary>
+    string Name { get; }
     bool CanMoveAxis(TelescopeAxis axis);
     IAxisRates AxisRates(TelescopeAxis axis);
     string Action(string name, string parameters);
@@ -128,6 +131,7 @@ internal sealed class AlpacaTelescopeDevice(AlpacaTelescope client) : ITelescope
     public double SiderealTime => client.SiderealTime;
     public string DriverVersion => client.DriverVersion;
     public string DriverInfo => client.DriverInfo;
+    public string Name => client.Name;
     public bool CanMoveAxis(TelescopeAxis axis) => client.CanMoveAxis(axis);
     public IAxisRates AxisRates(TelescopeAxis axis) => client.AxisRates(axis);
     public string Action(string name, string parameters) => client.Action(name, parameters);

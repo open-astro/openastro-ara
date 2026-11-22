@@ -28,8 +28,9 @@ namespace OpenAstroAra.Server.Services;
 // wherever it points, so every move that trusts the position model (GoTo, Park, polar alignment, the
 // flip, a sequence's Find Home) is refused until Home is confirmed. Sync, the pad, Stop, tracking and
 // Unpark stay allowed: the user must always be able to stop the mount and back it off. #2173 — so does
-// the user's Home (FindHome, the mount's home-sensor search): it is the way out, and a search that ends
-// with the mount reporting Home trusts the position again by itself.
+// the user's Home on a mount whose FindHome is known to be its home-sensor search (HomeIsSensorSearch): it is
+// the way out, and a search seen to run that ends with the mount reporting Home trusts the position again by
+// itself. Any other mount's Home drives by its model, so it stays refused, as before.
 public sealed partial class TelescopeService {
 
     // Under _gate. Internal for tests.
@@ -65,18 +66,23 @@ public sealed partial class TelescopeService {
     // once (bounded), as the #1124 equatorial-system read does: a GoTo right after a reconnect must not
     // slip through the window before the first refresh.
     private async Task<string?> PoseBlockReasonAsync(ITelescopeDevice client, CancellationToken ct) {
+        bool waiting;
         lock (_gate) {
-            if (PoseTrust.Observed || PoseTrust.Reason is not null) {
+            waiting = PoseTrust.Observed && PoseTrust.Reason is null && PoseTrust.PendingVerdict is not null;
+            if (!waiting && (PoseTrust.Observed || PoseTrust.Reason is not null)) {
                 return PoseTrust.BlockReason;
             }
         }
+        if (waiting) {
+            return await PoseBlockReasonOnceSettledAsync(ct).ConfigureAwait(false);
+        }
         // ReadPoseBestEffort never throws, so a task abandoned on a timeout needs no observer.
         var read = Task.Run(() => ReadPoseBestEffort(client), CancellationToken.None);
-        (bool AtHome, bool? Slewing, double? DecDeg) pose;
+        PoseReading pose;
         try {
             pose = await read.WaitAsync(PoseReadTimeout, ct).ConfigureAwait(false);
         } catch (TimeoutException) {
-            pose = (false, null, null);
+            pose = new(null, null, null);
         }
         var flagged = false;
         string? reason;
@@ -85,7 +91,9 @@ public sealed partial class TelescopeService {
                 return MountPoseTrust.NotReadYet;
             }
             if (!PoseTrust.Observed && pose.Slewing is bool slewing) {
-                flagged = PoseTrust.Observe(pose.AtHome, slewing, pose.DecDeg, PoseClock.GetUtcNow());
+                // A failed AtHome reads as not at Home, as the refresh tick's ReadRuntime reads it (a driver may not
+                // implement it at all); the placeholder (0, 0) is already no Dec (ReadPoseBestEffort).
+                flagged = PoseTrust.Observe(pose.AtHome ?? false, slewing, pose.DecDeg, PoseClock.GetUtcNow());
             }
             reason = PoseTrust.BlockReason;
         }
@@ -95,16 +103,48 @@ public sealed partial class TelescopeService {
         return reason;
     }
 
+    // #2173 review — what one best-effort read of the mount answered; null = that read failed. A failed AtHome stays
+    // unknown here: the Home watch must not take it as "away from Home".
+    private readonly record struct PoseReading(bool? AtHome, bool? Slewing, double? DecDeg);
+
+    // How long a guard waits for a verdict one reading suggested to be settled by the next readings (#2173 review).
+    internal TimeSpan PendingVerdictWait { get; init; } = TimeSpan.FromSeconds(6);
+
+    // #2173 review — one reading suggested a verdict and the next has not agreed yet: a GoTo or park now would drive by a
+    // model that may just have reset. Wait (bounded) for the next readings to settle it, then answer; still pending at the
+    // bound answers not_read_yet. Each refresh tick settles it, so a healthy link answers within about the confirm gap.
+    private async Task<string?> PoseBlockReasonOnceSettledAsync(CancellationToken ct) {
+        RefreshCacheOnce();
+        var deadline = DateTime.UtcNow + PendingVerdictWait;
+        while (true) {
+            lock (_gate) {
+                if (PoseTrust.Reason is not null || PoseTrust.PendingVerdict is null || DateTime.UtcNow >= deadline) {
+                    return PoseTrust.BlockReason;
+                }
+            }
+            await Task.Delay(TimeSpan.FromMilliseconds(50), ct).ConfigureAwait(false);
+        }
+    }
+
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
-        Justification = "Per-field read boundary: a failed Slewing or Dec read leaves the pose undecided (null), a failed AtHome reads as not at home, as ReadRuntime does.")]
-    private static (bool AtHome, bool? Slewing, double? DecDeg) ReadPoseBestEffort(ITelescopeDevice c) {
+        Justification = "Per-field read boundary: a failed Slewing, Dec or AtHome read leaves that field unknown (null); the callers decide what an unknown means.")]
+    private static PoseReading ReadPoseBestEffort(ITelescopeDevice c) {
         bool? slewing;
         try { slewing = c.Slewing; } catch (Exception) { slewing = null; }
         double? dec;
         try { dec = c.Declination; } catch (Exception) { dec = null; }
-        bool atHome;
-        try { atHome = c.AtHome; } catch (Exception) { atHome = false; }
-        return (atHome, slewing, dec);
+        bool? atHome;
+        try { atHome = c.AtHome; } catch (Exception) { atHome = null; }
+        // #2173 review — an exact (0, 0) is AlpacaBridge's placeholder after a failed status poll, not a position, as the
+        // refresh tick's reading treats it (ObservePoseLocked): no Dec. RA is read only for a Dec of exactly 0.
+        if (dec is 0.0) {
+            double? ra;
+            try { ra = c.RightAscension; } catch (Exception) { ra = null; }
+            if (ra is 0.0) {
+                dec = null;
+            }
+        }
+        return new(atHome, slewing, dec);
     }
 
     // An Ara axis move started, renewed or stopped: it explains the position changes it makes.
@@ -128,27 +168,127 @@ public sealed partial class TelescopeService {
         }
     }
 
-    private void EndPoseMove(int generation) {
+    // #2173 review — a REST GoTo that was dropped or failed: its target explains no later Dec.
+    private void ClearPoseGotoTarget() {
         lock (_gate) {
-            PoseTrust.EndCommandedMove(generation, PoseClock.GetUtcNow());
+            PoseTrust.ClearGotoTarget();
         }
+    }
+
+    // arrived false: the move failed, was refused or was given up on, so a GoTo's target explains nothing after it.
+    private void EndPoseMove(int generation, bool arrived) {
+        lock (_gate) {
+            PoseTrust.EndCommandedMove(generation, PoseClock.GetUtcNow(), arrived);
+        }
+    }
+
+    // Test knob: how long a REST park or a model Home is held as Ara's own move after its call returns (#2173 review).
+    internal TimeSpan MoveSettleTimeout { get; init; } = TimeSpan.FromMinutes(5);
+
+    /// <summary>#2173 review — many drivers return from Park (or a model Home) at once, and the mount then moves for a
+    /// minute or more. Over a slow link that drops the Slewing reads, that move would outlast the quiet window and land
+    /// as a jump. So the move stays Ara's own until the mount reports <paramref name="arrived"/> or answers that it is
+    /// not slewing, a stop lands after it, the mount reconnects, or <see cref="MoveSettleTimeout"/> passes.</summary>
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Background hold boundary: a failed read is a poll that did not see the end; nothing escapes the fire-and-forget task.")]
+    private async Task HoldPoseMoveUntilSettledAsync(ITelescopeDevice client, long fence, Func<ITelescopeDevice, bool> arrived) {
+        var deadline = DateTime.UtcNow + MoveSettleTimeout;
+        try {
+            while (DateTime.UtcNow < deadline) {
+                lock (_gate) {
+                    if (!_lifecycle.IsLive(client)) {
+                        return;
+                    }
+                }
+                if (AbortedSince(fence)) {
+                    return;
+                }
+                bool done;
+                try {
+                    done = arrived(client) || ReadPoseBestEffort(client).Slewing == false;
+                } catch (Exception) {
+                    done = false; // a read that failed: the move may still run
+                }
+                if (done) {
+                    return;
+                }
+                await Task.Delay(HomeSearchPollInterval, CancellationToken.None).ConfigureAwait(false);
+            }
+        } catch (Exception ex) {
+            LogMoveSettleWatchFailed(ex);
+        }
+    }
+
+    /// <summary>#2173 review — true when the mount's FindHome is known to be its home-sensor search, so Home is safe from
+    /// an unverified position and a search that ends at Home may trust it: only the iOptron HAE29C on AlpacaBridge
+    /// 6.0.0~beta3 or later (open-astro/AlpacaBridge#2420 runs <c>:MSH#</c> for FindHome on that model, and #2472 keeps a
+    /// search that never moved from reading as Home). Every other mount's Home (other iOptron models, ZWO AM, OnStep,
+    /// Sky-Watcher, an older AlpacaBridge sending <c>:MH#</c>) goes to Home by its position model, which may be wrong.</summary>
+    internal static bool HomeIsSensorSearch(string? name, string? driverInfo, string? driverVersion) =>
+        name is not null && name.Contains("HAE29C", StringComparison.OrdinalIgnoreCase)
+        && driverInfo is not null && driverInfo.StartsWith("AlpacaCore iOptron Driver", StringComparison.Ordinal)
+        && AlpacaBridgeHasZeroSearchLanding(driverVersion);
+
+    // AlpacaBridge versions are X.Y.Z or X.Y.Z~betaN (its VERSION file); #2472 is in 6.0.0~beta3 and every later one.
+    private static bool AlpacaBridgeHasZeroSearchLanding(string? version) {
+        if (version is null) {
+            return false;
+        }
+        var m = System.Text.RegularExpressions.Regex.Match(version.Trim(), @"^(\d+)\.(\d+)\.(\d+)(?:~beta(\d+))?$",
+            System.Text.RegularExpressions.RegexOptions.CultureInvariant, TimeSpan.FromSeconds(1));
+        if (!m.Success
+                || !int.TryParse(m.Groups[1].Value, NumberStyles.None, CultureInfo.InvariantCulture, out var major)
+                || !int.TryParse(m.Groups[2].Value, NumberStyles.None, CultureInfo.InvariantCulture, out var minor)
+                || !int.TryParse(m.Groups[3].Value, NumberStyles.None, CultureInfo.InvariantCulture, out var patch)) {
+            return false;
+        }
+        if (major != 6 || minor != 0 || patch != 0) {
+            return major > 6 || (major == 6 && (minor > 0 || patch > 0));
+        }
+        return !m.Groups[4].Success
+            || (int.TryParse(m.Groups[4].Value, NumberStyles.None, CultureInfo.InvariantCulture, out var beta) && beta >= 3);
+    }
+
+    // Under _gate: what the last read of the driver's identity said (the connect's capability pass, or a Home's own read).
+    private bool _homeIsSensorSearch;
+
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Per-field read boundary: a driver whose Name, DriverInfo or DriverVersion read fails is not known to run a sensor search.")]
+    private bool ReadHomeIsSensorSearch(ITelescopeDevice c) {
+        bool sensor;
+        try {
+            sensor = HomeIsSensorSearch(c.Name, c.DriverInfo, c.DriverVersion);
+        } catch (Exception) {
+            sensor = false;
+        }
+        lock (_gate) {
+            if (_lifecycle.IsLive(c)) {
+                _homeIsSensorSearch = sensor;
+            }
+        }
+        return sensor;
     }
 
     // Test knobs: how often and how long the user's Home is watched for its end (#2173).
     internal TimeSpan HomeSearchPollInterval { get; init; } = TimeSpan.FromSeconds(1);
     internal TimeSpan HomeSearchTimeout { get; init; } = TimeSpan.FromMinutes(5);
 
-    /// <summary>#2173 — the user's Home (FindHome) was sent. A home-sensor search that ends with the mount still and
-    /// reporting Home, on two polls in a row, trusts the position again with no eye check: if Ara drove it home, it
-    /// is home. Only a search seen away from Home (<paramref name="leftHome"/>: the mount did not report Home when it was
-    /// sent, or stopped reporting it while it ran) counts: AlpacaBridge's HAE29C search clears AtHome until it lands
-    /// (AlpacaBridge#2420), while a mount with no sensor search sent Home at its false zero goes nowhere and reports Home
-    /// throughout. Nothing is cleared when the mount reconnects, a stop lands after the Home (<paramref name="fence"/>), or
-    /// the search does not end at Home within <see cref="HomeSearchTimeout"/>.</summary>
+    /// <summary>#2173 — the user's Home (FindHome) was sent on a mount whose Home is its home-sensor search
+    /// (<see cref="HomeIsSensorSearch"/>). A search seen to run that ends with the mount still and reporting Home, on two
+    /// polls in a row, trusts the position again with no eye check: if Ara drove it home, it is home. #2173 review — "seen
+    /// to run" means, since the last poll that could not be read: one poll answered AtHome false with a real Dec (not
+    /// AlpacaBridge's (0, 0) placeholder), and one answered Slewing true or the Dec moved more than
+    /// <see cref="MountPoseTrust.PoseJumpDeg"/>. A failed AtHome is never "away from Home", and any poll that could not be
+    /// read (the mount may have lost power and woken at a false zero in that gap) wipes what was seen before it.
+    /// <paramref name="atSend"/> is the read just before FindHome went out. Nothing is cleared when the mount reconnects,
+    /// a stop lands after the Home (<paramref name="fence"/>), or the search does not end at Home within
+    /// <see cref="HomeSearchTimeout"/>.</summary>
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Background watch boundary: a failed read is a poll that did not see Home; nothing escapes the fire-and-forget task.")]
-    private async Task TrustPoseAfterHomeSearchAsync(ITelescopeDevice client, long fence, bool leftHome) {
+    private async Task TrustPoseAfterHomeSearchAsync(ITelescopeDevice client, long fence, PoseReading atSend) {
         var deadline = DateTime.UtcNow + HomeSearchTimeout;
+        var search = new HomeSearchEvidence();
+        search.Add(atSend);
         var atHomePolls = 0;
         try {
             while (DateTime.UtcNow < deadline) {
@@ -163,13 +303,13 @@ public sealed partial class TelescopeService {
                     return;
                 }
                 var pose = ReadPoseBestEffort(client);
-                leftHome |= !pose.AtHome;
+                search.Add(pose);
                 atHomePolls = pose is { AtHome: true, Slewing: false, DecDeg: double } ? atHomePolls + 1 : 0;
                 if (atHomePolls < 2) {
                     continue;
                 }
-                if (!leftHome) {
-                    LogHomeSearchNotTrusted("the mount reported Home all along, so no search was seen; confirm Home by eye");
+                if (!search.Seen) {
+                    LogHomeSearchNotTrusted("no search was seen leaving Home and moving since the last poll the mount answered; confirm Home by eye");
                     return;
                 }
                 bool cleared;
@@ -189,6 +329,32 @@ public sealed partial class TelescopeService {
             LogHomeSearchTimedOut(HomeSearchTimeout.TotalSeconds);
         } catch (Exception ex) {
             LogHomeSearchWatchFailed(ex);
+        }
+    }
+
+    // #2173 review — what the Home watch has seen of a search since the last poll that could not be read.
+    private sealed class HomeSearchEvidence {
+        private bool _leftHome;
+        private bool _moved;
+        private double _decLow = double.PositiveInfinity;
+        private double _decHigh = double.NegativeInfinity;
+
+        public bool Seen => _leftHome && _moved;
+
+        public void Add(PoseReading pose) {
+            if (pose.AtHome is not bool atHome || pose.Slewing is not bool slewing || pose.DecDeg is not double raw
+                    || MountPoseTrust.FoldDec(raw) is not double dec) {
+                // A gap: the mount may have reset in it and woken reporting Home wherever it points.
+                _leftHome = false;
+                _moved = false;
+                _decLow = double.PositiveInfinity;
+                _decHigh = double.NegativeInfinity;
+                return;
+            }
+            _leftHome |= !atHome;
+            _decLow = Math.Min(_decLow, dec);
+            _decHigh = Math.Max(_decHigh, dec);
+            _moved |= slewing || _decHigh - _decLow > MountPoseTrust.PoseJumpDeg;
         }
     }
 
@@ -219,23 +385,29 @@ public sealed partial class TelescopeService {
     }
 
     /// <summary>The refusal a REST move answers while the position is unverified (409, ADR 0022).</summary>
-    internal static RefusalException PositionUnverifiedRefusal(string reason) =>
-        new(RefusalCatalog.MountPositionUnverified, PositionUnverifiedDetail(reason),
+    /// <param name="homeIsSensorSearch">#2173 review — the mount's Home is its home-sensor search
+    /// (<see cref="HomeIsSensorSearch"/>): Home in Ara is then the way out; otherwise the hand controller is.</param>
+    internal static RefusalException PositionUnverifiedRefusal(string reason, bool homeIsSensorSearch = false) =>
+        new(RefusalCatalog.MountPositionUnverified, PositionUnverifiedDetail(reason, homeIsSensorSearch),
             new Dictionary<string, object?> { ["position_unverified_reason"] = reason });
 
-    internal static string PositionUnverifiedDetail(string reason) {
-        const string Fix = " The safe way out is Home: it runs the mount's own home-sensor search, and the position is trusted again once the mount reports Home."
-            + " You can also run that search from the mount's hand controller or app, then confirm Home."
-            + " GoTo, Park and polar alignment are blocked until then; Home, Stop, the direction pad and tracking still work.";
+    internal static string PositionUnverifiedDetail(string reason, bool homeIsSensorSearch = false) {
+        var fix = homeIsSensorSearch
+            ? " The safe way out is Home: it runs the mount's own home-sensor search, and the position is trusted again once the mount reports Home."
+                + " You can also run that search from the mount's hand controller or app, then confirm Home."
+                + " GoTo, Park and polar alignment are blocked until then; Home, Stop, the direction pad and tracking still work."
+            : " Run the mount's zero (home-sensor) search from its hand controller or app, then confirm Home."
+                + " GoTo, Park, Home and polar alignment are blocked until then: this mount's Home goes by its position model, which may be wrong."
+                + " Stop, the direction pad and tracking still work.";
         return reason switch {
-            MountPoseTrust.NotReadYet => "The mount's position has not been read since it connected; try again in a few seconds.",
-            MountPoseTrust.AtHomeOnConnect => "Mount position unverified: the mount reported Home as soon as it connected, which a mount without absolute encoders also does after a power loss wherever it points." + Fix,
+            MountPoseTrust.NotReadYet => "The mount's position is not confirmed yet: it was just connected, or a reading is being checked against the next one; try again in a few seconds.",
+            MountPoseTrust.AtHomeOnConnect => "Mount position unverified: the mount reported Home as soon as it connected, which a mount without absolute encoders also does after a power loss wherever it points." + fix,
             MountPoseTrust.PoseJumpOnReconnect => string.Create(CultureInfo.InvariantCulture,
-                $"Mount position unverified: its declination moved more than {MountPoseTrust.PoseJumpDeg:0}° while it was disconnected, as after a power loss.") + Fix,
-            MountPoseTrust.AtHomeWithoutCommand => "Mount position unverified: it started reporting Home with no move commanded, as after a power blip." + Fix,
-            MountPoseTrust.StopUnconfirmed => "Mount position unverified: Ara could not confirm that the mount stopped after polar alignment moved it, or the mount reconnected while polar alignment ran, so it may have moved on." + Fix,
+                $"Mount position unverified: its declination moved more than {MountPoseTrust.PoseJumpDeg:0}° while it was disconnected, as after a power loss.") + fix,
+            MountPoseTrust.AtHomeWithoutCommand => "Mount position unverified: it started reporting Home with no move commanded, as after a power blip." + fix,
+            MountPoseTrust.StopUnconfirmed => "Mount position unverified: Ara could not confirm that the mount stopped after polar alignment moved it, or the mount reconnected while polar alignment ran, so it may have moved on." + fix,
             _ => string.Create(CultureInfo.InvariantCulture,
-                $"Mount position unverified: its declination jumped more than {MountPoseTrust.PoseJumpDeg:0}° with no move commanded, as after a power blip.") + Fix,
+                $"Mount position unverified: its declination jumped more than {MountPoseTrust.PoseJumpDeg:0}° with no move commanded, as after a power blip.") + fix,
         };
     }
 
@@ -243,7 +415,7 @@ public sealed partial class TelescopeService {
     private async Task ThrowIfPoseUnverifiedAsync(ITelescopeDevice client, string op, CancellationToken ct) {
         if (await PoseBlockReasonAsync(client, ct).ConfigureAwait(false) is { } reason) {
             LogMoveRefusedUnverified(op, reason);
-            throw PositionUnverifiedRefusal(reason);
+            throw PositionUnverifiedRefusal(reason, HomeIsSensorSearchKnown);
         }
     }
 
@@ -255,7 +427,7 @@ public sealed partial class TelescopeService {
             bool stopTrackingOnRefusal = false) {
         if (await PoseBlockReasonAsync(client, ct).ConfigureAwait(false) is { } reason) {
             LogMoveRefusedUnverified(op, reason);
-            var detail = PositionUnverifiedDetail(reason);
+            var detail = PositionUnverifiedDetail(reason, HomeIsSensorSearchKnown);
             if (stopTrackingOnRefusal) {
                 var stopped = false;
                 try {
@@ -267,6 +439,15 @@ public sealed partial class TelescopeService {
                 detail = (stopped ? "The mount was NOT parked; tracking was stopped instead. " : "The mount was NOT parked, and stopping tracking failed. ") + detail;
             }
             throw new SequenceEntityFailedException(detail);
+        }
+    }
+
+    // What the last identity read said (the refusals' wording only; Home itself reads it fresh).
+    private bool HomeIsSensorSearchKnown {
+        get {
+            lock (_gate) {
+                return _homeIsSensorSearch;
+            }
         }
     }
 
@@ -282,15 +463,16 @@ public sealed partial class TelescopeService {
 
     public async Task ConfirmHomeAsync(CancellationToken ct) {
         var client = RequireConnectedClient();
-        (bool AtHome, bool? Slewing, double? DecDeg) pose;
+        PoseReading pose;
         try {
             pose = await Task.Run(() => ReadPoseBestEffort(client), CancellationToken.None).WaitAsync(PoseReadTimeout, ct).ConfigureAwait(false);
         } catch (TimeoutException) {
             throw new InvalidOperationException("the mount did not answer; Home was not confirmed");
         }
-        if (!pose.AtHome || pose.Slewing != false) {
-            throw new InvalidOperationException(
-                "the mount does not report that it is at Home, so Home cannot be confirmed: run the mount's zero (home sensor) search from its hand controller or app, then confirm");
+        if (pose.AtHome != true || pose.Slewing != false) {
+            throw new InvalidOperationException(HomeIsSensorSearchKnown
+                ? "the mount does not report that it is at Home, so Home cannot be confirmed: press Home to run the mount's home-sensor search (the position is trusted again once it ends at Home), or run that search from its hand controller or app, then confirm"
+                : "the mount does not report that it is at Home, so Home cannot be confirmed: run the mount's zero (home sensor) search from its hand controller or app, then confirm");
         }
         bool cleared;
         string? device;
@@ -323,6 +505,9 @@ public sealed partial class TelescopeService {
 
     [LoggerMessage(Level = LogLevel.Information, Message = "telescope.findhome: the position was not trusted from this Home (the mount did not report Home and still within {Seconds:0} s) (#2173)")]
     private partial void LogHomeSearchTimedOut(double seconds);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "telescope: watching a park or Home for its end failed (#2173)")]
+    private partial void LogMoveSettleWatchFailed(Exception exception);
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "telescope.findhome: watching the Home search for its end failed (#2173)")]
     private partial void LogHomeSearchWatchFailed(Exception exception);

@@ -225,7 +225,9 @@ class _MountBody extends ConsumerWidget {
               ),
             // Home slews to the mount's homing switch — disabled while parked (must
             // unpark first) or busy. Shown only when the mount supports FindHome.
-            // #2173 — on while the position is unverified: it is the way out.
+            // #2173 — on while the position is unverified: on a mount whose Home is
+            // its home-sensor search it is the way out; on any other the rig refuses
+            // it with the hand controller's search as the way out (shown as the error).
             if (caps?.canFindHome ?? false)
               OutlinedButton(
                 key: const Key('mount_find_home'),

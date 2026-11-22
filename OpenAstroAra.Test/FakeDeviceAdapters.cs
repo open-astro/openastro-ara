@@ -352,7 +352,17 @@ namespace OpenAstroAra.Test {
         public DriveRate TrackingRate { get => DriveRate.Sidereal; set { } }
         public bool Tracking { get { ThrowIfLatched(); return TrackingOn; } set => TrackingOn = value; }
         public bool AtPark { get { ThrowIfLatched(); return ReportsArrival && _atPark; } }
-        public bool AtHome { get { ThrowIfLatched(); return ReportsAtHome || (ReportsArrival && _atHome); } }
+        public bool AtHome {
+            get {
+                ThrowIfLatched();
+                if (AtHomeReadFails) {
+                    throw new InvalidOperationException("AtHome read timed out");
+                }
+                return ReportsAtHome || (ReportsArrival && _atHome);
+            }
+        }
+        /// <summary>#2173 review — the AtHome read throws (a slow link, or a mount that lost power), while the others answer.</summary>
+        public volatile bool AtHomeReadFails;
         // #2071 — opt-in: Park and FindHome report arriving, so a sequencer park or home completes.
         public volatile bool ReportsArrival;
         private volatile bool _atPark, _atHome;
@@ -381,6 +391,8 @@ namespace OpenAstroAra.Test {
         public double SiderealTime => 0.0;
         public string DriverVersion { get; set; } = string.Empty;
         public string DriverInfo { get; set; } = string.Empty;
+        /// <summary>#2173 review — the driver's Name (with DriverInfo and DriverVersion: whether Home is a sensor search).</summary>
+        public string Name { get; set; } = string.Empty;
         public bool CanMoveAxis(TelescopeAxis axis) => true;
         public IAxisRates AxisRates(TelescopeAxis axis) => new FakeAxisRates();
         // The driver's actions: set the list before the connect reads it; ActionResponder answers each

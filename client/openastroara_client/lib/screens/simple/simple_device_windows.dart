@@ -1347,8 +1347,9 @@ class _SimpleMountWindowState extends ConsumerState<SimpleMountWindow> {
                 ref.watch(simpleMountHomeProvider) ||
                 (m.isBusy && !ref.watch(simplePadMovingProvider)),
             canHome: caps?.canFindHome ?? false,
-            // #2173 — Home (the mount's home-sensor search) stays on while the
-            // position is unverified: it is the way out.
+            // #2173 — Home stays on while the position is unverified: where it is
+            // the mount's home-sensor search it is the way out; elsewhere the rig
+            // refuses it and says to use the hand controller's search.
             onHome: m.parked || m.isBusy
                 ? null
                 : () => planRunning

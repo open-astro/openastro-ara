@@ -218,6 +218,7 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
         _canMoveSecondaryAxis = null;
         _driverVersion = null;
         _driverInfo = null;
+        _homeIsSensorSearch = false; // #2173 review — read again with the next session's capabilities
         _axisBands = null;          // #1064 — per-axis rate bands re-read for the new device
         _axisRatesSettled = false;
         _axisRatesDeadline = DateTimeOffset.UtcNow + AxisRatesSettleWindow;
@@ -462,11 +463,25 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
                             LogParkDroppedAfterAbort(StoppedSinceWords(abortEpoch)); // #2107 — named: a second park in flight too
                             return;
                         }
-                        var poseMove = BeginPoseMove(); // #2173 — the park's own motion, while its call runs
+                        var poseMove = BeginPoseMove(); // #2173 — the park's own motion, while its call runs and after
+                        var parkSent = false;
                         try {
                             SendMotion(motion, c, c.Park);
+                            parkSent = true;
                         } finally {
-                            EndPoseMove(poseMove);
+                            if (parkSent) {
+                                // #2173 review — many drivers return from Park at once: the move stays Ara's own until the
+                                // mount reports AtPark or not slewing (bounded), off this control call.
+                                _ = Task.Run(async () => {
+                                    try {
+                                        await HoldPoseMoveUntilSettledAsync(c, abortEpoch, d => d.AtPark).ConfigureAwait(false);
+                                    } finally {
+                                        EndPoseMove(poseMove, arrived: true);
+                                    }
+                                }, CancellationToken.None);
+                            } else {
+                                EndPoseMove(poseMove, arrived: false);
+                            }
                         }
                     });
                 });
@@ -495,11 +510,30 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
     [SuppressMessage("Reliability", "CA2000:Dispose objects before losing scope",
         Justification = "#2066 — the dispatch scope is handed to the background send, which disposes it when the move is sent or dropped; a throw before the hand-off disposes it here.")]
     private async Task<OperationAcceptedDto> FindHomeAfterGuidingStoppedAsync(ITelescopeDevice client, string? idempotencyKey, long abortEpoch, long motion, CancellationToken ct) {
-        // #2173 — not refused while the position is unverified: FindHome is the mount's home-sensor search
-        // (AlpacaBridge#2420 sends :MSH# on the models that have one), the way out of an unverified position, and a
-        // search that ends at Home trusts the position again (TrustPoseAfterHomeSearchAsync). GoTo, Park and polar
-        // alignment stay refused. The sequencer's Find Home instruction still is (RunMountOpAsync).
-        _ = ct;
+        // #2173 — on a mount whose FindHome is its home-sensor search (HomeIsSensorSearch: the HAE29C on an AlpacaBridge
+        // that runs :MSH# for it, AlpacaBridge#2420/#2472), Home is not refused while the position is unverified: it is
+        // the way out, and a search seen to run that ends at Home trusts the position again (TrustPoseAfterHomeSearchAsync).
+        // #2173 review — any other mount's Home drives to where its model thinks Home is, which may be counterweight up
+        // or into the pier, so it stays refused (#2070), with the hand controller's search as the way out. GoTo, Park and
+        // polar alignment stay refused either way. The sequencer's Find Home instruction always is (RunMountOpAsync).
+        bool sensorSearch;
+        try {
+            sensorSearch = await Task.Run(() => ReadHomeIsSensorSearch(client), CancellationToken.None)
+                .WaitAsync(PoseReadTimeout, ct).ConfigureAwait(false);
+        } catch (TimeoutException) {
+            sensorSearch = false;
+        } catch {
+            NoteMotionFailed(motion, client);
+            throw;
+        }
+        if (!sensorSearch) {
+            try {
+                await ThrowIfPoseUnverifiedAsync(client, "findhome", ct).ConfigureAwait(false);
+            } catch {
+                NoteMotionFailed(motion, client);
+                throw;
+            }
+        }
         // #2066 (ARA-2) — the user's Find Home (nothing else calls this) is counted in the dispatch as the user's park is.
         var dispatch = BeginRestMotionDispatchOrRefuse("telescope.findhome", "home", motion, client);
         try {
@@ -521,7 +555,7 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
             NoteMountCommand(w => w.NoteParkCommanded());
             _ = Task.Run(async () => {
                 var sent = false;
-                var leftHome = false;
+                PoseReading atSend = default;
                 var poseMove = BeginPoseMove(); // #2173 — the search's own motion, until it ends or is given up on
                 try {
                     using (dispatch) {
@@ -534,16 +568,20 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
                                 LogFindHomeDroppedAfterAbort(StoppedSinceWords(fence));
                                 return;
                             }
-                            leftHome = !ReadPoseBestEffort(c).AtHome; // #2173 — a search that starts away from Home
+                            atSend = sensorSearch ? ReadPoseBestEffort(c) : default; // #2173 — where the search starts
                             SendMotion(motion, c, c.FindHome);
                             sent = true;
                         });
                     }
-                    if (sent) {
-                        await TrustPoseAfterHomeSearchAsync(client, fence, leftHome).ConfigureAwait(false);
+                    if (sent && sensorSearch) {
+                        await TrustPoseAfterHomeSearchAsync(client, fence, atSend).ConfigureAwait(false);
+                    } else if (sent) {
+                        // #2173 review — a model Home whose call returned at once still moves: it stays Ara's own until
+                        // the mount reports Home or not slewing (bounded).
+                        await HoldPoseMoveUntilSettledAsync(client, fence, d => d.AtHome).ConfigureAwait(false);
                     }
                 } finally {
-                    EndPoseMove(poseMove);
+                    EndPoseMove(poseMove, arrived: sent);
                 }
             }, CancellationToken.None);
         } catch {
@@ -1205,6 +1243,9 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
                 }
                 LogSlewDroppedOwned(sync ? "sync" : "slew", raHours, decDeg, owner!);
                 ClearPendingSlewTarget();
+                if (!sync) {
+                    ClearPoseGotoTarget(); // #2173 review — never sent: its target explains no later Dec
+                }
                 return;
             }
             if (sync) {
@@ -1226,6 +1267,7 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
                     }
                     LogSlewDroppedAfterAbort(raHours, decDeg);
                     ClearPendingSlewTarget();
+                    ClearPoseGotoTarget(); // #2173 review — never sent
                     return;
                 }
                 // Async goto: returns immediately, Slewing goes true; the refresh cache surfaces
@@ -1278,6 +1320,10 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
             // The dispatch failed — no episode will open for this command, so its noted target
             // must not ride an unrelated later episode's slew_started (#836 r2).
             ClearPendingSlewTarget();
+            // #2173 review — nor may it excuse a later jump near that Dec for the rest of the session.
+            if (!sync) {
+                ClearPoseGotoTarget();
+            }
         }
     }
 
@@ -1363,6 +1409,7 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
         var canMoveSecondary = needCaps ? ReadCanMoveAxis(client, TelescopeAxis.Secondary) : null;
         var driverVersion = needCaps ? ReadDriverVersion(client) : null;
         var driverInfo = needCaps ? ReadDriverInfo(client) : null;
+        var driverName = needCaps ? ReadDriverName(client) : null;
         var actions = needCaps
             ? new LiveDriverActions(LiveDriverActions.Read(() => client.SupportedActions), () => _lifecycle.IsLive(client), client.Action)
             : null;
@@ -1401,6 +1448,7 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
                     _canMoveSecondaryAxis = canMoveSecondary;
                     _driverVersion = driverVersion;
                     _driverInfo = driverInfo;
+                    _homeIsSensorSearch = HomeIsSensorSearch(driverName, driverInfo, driverVersion); // #2173 review
                 }
                 if (needAxisRates) {
                     // Keep any axis already known; fill the rest from this pass.
@@ -2006,6 +2054,16 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
     private static string ReadDriverVersion(ITelescopeDevice c) {
         try {
             return c.DriverVersion?.Trim() ?? string.Empty;
+        } catch (Exception) {
+            return string.Empty;
+        }
+    }
+
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Per-field read boundary: a driver that fails Name reports none (empty), so it is not known to run a sensor search for Home.")]
+    private static string ReadDriverName(ITelescopeDevice c) {
+        try {
+            return c.Name?.Trim() ?? string.Empty;
         } catch (Exception) {
             return string.Empty;
         }

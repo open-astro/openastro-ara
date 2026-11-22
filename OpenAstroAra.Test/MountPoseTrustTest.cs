@@ -313,7 +313,7 @@ namespace OpenAstroAra.Test {
             Assert.That(trust.Observe(false, false, 50, t), Is.False);
             Assert.That(trust.Observe(false, false, 70, t + TimeSpan.FromSeconds(3)), Is.False);
             Assert.That(trust.Observe(false, false, 70, t + TimeSpan.FromSeconds(6)), Is.False, "a park or Home still running");
-            trust.EndCommandedMove(move, t + TimeSpan.FromSeconds(6));
+            trust.EndCommandedMove(move, t + TimeSpan.FromSeconds(6), arrived: true);
             Assert.That(Twice(trust, false, false, 72.5, t + TimeSpan.FromSeconds(20)), Is.False, "the quiet window counts from its end");
             Assert.That(trust.BlockReason, Is.Null);
 
@@ -327,11 +327,55 @@ namespace OpenAstroAra.Test {
             trust.BeginSession("mount-1", null);
             trust.Observe(false, false, 30, T0);
             var current = trust.BeginCommandedMove(T0);
-            trust.EndCommandedMove(old, T0); // the old session's park call returns late
+            trust.EndCommandedMove(old, T0, arrived: true); // the old session's park call returns late
             var t = T0 + MountPoseTrust.QuietWindow + TimeSpan.FromSeconds(10);
             trust.Observe(false, false, 50, t);
             Assert.That(trust.Observe(false, false, 50, t + TimeSpan.FromSeconds(3)), Is.False, "the current move still runs");
-            trust.EndCommandedMove(current, t);
+            trust.EndCommandedMove(current, t, arrived: true);
+        }
+
+        // #2173 review — while a jump waits for its second reading, motion is refused: a GoTo in that window would drive
+        // by a model that may just have reset.
+        [Test]
+        public void A_jump_waiting_for_its_second_reading_refuses_motion() {
+            var trust = Session();
+            trust.Observe(false, false, 30, T0);
+            var t = T0 + TimeSpan.FromMinutes(5);
+
+            Assert.That(trust.Observe(false, false, 60, t), Is.False);
+
+            Assert.That(trust.PendingVerdict, Is.EqualTo(MountPoseTrust.PoseJumpInSession));
+            Assert.That(trust.BlockReason, Is.EqualTo(MountPoseTrust.NotReadYet));
+        }
+
+        // #2173 review — a GoTo (or any Ara command) landing in the confirm window made the next reading "moving", which
+        // cleared the pending jump and took the jumped pose as trusted: the jump never flagged. It must flag.
+        [Test]
+        public void A_command_in_the_confirm_window_does_not_wash_out_a_jump() {
+            var trust = Session();
+            trust.Observe(false, false, 30, T0);
+            var t = T0 + TimeSpan.FromMinutes(5);
+            Assert.That(trust.Observe(false, false, 60, t), Is.False);
+
+            var move = trust.BeginCommandedMove(t + TimeSpan.FromSeconds(1));
+            Assert.That(trust.Observe(false, false, 60, t + TimeSpan.FromSeconds(1.5)), Is.False, "mid-move: wait");
+            trust.EndCommandedMove(move, t + TimeSpan.FromSeconds(2), arrived: true);
+
+            Assert.That(trust.Observe(false, false, 60, t + TimeSpan.FromSeconds(3)), Is.True, "the next still reading agrees: a jump");
+            Assert.That(trust.Reason, Is.EqualTo(MountPoseTrust.PoseJumpInSession));
+        }
+
+        // #2173 review — a GoTo that failed, was refused or timed out never reached its target: a later jump to that Dec
+        // is a jump, not the GoTo's arrival.
+        [Test]
+        public void A_goto_that_did_not_arrive_excuses_no_later_jump_to_its_target() {
+            var trust = Session();
+            trust.Observe(false, false, 30, T0);
+            var move = trust.BeginCommandedMove(T0, gotoTargetDecDeg: 60);
+            trust.EndCommandedMove(move, T0 + TimeSpan.FromSeconds(1), arrived: false);
+
+            var later = T0 + TimeSpan.FromMinutes(5);
+            Assert.That(Twice(trust, false, false, 60, later), Is.True);
         }
     }
 }

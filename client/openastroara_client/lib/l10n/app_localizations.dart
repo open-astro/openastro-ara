@@ -11208,22 +11208,22 @@ abstract class AppLocalizations {
   /// **'End Night is already running. Wait for it to finish, or cancel it, before starting it again.'**
   String get refusalEndNightInProgress;
 
-  /// Refusal (mount-position-unverified): GoTo, Park and Polar Align are blocked (Home is the way out) because the mount's reported position is not trusted after a power loss
+  /// Refusal (mount-position-unverified): GoTo, Park and Polar Align are blocked (and Home, unless it is the mount's home-sensor search) because the mount's reported position is not trusted after a power loss
   ///
   /// In en, this message translates to:
-  /// **'The mount\'s position is unverified: it may have lost power, and it reports Home wherever it points. The safe way out is Home: it runs the mount\'s home-sensor search, and the position is trusted again once the mount reports Home. Or run that search from the mount\'s hand controller or app, then confirm Home.'**
+  /// **'The mount\'s position is unverified: it may have lost power, and it reports Home wherever it points. If the mount\'s Home is its home-sensor search (the iOptron HAE29C on AlpacaBridge 6), press Home: the position is trusted again once the search ends at Home. Otherwise run the zero search from the mount\'s hand controller or app, then confirm Home.'**
   String get refusalMountPositionUnverified;
 
-  /// Refusal (mount-position-unverified, not yet read): a move right after the mount connected, before its first position read
+  /// Refusal (mount-position-unverified, not yet read): a move right after the mount connected, before its first position read, or while one reading waits for the next to agree (#2173)
   ///
   /// In en, this message translates to:
-  /// **'The mount\'s position has not been read since it connected. Try again in a few seconds.'**
+  /// **'The mount\'s position is not confirmed yet: it was just connected, or a reading is being checked against the next one. Try again in a few seconds.'**
   String get refusalMountPositionNotReadYet;
 
-  /// Refusal (mount-position-unverified, reason stop_unconfirmed, #2066): GoTo, Park and Polar Align are blocked (Home is the way out) because a polar alignment's stop of the mount was not confirmed, or the mount reconnected during it
+  /// Refusal (mount-position-unverified, reason stop_unconfirmed, #2066): GoTo, Park and Polar Align are blocked (and Home, unless it is the mount's home-sensor search) because a polar alignment's stop of the mount was not confirmed, or the mount reconnected during it
   ///
   /// In en, this message translates to:
-  /// **'The mount\'s position is unverified: Ara could not confirm that the mount stopped after polar alignment moved it, or the mount reconnected while polar alignment ran. The safe way out is Home: it runs the mount\'s home-sensor search, and the position is trusted again once the mount reports Home. Or run that search from the mount\'s hand controller or app, then confirm Home.'**
+  /// **'The mount\'s position is unverified: Ara could not confirm that the mount stopped after polar alignment moved it, or the mount reconnected while polar alignment ran. If the mount\'s Home is its home-sensor search (the iOptron HAE29C on AlpacaBridge 6), press Home: the position is trusted again once the search ends at Home. Otherwise run the zero search from the mount\'s hand controller or app, then confirm Home.'**
   String get refusalMountPositionStopUnconfirmed;
 
   /// Mount window: heading of the warning shown when the rig does not trust the mount's reported position (it may have lost power)
@@ -11235,19 +11235,19 @@ abstract class AppLocalizations {
   /// Mount window: what the unverified-position warning means and what still works
   ///
   /// In en, this message translates to:
-  /// **'The mount may have lost power: it reports Home wherever it points. GoTo, Park and Polar Align are blocked. Home, Stop, the direction pad and tracking still work.'**
+  /// **'The mount may have lost power: it reports Home wherever it points. GoTo, Park and Polar Align are blocked, and so is Home unless it is the mount\'s home-sensor search. Stop, the direction pad and tracking still work.'**
   String get mountPositionUnverifiedBody;
 
   /// Mount window: the unverified-position fix while the mount does not report Home (the confirm button shows once it does)
   ///
   /// In en, this message translates to:
-  /// **'Press Home: the mount runs its home-sensor search, and its position is trusted again once it reports Home. Or run that search from its hand controller or app, then confirm Home here.'**
+  /// **'Press Home if the mount\'s Home is its home-sensor search (the iOptron HAE29C on AlpacaBridge 6): its position is trusted again once it reports Home. Otherwise run the zero search from its hand controller or app, then confirm Home here.'**
   String get mountPositionUnverifiedRunZeroSearch;
 
   /// Mount window: what the unverified-position warning means when polar alignment's stop was not confirmed (reason stop_unconfirmed, #2066), and what still works
   ///
   /// In en, this message translates to:
-  /// **'Ara could not confirm that the mount stopped after polar alignment moved it, or the mount reconnected while polar alignment ran, so it may have moved on. GoTo, Park and Polar Align are blocked. Home, Stop, the direction pad and tracking still work.'**
+  /// **'Ara could not confirm that the mount stopped after polar alignment moved it, or the mount reconnected while polar alignment ran, so it may have moved on. GoTo, Park and Polar Align are blocked, and so is Home unless it is the mount\'s home-sensor search. Stop, the direction pad and tracking still work.'**
   String get mountPositionStopUnconfirmedBody;
 
   /// Mount window: button that confirms the mount is physically at Home, so its position is trusted again

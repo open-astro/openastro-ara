@@ -39,6 +39,8 @@ namespace OpenAstroAra.Server.Services;
 /// (<see cref="FoldDec"/>), as Polar Align's fresh reads fold it. An Ara GoTo, park or Home whose call or arrival wait
 /// is still running (<see cref="BeginCommandedMove"/>) explains every change, and a Dec that lands at the last
 /// commanded GoTo's target (<see cref="NoteGotoTarget"/>) is no jump, however long the slew took.
+/// While a verdict waits for its second reading, motion is refused (<see cref="BlockReason"/>), and a command or move in
+/// that window does not wash it out: the next still reading settles it (see <see cref="Observe"/>).
 /// A routine that drove the motors flags it too (<see cref="StopUnconfirmed"/>): its stop was not confirmed, or the mount
 /// reconnected while it ran (#2066).
 /// Only <see cref="Confirm"/> (the user says the mount is at Home, or #2173 an Ara home-sensor search ended at Home) clears it; a new session for the
@@ -106,11 +108,12 @@ internal sealed class MountPoseTrust {
     public string? Reason => _reason;
 
     /// <summary>Null when motion may go ahead; otherwise the reason it may not (<see cref="NotReadYet"/>
-    /// before this session's first read).</summary>
-    public string? BlockReason => _reason ?? (_observed ? null : NotReadYet);
+    /// before this session's first read, and #2173 while a reading's verdict waits for the next to agree).</summary>
+    public string? BlockReason => _reason ?? (_observed && _pending is null ? null : NotReadYet);
 
-    /// <summary>#2173 — the reason one reading suggested and the next has not yet agreed with (null: none). Not a flag:
-    /// motion is not refused for it, except before the session's first verdict, which stays <see cref="NotReadYet"/>.</summary>
+    /// <summary>#2173 — the reason one reading suggested and the next has not yet agreed with (null: none). Not a flag,
+    /// but motion is refused while it waits (<see cref="BlockReason"/> is <see cref="NotReadYet"/>): a GoTo sent in that
+    /// window would drive by a model that may just have reset.</summary>
     public string? PendingVerdict => _pending?.Reason;
 
     /// <summary>#2173 — a Dec past ±90° (a Dec axis over the pole, as an iOptron at Home reads +90.71°) folded back to the
@@ -160,14 +163,22 @@ internal sealed class MountPoseTrust {
         return _sessionGeneration;
     }
 
-    /// <summary>#2173 — the move <see cref="BeginCommandedMove"/> began is over (arrived, failed or abandoned).</summary>
-    public void EndCommandedMove(int generation, DateTimeOffset now) {
+    /// <summary>#2173 — the move <see cref="BeginCommandedMove"/> began is over: it <paramref name="arrived"/>, or it
+    /// failed or was abandoned, when a GoTo's target no longer explains a later Dec (<see cref="ClearGotoTarget"/>).</summary>
+    public void EndCommandedMove(int generation, DateTimeOffset now, bool arrived) {
         if (generation != _sessionGeneration || _commandedMoves == 0) {
             return;
         }
         _commandedMoves--;
         NoteCommand(now);
+        if (!arrived) {
+            ClearGotoTarget();
+        }
     }
+
+    /// <summary>#2173 — the last GoTo was not sent, was refused or failed: a later Dec near its target is no longer its
+    /// own (a jump there would otherwise be excused for the rest of the session).</summary>
+    public void ClearGotoTarget() => _commandedDec = null;
 
     /// <summary>#2173 — an Ara GoTo to <paramref name="targetDecDeg"/> is about to be sent: a Dec that lands there is the
     /// GoTo's, never a jump, even when the slew outlasted the quiet window with no slewing tick read.</summary>
@@ -213,6 +224,22 @@ internal sealed class MountPoseTrust {
             _lastMotionAt = now;
             _motionSinceTrusted = true;
         }
+        // #2173 review — a verdict waiting for its second reading when a command or a move came: the move must not wash
+        // it out (a moving or quiet-window reading decides nothing, so the jumped pose would become the trusted one).
+        // A reading that agrees with it confirms it; the mount back where it was before calls it an outlier; the mount
+        // still somewhere else after the move flags it (fail safe: Ara cannot tell the jump from the move).
+        if (_reason is null && _pending is { } waiting && _lastMotionAt >= waiting.At) {
+            if (Agrees(waiting, atHome, dec)) {
+                return now - waiting.At >= ConfirmGap && Settle(waiting.Reason, atHome, dec);
+            }
+            if (moving) {
+                return false; // wait for the move to end: a reading mid-move says nothing about the jump
+            }
+            if (_previous is not { } before || before.AtHome != atHome || Math.Abs(dec - before.DecDeg) > PoseJumpDeg) {
+                return Settle(waiting.Reason, atHome, dec);
+            }
+            _pending = null; // back at the pose before the odd reading: that one was an outlier, and this one goes on below
+        }
         string? verdict = null;
         if (!_observed) {
             if (_reason is null && !slewing) {
@@ -230,8 +257,7 @@ internal sealed class MountPoseTrust {
             }
         }
         if (verdict is not null) {
-            if (_pending is not { } pending || pending.Reason != verdict || pending.AtHome != atHome
-                    || Math.Abs(dec - pending.DecDeg) > PoseJumpDeg) {
+            if (_pending is not { } pending || pending.Reason != verdict || !Agrees(pending, atHome, dec)) {
                 // One reading: wait for the next. The pose it reported is not taken as the previous or the trusted
                 // one, so an outlier leaves nothing behind.
                 _pending = (verdict, atHome, dec, now);
@@ -240,11 +266,7 @@ internal sealed class MountPoseTrust {
             if (now - pending.At < ConfirmGap) {
                 return false; // too soon to be a fresh reading of its own: wait for a later one
             }
-            _pending = null;
-            _observed = true;
-            _reason = verdict;
-            _previous = (atHome, dec);
-            return true;
+            return Settle(verdict, atHome, dec);
         }
         _pending = null;
         _observed = true;
@@ -257,6 +279,18 @@ internal sealed class MountPoseTrust {
             }
         }
         return false;
+    }
+
+    private static bool Agrees((string Reason, bool AtHome, double DecDeg, DateTimeOffset At) pending, bool atHome, double dec) =>
+        pending.AtHome == atHome && Math.Abs(dec - pending.DecDeg) <= PoseJumpDeg;
+
+    // The verdict stands: the position is unverified from this reading on.
+    private bool Settle(string reason, bool atHome, double dec) {
+        _pending = null;
+        _observed = true;
+        _reason = reason;
+        _previous = (atHome, dec);
+        return true;
     }
 
     private bool AtCommandedTarget(double dec) => _commandedDec is double target && Math.Abs(dec - target) <= PoseJumpDeg;
