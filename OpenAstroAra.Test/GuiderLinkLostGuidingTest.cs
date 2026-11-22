@@ -46,6 +46,7 @@ namespace OpenAstroAra.Test {
             public readonly Mock<ISequencerService> Sequencer = new();
             public readonly List<NotificationDto> Notifications = new();
             public readonly List<string> Steps = new(); // "restart" and "resume", in the order they happened
+            public readonly List<EquipmentFaultEvent> Faults = new(); // every fault the guider published
             public readonly Guid RunId = Guid.NewGuid();
             public readonly HeadlessProfileService Profile = new();
             public readonly FaultReactionService Reaction;
@@ -80,6 +81,7 @@ namespace OpenAstroAra.Test {
                 ws.Setup(w => w.PublishAsync(It.IsAny<OpenAstroAra.Server.Contracts.WsEvents.WsEvent>(), It.IsAny<System.Text.Json.JsonElement>(), It.IsAny<CancellationToken>()))
                     .Returns(Task.CompletedTask);
                 var hub = new EquipmentFaultHub(ws.Object);
+                hub.Subscribe(f => { lock (Faults) { Faults.Add(f); } });
                 Reaction = new FaultReactionService(hub, reconnector: null, profiles.Object, () => Sequencer.Object,
                     telescope: null, notifications.Object, ws.Object, guiderEpisodes: () => Service);
                 Reaction.StartAsync(CancellationToken.None).GetAwaiter().GetResult();
@@ -257,6 +259,25 @@ namespace OpenAstroAra.Test {
                 Assert.That(rig.Steps, Is.EqualTo(RestartRestartResume), "the second reconnect restarts guiding before the run resumes");
             }
             Assert.That(rig.Titled(NotRestartedTitle), Is.Zero, "the first restart was cut short by the loss, not given up on");
+        }
+
+        [Test]
+        public async Task A_quick_unguided_re_drop_leaves_the_first_guided_link_loss_marked_as_guided() {
+            // #2169 review — each loss keeps what it saw: a later drop with guiding off does not unmark the first.
+            using var rig = new Rig { RestartSucceeds = false };
+            await using var fake = await ConnectedFakeAsync(rig, guiding: true).ConfigureAwait(false);
+
+            await DropAndReconnectStoppedAsync(rig, fake).ConfigureAwait(false);
+            Assert.That(await WaitUntilAsync(() => rig.Titled(NotRestartedTitle) == 1).ConfigureAwait(false), Is.True);
+            await DropAndReconnectStoppedAsync(rig, fake).ConfigureAwait(false);
+
+            EquipmentFaultEvent[] links;
+            lock (rig.Faults) {
+                links = rig.Faults.Where(f => f.Details == "link_down").ToArray();
+            }
+            Assert.That(links, Has.Length.EqualTo(2));
+            IGuiderEpisodeListener listener = rig.Service;
+            Assert.That((listener.GuidedWhenLost(links[0]), listener.GuidedWhenLost(links[1])), Is.EqualTo((true, false)));
         }
     }
 }

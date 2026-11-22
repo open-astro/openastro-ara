@@ -772,7 +772,12 @@ public sealed partial class GuiderService : IGuiderService, IGuideCameraPort, IG
         // §42.2: guiding is gone NOW — any running sequence is shooting unguided, so the shared
         // reaction runs the profile's on_guider_lost plan.
         // #2169 — guided, the light in progress is stopped and guiding restarts before the runs resume.
-        _linkFault ??= PublishFaultLocked(EquipmentFaultKind.Disconnected, "link_down", f => _guidedLinkFault = guided ? f : null);
+        // A loss with guiding off leaves an earlier guided loss marked: its episode may still be deciding.
+        _linkFault ??= PublishFaultLocked(EquipmentFaultKind.Disconnected, "link_down", f => {
+            if (guided) {
+                _guidedLinkFault = f;
+            }
+        });
     }
 
     // Append each guide step's raw RA/Dec error to the bounded RMS window. Guarded on the current
