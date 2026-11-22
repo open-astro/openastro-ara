@@ -47,9 +47,12 @@ class _SaveClient implements SequenceClient {
       throw UnimplementedError();
   List<FieldChange>? liveFields;
   @override
-  Future<SequenceDetail> setRunFields(String id, List<FieldChange> changes) async {
+  Future<SequenceDetail> setRunFields(String id, List<FieldChange> changes,
+          {String? baseModifiedUtc}) async {
     liveFields = changes;
-    return _detail(id);
+    // The daemon answers with its copy, the change in it.
+    final d = _detail(id);
+    return SequenceDetail(id: d.id, body: applyFieldChanges(d.body, changes));
   }
 
   @override

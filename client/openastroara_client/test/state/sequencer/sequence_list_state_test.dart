@@ -27,7 +27,8 @@ class _FakeSeqClient implements SequenceClient {
   Future<SequenceDetail> moveRunItem(String id, List<int> path, int newIndex) =>
       throw UnimplementedError();
   @override
-  Future<SequenceDetail> setRunFields(String id, List<FieldChange> changes) =>
+  Future<SequenceDetail> setRunFields(String id, List<FieldChange> changes,
+          {String? baseModifiedUtc}) =>
       throw UnimplementedError();
 
   @override

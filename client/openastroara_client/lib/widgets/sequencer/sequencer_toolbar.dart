@@ -588,6 +588,7 @@ Future<void> preflightAndRunSequence(BuildContext context, ProviderReader read) 
   await runSequenceLifecycle(context, read, (api, id) => api.start(id));
 }
 
+
 enum _PreflightChoice { cancel, goToSetup, runAnyway }
 
 /// The daemon refused to start: there is no storage disk for the frames.
@@ -741,8 +742,8 @@ Future<void> _save(BuildContext context, WidgetRef ref) async {
   }
   busy.setBusy(true);
   try {
-    await api.updateSequence(editor.id, body: sentBody);
-    editorNotifier.markSaved(sentBody);
+    final saved = await api.updateSequence(editor.id, body: sentBody);
+    editorNotifier.markSaved(sentBody, modifiedUtc: saved.modifiedUtc);
     messenger.showSnackBar(const SnackBar(content: Text('Sequence saved.')));
   } on DioException catch (e) {
     final code = e.response?.statusCode;

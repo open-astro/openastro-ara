@@ -37,7 +37,8 @@ class _FakeClient implements SequenceClient {
   /// The daemon's refusal text for a live field save, when set.
   String? refuseFields;
   @override
-  Future<SequenceDetail> setRunFields(String id, List<FieldChange> changes) async {
+  Future<SequenceDetail> setRunFields(String id, List<FieldChange> changes,
+          {String? baseModifiedUtc}) async {
     calls.add('fields');
     if (refuseFields != null) {
       final req = RequestOptions(path: '/api/v1/sequences/$id/run/fields');
@@ -73,8 +74,9 @@ class _FakeClient implements SequenceClient {
       SequenceDetail(id: id, name: id, body: const {});
   @override
   Future<SequenceDetail> updateSequence(String id,
-          {String? name, String? description, Map<String, dynamic>? body}) async =>
-      SequenceDetail(id: id, name: name ?? id, description: description, body: body ?? const {});
+      {String? name, String? description, Map<String, dynamic>? body}) async {
+    return SequenceDetail(id: id, name: name ?? id, description: description, body: body ?? const {});
+  }
   @override
   Future<SequenceNode> getSequence(String id) async => SequenceNode(
       id: 'root', kind: SequenceNodeKind.root, displayName: 'fake');

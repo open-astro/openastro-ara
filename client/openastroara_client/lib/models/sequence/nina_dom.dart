@@ -462,3 +462,117 @@ List<FieldChange>? scalarFieldChanges(
 
   return walk(original, edited, const []) ? out : null;
 }
+
+/// The class name of a node's `$type`, without namespace or assembly:
+/// `NINA.Sequencer.SequenceItem.Imaging.TakeExposure, NINA.Sequencer` →
+/// `TakeExposure`. A NINA import and the daemon's own copy name the same class
+/// with different namespaces, so a match compares this part only.
+String? _shortType(Object? type) {
+  if (type is! String) return null;
+  final cls = type.split(',').first.trim();
+  return cls.substring(cls.lastIndexOf('.') + 1);
+}
+
+/// Where the node at [path] in [from] is in [to], found level by level by
+/// kind and name (#2168): positions shift when an item is added, removed or
+/// moved, so a stale position could point at a different item. Among siblings
+/// of the same kind and name, the k-th one stays the k-th one. [edited] (the
+/// same shape as [from]) adds the node's edited name as a second accepted
+/// name, so a renamed item still matches. Null when the node is gone.
+NodePath? mapNodePath(
+    Map<String, dynamic> from, Map<String, dynamic> to, NodePath path,
+    {Map<String, dynamic>? edited}) {
+  var a = from;
+  Map<String, dynamic>? e = edited;
+  var b = to;
+  final out = <int>[];
+  for (final i in path) {
+    final ka = childrenOf(a), kb = childrenOf(b);
+    if (i < 0 || i >= ka.length) return null;
+    final ke = e == null ? null : childrenOf(e);
+    final node = ka[i];
+    final type = _shortType(node[r'$type']);
+    final names = {node['Name'], if (ke != null && i < ke.length) ke[i]['Name']};
+    bool same(Map<String, dynamic> n) =>
+        _shortType(n[r'$type']) == type && names.contains(n['Name']);
+    var k = 0;
+    for (var j = 0; j < i; j++) {
+      if (same(ka[j])) k++;
+    }
+    var found = -1;
+    for (var j = 0; j < kb.length; j++) {
+      if (!same(kb[j])) continue;
+      if (k == 0) {
+        found = j;
+        break;
+      }
+      k--;
+    }
+    if (found < 0) return null;
+    out.add(found);
+    a = node;
+    e = (ke != null && i < ke.length) ? ke[i] : null;
+    b = kb[found];
+  }
+  return out;
+}
+
+/// The same rule for a loop rule or trigger: the k-th one of its kind on the
+/// node stays the k-th one. Null when there is no such one.
+int? _mapRuleIndex(
+    List<Map<String, dynamic>> from, List<Map<String, dynamic>> to, int index) {
+  if (index < 0 || index >= from.length) return null;
+  final type = _shortType(from[index][r'$type']);
+  var k = 0;
+  for (var j = 0; j < index; j++) {
+    if (_shortType(from[j][r'$type']) == type) k++;
+  }
+  for (var j = 0; j < to.length; j++) {
+    if (_shortType(to[j][r'$type']) != type) continue;
+    if (k == 0) return j;
+    k--;
+  }
+  return null;
+}
+
+/// #2168 — move unsaved setting edits ([changes], made on [from]; [edited] is
+/// the edited copy) onto a newer copy [to] of the plan. `kept` are the edits
+/// re-addressed to the same items in [to]; `lost` are the ones whose item is
+/// gone (removed elsewhere).
+({List<FieldChange> kept, List<FieldChange> lost}) rebaseFieldChanges(
+    Map<String, dynamic> from,
+    Map<String, dynamic> edited,
+    Map<String, dynamic> to,
+    List<FieldChange> changes) {
+  final kept = <FieldChange>[], lost = <FieldChange>[];
+  for (final c in changes) {
+    final path = mapNodePath(from, to, c.path, edited: edited);
+    int? index = c.index;
+    if (path != null && c.target != 'item') {
+      final of = c.target == 'condition' ? conditionsOf : triggersOf;
+      index = _mapRuleIndex(
+          of(nodeAt(from, c.path)!), of(nodeAt(to, path)!), c.index ?? -1);
+    }
+    if (path == null || (c.target != 'item' && index == null)) {
+      lost.add(c);
+      continue;
+    }
+    kept.add(FieldChange(
+        path: path, target: c.target, index: index, key: c.key, value: c.value));
+  }
+  return (kept: kept, lost: lost);
+}
+
+/// [body] with every one of [changes] set.
+Map<String, dynamic> applyFieldChanges(
+    Map<String, dynamic> body, List<FieldChange> changes) {
+  var out = body;
+  for (final c in changes) {
+    out = switch (c.target) {
+      'condition' => setConditionField(out, c.path, c.index!, c.key, c.value),
+      'trigger' => setTriggerField(out, c.path, c.index!, c.key, c.value),
+      _ => setField(out, c.path, c.key, c.value),
+    };
+  }
+  return out;
+}

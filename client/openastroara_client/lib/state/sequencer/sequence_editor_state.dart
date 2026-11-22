@@ -44,6 +44,10 @@ class SequenceEditorState {
   /// indices from the root (`[]` = the root container itself).
   final NodePath? selectedPath;
 
+  /// The daemon's `modified_utc` for [originalBody] (#2168). A live setting
+  /// edit sends it so the daemon can refuse positions from an older copy.
+  final String? baseModified;
+
   /// Whether the working [body] differs from the loaded/saved [originalBody].
   /// Computed ONCE here (not per read) so widget rebuilds that watch the
   /// provider don't each pay an O(n) deep compare: an identity short-circuit
@@ -57,6 +61,7 @@ class SequenceEditorState {
     required this.body,
     required this.originalBody,
     this.selectedPath,
+    this.baseModified,
   }) : isDirty = !identical(body, originalBody) &&
             !_bodyEquality.equals(body, originalBody);
 
@@ -65,6 +70,7 @@ class SequenceEditorState {
     Map<String, dynamic>? originalBody,
     NodePath? selectedPath,
     bool clearSelection = false,
+    String? baseModified,
   }) {
     assert(!(clearSelection && selectedPath != null),
         'pass either clearSelection or selectedPath, not both');
@@ -73,6 +79,7 @@ class SequenceEditorState {
       body: body ?? this.body,
       originalBody: originalBody ?? this.originalBody,
       selectedPath: clearSelection ? null : (selectedPath ?? this.selectedPath),
+      baseModified: baseModified ?? this.baseModified,
     );
   }
 }
@@ -187,7 +194,7 @@ class SequenceEditorController extends Notifier<SequenceEditorState?> {
 
   bool _liveBusy() {
     if (_liveEditInFlight) {
-      _notice('Hold on — the previous change is still being applied.');
+      _notice(_busyNotice);
       return true;
     }
     return false;
@@ -228,11 +235,19 @@ class SequenceEditorController extends Notifier<SequenceEditorState?> {
     if (api == null) return;
     _liveEditInFlight = true;
     try {
-      // Unsaved field edits go first: the reload below would drop them.
-      if (s.isDirty && !await _sendLiveFields(api, s)) return;
+      // Unsaved field edits go first, so the op's positions and the daemon's
+      // copy agree.
+      if (s.isDirty) {
+        final why = await _pushLiveFields(api);
+        if (why != null) {
+          _notice(why);
+          return;
+        }
+      }
       final detail = await send(api);
       // Stale guard: the editor may have moved to another sequence mid-flight.
-      if (state?.id == s.id) load(detail);
+      // A value typed while the op was in flight is moved onto the answer.
+      if (state?.id == s.id) adopt(detail);
     } on DioException catch (e) {
       _liveRefused(e);
     } finally {
@@ -240,15 +255,7 @@ class SequenceEditorController extends Notifier<SequenceEditorState?> {
     }
   }
 
-  void _liveRefused(DioException e) {
-    final data = e.response?.data;
-    final detail =
-        data is Map<String, dynamic> ? (data['detail'] ?? data['error']) : null;
-    _notice(detail is String && detail.isNotEmpty
-        ? detail
-        : "The running plan couldn't be changed. Check the connection and try again.");
-    debugPrint('[sequencer] live edit refused/failed: $e');
-  }
+  void _liveRefused(DioException e) => _notice(_liveReason(e));
 
   /// #2168 — save the field edits made while the run is going (running or
   /// paused) to the live plan, NINA-style: the daemon changes the running
@@ -257,44 +264,108 @@ class SequenceEditorController extends Notifier<SequenceEditorState?> {
   /// sent, never the whole body. True when there was nothing to send or the
   /// daemon took the change; false (edits kept, with a notice) on a refusal.
   Future<bool> applyLiveEdits() async {
+    final why = await _sendLiveEdits();
+    if (why != null) _notice(why);
+    return why == null;
+  }
+
+  Future<String?> _sendLiveEdits() async {
     final s = state;
-    if (s == null || !s.isDirty) return true;
+    if (s == null || !s.isDirty) return null;
     final api = ref.read(sequenceApiProvider);
-    if (api == null) return false;
-    if (_liveBusy()) return false;
+    if (api == null) return _noConnectionNotice;
+    if (_liveEditInFlight) return _busyNotice;
     _liveEditInFlight = true;
     try {
-      return await _sendLiveFields(api, s);
-    } on DioException catch (e) {
-      _liveRefused(e);
-      return false;
+      return await _pushLiveFields(api);
     } finally {
       _liveEditInFlight = false;
     }
   }
 
-  /// Send [s]'s field edits; reload the daemon's answer. DioExceptions
-  /// propagate to the caller.
-  Future<bool> _sendLiveFields(SequenceClient api, SequenceEditorState s) async {
-    final changes = scalarFieldChanges(s.originalBody, s.body);
-    if (changes == null) {
-      _notice(_liveStructureNotice);
-      return false;
-    }
-    if (changes.isEmpty) return true;
-    final detail = await api.setRunFields(s.id, changes);
-    final now = state;
-    if (now?.id == s.id) {
-      if (identical(now!.body, s.body)) {
-        load(detail);
-      } else {
-        // Typed on while the save was in flight: keep those edits dirty.
-        markSaved(s.body);
+  /// Send the editor's field edits and take the daemon's answer ([adopt]).
+  /// Null on success (or nothing to send), else the reason. When the plan
+  /// changed on the rig since this copy was read (409 plan changed), reload,
+  /// move the edits onto the new copy and send once more.
+  Future<String?> _pushLiveFields(SequenceClient api) async {
+    for (var attempt = 0;; attempt++) {
+      final s = state;
+      if (s == null) return null;
+      final changes = scalarFieldChanges(s.originalBody, s.body);
+      if (changes == null) return _liveStructureNotice;
+      if (changes.isEmpty) return null;
+      try {
+        final detail = await api.setRunFields(s.id, changes,
+            baseModifiedUtc: s.baseModified);
+        if (state?.id == s.id) adopt(detail);
+        _notice('Saved. Frames that start now use the new settings.');
+        return null;
+      } on DioException catch (e) {
+        if (attempt == 0 && isPlanChangedError(e)) {
+          try {
+            final fresh = await api.getSequenceDetail(s.id);
+            if (state?.id != s.id) return null;
+            adopt(fresh);
+          } on DioException catch (e2) {
+            return _liveReason(e2);
+          }
+          continue;
+        }
+        return _liveReason(e);
       }
     }
-    _notice('Saved. Frames that start now use the new settings.');
-    return true;
   }
+
+  /// #2168 — take a newer daemon copy of the open plan without dropping the
+  /// editor's unsaved setting edits. Positions shift when an item is added,
+  /// removed or moved elsewhere (Simple mode, another device), so each edit is
+  /// moved onto the same item in [detail] ([rebaseFieldChanges]); an edit
+  /// whose item is gone is dropped with a notice, never silently. With no
+  /// unsaved edits this is [load]. Edits that change the layout can't be moved
+  /// onto a live plan: the editor then keeps its own copy.
+  void adopt(SequenceDetail detail) {
+    final s = state;
+    if (s == null || s.id != detail.id || !s.isDirty) {
+      load(detail);
+      return;
+    }
+    final changes = scalarFieldChanges(s.originalBody, s.body);
+    if (changes == null) return;
+    final moved =
+        rebaseFieldChanges(s.originalBody, s.body, detail.body, changes);
+    final selected = s.selectedPath;
+    _resetHistory(); // the undo snapshots belong to the old copy
+    state = SequenceEditorState(
+      id: detail.id,
+      body: applyFieldChanges(detail.body, moved.kept),
+      originalBody: detail.body,
+      baseModified: detail.modifiedUtc,
+      selectedPath: selected == null
+          ? null
+          : mapNodePath(s.originalBody, detail.body, selected, edited: s.body),
+    );
+    if (moved.lost.isNotEmpty) {
+      final keys = {for (final c in moved.lost) c.key}.join(', ');
+      _notice('The plan changed on the rig and an item you edited is gone, '
+          'so your change to $keys was not kept.');
+    }
+  }
+
+  static String _liveReason(DioException e) {
+    debugPrint('[sequencer] live edit refused/failed: $e');
+    final data = e.response?.data;
+    final detail = data is Map<String, dynamic>
+        ? (data['detail'] ?? data['error'])
+        : null;
+    return detail is String && detail.isNotEmpty
+        ? detail
+        : "The running plan couldn't be changed. Check the connection and try again.";
+  }
+
+  static const String _noConnectionNotice =
+      "The running plan couldn't be changed. Check the connection and try again.";
+  static const String _busyNotice =
+      'Hold on — the previous change is still being applied.';
 
   static const String _liveStructureNotice =
       'While the run is going you can change settings and add, remove or '
@@ -369,6 +440,7 @@ class SequenceEditorController extends Notifier<SequenceEditorState?> {
       id: detail.id,
       body: detail.body,
       originalBody: detail.body,
+      baseModified: detail.modifiedUtc,
     );
   }
 
@@ -700,10 +772,13 @@ class SequenceEditorController extends Notifier<SequenceEditorState?> {
   /// PATCH was in flight, the working body now differs from [savedBody], so
   /// [SequenceEditorState.isDirty] correctly stays true and that edit isn't
   /// silently marked clean. No-op if nothing is loaded.
-  void markSaved(Map<String, dynamic> savedBody) {
+  ///
+  /// [modifiedUtc] is the saved record's new `modified_utc` (#2168), the copy
+  /// a later live setting edit is based on.
+  void markSaved(Map<String, dynamic> savedBody, {String? modifiedUtc}) {
     final s = state;
     if (s == null) return;
-    state = s._copyWith(originalBody: savedBody);
+    state = s._copyWith(originalBody: savedBody, baseModified: modifiedUtc);
   }
 }
 

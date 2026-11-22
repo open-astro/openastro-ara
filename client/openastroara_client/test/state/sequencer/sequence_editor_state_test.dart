@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -670,6 +672,100 @@ void main() {
       ]);
     });
 
+    // ── #2168 review: positions shift, other buttons resume, object fields ──
+    Map<String, dynamic> target(String name, double t) => withChildren({
+          r'$type': 'X.DeepSkyObjectContainer',
+          'Name': name,
+          'Target': {r'$type': 'X.InputTarget', 'TargetName': name},
+        }, [
+          {r'$type': 'X.TakeExposure', 'ExposureTime': t},
+        ]);
+    // A running first item, then targets A, B, C.
+    Map<String, dynamic> threeTargets() => withChildren(sampleDetail().body, [
+          {r'$type': 'X.SwitchFilter', 'Filter': 'L'},
+          target('A', 5),
+          target('B', 5),
+          target('C', 5),
+        ]);
+    Future<SequenceEditorController> threeCtrl(ProviderContainer c) async {
+      final n = await liveCtrl(c);
+      api.daemonBody = threeTargets();
+      n.load(SequenceDetail(id: 'seq-1', body: threeTargets(), modifiedUtc: 't0'));
+      return n;
+    }
+
+    test('an item moved elsewhere keeps the unsaved edit on the same item',
+        () async {
+      final c = liveContainer();
+      final n = await threeCtrl(c);
+      n.setNodeField(const [3, 0], 'ExposureTime', 180.0); // C
+      // Simple mode moves C ahead of B on the rig.
+      final moved = threeTargets();
+      final kids = childrenOf(moved);
+      n.adopt(SequenceDetail(
+          id: 'seq-1',
+          body: withChildren(moved, [kids[0], kids[1], kids[3], kids[2]]),
+          modifiedUtc: 't1'));
+      final s = c.read(sequenceEditorProvider)!;
+      expect(nodeAt(s.body, const [2])!['Name'], 'C');
+      expect(nodeAt(s.body, const [2, 0])!['ExposureTime'], 180.0);
+      expect(nodeAt(s.body, const [3, 0])!['ExposureTime'], 5, reason: 'B untouched');
+      expect(s.isDirty, isTrue);
+      expect(s.baseModified, 't1');
+    });
+
+    test('an edit whose item was removed elsewhere is dropped with a notice',
+        () async {
+      final c = liveContainer();
+      final n = await threeCtrl(c);
+      n.setNodeField(const [3, 0], 'ExposureTime', 180.0);
+      n.adopt(SequenceDetail(
+          id: 'seq-1', body: removeAt(threeTargets(), const [3]), modifiedUtc: 't1'));
+      expect(c.read(sequenceEditorProvider)!.isDirty, isFalse);
+      expect(c.read(liveEditNoticeProvider), contains('ExposureTime was not kept'));
+    });
+
+    test('the live save sends the modified time of the copy it read', () async {
+      final c = liveContainer();
+      final n = await threeCtrl(c);
+      n.setNodeField(const [3, 0], 'ExposureTime', 180.0);
+      expect(await n.applyLiveEdits(), isTrue);
+      expect(api.sentBases, ['t0']);
+    });
+
+    test('a plan-changed refusal reloads, moves the edits and sends again',
+        () async {
+      final c = liveContainer();
+      final n = await threeCtrl(c);
+      n.setNodeField(const [3, 0], 'ExposureTime', 180.0); // C, at [3]
+      // B was removed on the rig before the save landed.
+      api.daemonBody = removeAt(threeTargets(), const [2]);
+      api.modified = 't1';
+      api.planChangedOnce = true;
+
+      expect(await n.applyLiveEdits(), isTrue);
+      expect(api.sentBases, ['t0', 't1']);
+      expect(api.fieldSaves.single.single.path, [2, 0], reason: "C's new place");
+      expect(nodeAt(api.daemonBody!, const [2, 0])!['ExposureTime'], 180.0);
+      expect(c.read(sequenceEditorProvider)!.isDirty, isFalse);
+    });
+
+    test('a value typed while a remove is in flight is kept', () async {
+      final c = liveContainer();
+      final n = await threeCtrl(c);
+      api.removeGate = Completer<void>();
+      n.removeNode(const [2]); // B
+      await Future<void>.delayed(Duration.zero);
+      n.setNodeField(const [3, 0], 'ExposureTime', 120.0); // C, typed meanwhile
+      api.removeGate!.complete();
+      await Future<void>.delayed(Duration.zero);
+      await Future<void>.delayed(Duration.zero);
+      final s = c.read(sequenceEditorProvider)!;
+      expect(childrenOf(s.body), hasLength(3), reason: "the daemon's copy, B gone");
+      expect(nodeAt(s.body, const [2, 0])!['ExposureTime'], 120.0);
+      expect(s.isDirty, isTrue, reason: 'still to be saved');
+    });
+
     test('cross-parent drag is refused; same-parent reorder is sent', () async {
       final c = liveContainer();
       final n = await liveCtrl(c);
@@ -693,10 +789,45 @@ class _LiveFakeClient implements SequenceClient {
   final List<Map<String, dynamic>> addedItems = [];
   final List<(List<int>, int)> moves = [];
   final List<List<FieldChange>> fieldSaves = [];
+  final List<String?> sentBases = [];
+  final List<String> resumed = [];
   String? refuseFields;
+  // The daemon's copy: what every answer carries (sampleDetail's by default).
+  Map<String, dynamic>? daemonBody;
+  String modified = 't1';
+  bool planChangedOnce = false;
+  Completer<void>? removeGate;
+
+  SequenceDetail _answer([Map<String, dynamic>? body]) => SequenceDetail(
+      id: 'seq-1',
+      body: body ?? daemonBody ?? sampleDetail().body,
+      modifiedUtc: modified);
 
   @override
-  Future<SequenceDetail> setRunFields(String id, List<FieldChange> changes) async {
+  Future<SequenceDetail> getSequenceDetail(String id) async => _answer();
+
+  @override
+  Future<String> resume(String id,
+      {bool recenter = true, bool refocus = false}) async {
+    resumed.add(id);
+    return 'op-1';
+  }
+
+  @override
+  Future<SequenceDetail> setRunFields(String id, List<FieldChange> changes,
+          {String? baseModifiedUtc}) async {
+    sentBases.add(baseModifiedUtc);
+    if (planChangedOnce) {
+      planChangedOnce = false;
+      throw DioException(
+        requestOptions: RequestOptions(path: '/run/fields'),
+        response: Response(
+          requestOptions: RequestOptions(path: '/run/fields'),
+          statusCode: 409,
+          data: {'type': 'https://openastro.net/errors/sequence-plan-changed'},
+        ),
+      );
+    }
     if (refuseFields != null) {
       throw DioException(
         requestOptions: RequestOptions(path: '/run/fields'),
@@ -708,7 +839,10 @@ class _LiveFakeClient implements SequenceClient {
       );
     }
     fieldSaves.add(changes);
-    return sampleDetail();
+    // The daemon answers with its copy, the change in it.
+    daemonBody = applyFieldChanges(daemonBody ?? sampleDetail().body, changes);
+    modified = '${modified}x';
+    return _answer();
   }
 
   @override
@@ -723,7 +857,9 @@ class _LiveFakeClient implements SequenceClient {
   @override
   Future<SequenceDetail> removeRunItem(String id, List<int> path) async {
     removedPaths.add(path);
-    return sampleDetail();
+    await removeGate?.future;
+    if (daemonBody != null) daemonBody = removeAt(daemonBody!, path);
+    return daemonBody == null ? sampleDetail() : _answer();
   }
 
   @override
