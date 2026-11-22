@@ -8,6 +8,8 @@
 /// (root = `[]`, its first child = `[0]`, that child's second child = `[0,1]`).
 library;
 
+import 'package:collection/collection.dart';
+
 /// Child-index path from the root to a node. Empty = the root itself.
 typedef NodePath = List<int>;
 
@@ -378,4 +380,199 @@ Map<String, dynamic> moveSubtree(Map<String, dynamic> root, NodePath fromPath,
     adjustedParent[p] -= 1;
   }
   return insertChild(removed, adjustedParent, toIndex, node);
+}
+
+/// One setting changed on a node, or on one of its conditions or triggers
+/// (#2168): what the daemon's live `run/fields` op takes. [target] is `item`
+/// (the node at [path]), `condition` or `trigger` (then [index] picks it).
+class FieldChange {
+  final NodePath path;
+  final String target;
+  final int? index;
+  final String key;
+  final Object? value;
+
+  const FieldChange({
+    required this.path,
+    required this.target,
+    this.index,
+    required this.key,
+    required this.value,
+  });
+
+  Map<String, dynamic> toJson() => {
+        'path': path,
+        'target': target,
+        'index': index,
+        'key': key,
+        'value': value,
+      };
+
+  @override
+  String toString() =>
+      'FieldChange($target ${path.join('.')}${index == null ? '' : '#$index'} $key=$value)';
+}
+
+const DeepCollectionEquality _fieldEquality = DeepCollectionEquality();
+
+/// The structure keys a field diff never reports: children, the rule lists,
+/// and Json.NET metadata (`$type`, `$id`, …).
+bool _isStructureKey(String key) =>
+    key == 'Items' || key == 'Conditions' || key == 'Triggers' || key.startsWith(r'$');
+
+void _diffFields(Map<String, dynamic> a, Map<String, dynamic> b, NodePath path,
+    String target, int? index, List<FieldChange> out) {
+  for (final key in {...a.keys, ...b.keys}) {
+    if (_isStructureKey(key)) continue;
+    if (_fieldEquality.equals(a[key], b[key])) continue;
+    out.add(FieldChange(
+        path: path, target: target, index: index, key: key, value: b[key]));
+  }
+}
+
+/// The settings that differ between [original] and [edited] — only the keys
+/// that changed, never whole nodes, so a live save never writes back the run's
+/// own counters (frames taken, loops done) from a stale copy (#2168). Null when
+/// the two bodies differ in shape (a node, condition or trigger added, removed,
+/// moved or swapped for another kind): that is not a field edit.
+List<FieldChange>? scalarFieldChanges(
+    Map<String, dynamic> original, Map<String, dynamic> edited) {
+  final out = <FieldChange>[];
+  bool walk(Map<String, dynamic> a, Map<String, dynamic> b, NodePath path) {
+    if (a[r'$type'] != b[r'$type']) return false;
+    _diffFields(a, b, path, 'item', null, out);
+    for (final (target, of) in [
+      ('condition', conditionsOf),
+      ('trigger', triggersOf),
+    ]) {
+      final ra = of(a), rb = of(b);
+      if (ra.length != rb.length) return false;
+      for (var i = 0; i < ra.length; i++) {
+        if (ra[i][r'$type'] != rb[i][r'$type']) return false;
+        _diffFields(ra[i], rb[i], path, target, i, out);
+      }
+    }
+    final ka = childrenOf(a), kb = childrenOf(b);
+    if (ka.length != kb.length) return false;
+    for (var i = 0; i < ka.length; i++) {
+      if (!walk(ka[i], kb[i], <int>[...path, i])) return false;
+    }
+    return true;
+  }
+
+  return walk(original, edited, const []) ? out : null;
+}
+
+/// The class name of a node's `$type`, without namespace or assembly:
+/// `NINA.Sequencer.SequenceItem.Imaging.TakeExposure, NINA.Sequencer` →
+/// `TakeExposure`. A NINA import and the daemon's own copy name the same class
+/// with different namespaces, so a match compares this part only.
+String? _shortType(Object? type) {
+  if (type is! String) return null;
+  final cls = type.split(',').first.trim();
+  return cls.substring(cls.lastIndexOf('.') + 1);
+}
+
+/// Where the node at [path] in [from] is in [to], found level by level by
+/// kind and name (#2168): positions shift when an item is added, removed or
+/// moved, so a stale position could point at a different item. Among siblings
+/// of the same kind and name, the k-th one stays the k-th one. [edited] (the
+/// same shape as [from]) adds the node's edited name as a second accepted
+/// name, so a renamed item still matches. Null when the node is gone.
+NodePath? mapNodePath(
+    Map<String, dynamic> from, Map<String, dynamic> to, NodePath path,
+    {Map<String, dynamic>? edited}) {
+  var a = from;
+  Map<String, dynamic>? e = edited;
+  var b = to;
+  final out = <int>[];
+  for (final i in path) {
+    final ka = childrenOf(a), kb = childrenOf(b);
+    if (i < 0 || i >= ka.length) return null;
+    final ke = e == null ? null : childrenOf(e);
+    final node = ka[i];
+    final type = _shortType(node[r'$type']);
+    final names = {node['Name'], if (ke != null && i < ke.length) ke[i]['Name']};
+    bool same(Map<String, dynamic> n) =>
+        _shortType(n[r'$type']) == type && names.contains(n['Name']);
+    var k = 0;
+    for (var j = 0; j < i; j++) {
+      if (same(ka[j])) k++;
+    }
+    var found = -1;
+    for (var j = 0; j < kb.length; j++) {
+      if (!same(kb[j])) continue;
+      if (k == 0) {
+        found = j;
+        break;
+      }
+      k--;
+    }
+    if (found < 0) return null;
+    out.add(found);
+    a = node;
+    e = (ke != null && i < ke.length) ? ke[i] : null;
+    b = kb[found];
+  }
+  return out;
+}
+
+/// The same rule for a loop rule or trigger: the k-th one of its kind on the
+/// node stays the k-th one. Null when there is no such one.
+int? _mapRuleIndex(
+    List<Map<String, dynamic>> from, List<Map<String, dynamic>> to, int index) {
+  if (index < 0 || index >= from.length) return null;
+  final type = _shortType(from[index][r'$type']);
+  var k = 0;
+  for (var j = 0; j < index; j++) {
+    if (_shortType(from[j][r'$type']) == type) k++;
+  }
+  for (var j = 0; j < to.length; j++) {
+    if (_shortType(to[j][r'$type']) != type) continue;
+    if (k == 0) return j;
+    k--;
+  }
+  return null;
+}
+
+/// #2168 — move unsaved setting edits ([changes], made on [from]; [edited] is
+/// the edited copy) onto a newer copy [to] of the plan. `kept` are the edits
+/// re-addressed to the same items in [to]; `lost` are the ones whose item is
+/// gone (removed elsewhere).
+({List<FieldChange> kept, List<FieldChange> lost}) rebaseFieldChanges(
+    Map<String, dynamic> from,
+    Map<String, dynamic> edited,
+    Map<String, dynamic> to,
+    List<FieldChange> changes) {
+  final kept = <FieldChange>[], lost = <FieldChange>[];
+  for (final c in changes) {
+    final path = mapNodePath(from, to, c.path, edited: edited);
+    int? index = c.index;
+    if (path != null && c.target != 'item') {
+      final of = c.target == 'condition' ? conditionsOf : triggersOf;
+      index = _mapRuleIndex(
+          of(nodeAt(from, c.path)!), of(nodeAt(to, path)!), c.index ?? -1);
+    }
+    if (path == null || (c.target != 'item' && index == null)) {
+      lost.add(c);
+      continue;
+    }
+    kept.add(FieldChange(
+        path: path, target: c.target, index: index, key: c.key, value: c.value));
+  }
+  return (kept: kept, lost: lost);
+}
+
+/// [body] with every one of [changes] set.
+Map<String, dynamic> applyFieldChanges(
+    Map<String, dynamic> body, List<FieldChange> changes) {
+  var out = body;
+  for (final c in changes) {
+    out = switch (c.target) {
+      'condition' => setConditionField(out, c.path, c.index!, c.key, c.value),
+      'trigger' => setTriggerField(out, c.path, c.index!, c.key, c.value),
+      _ => setField(out, c.path, c.key, c.value),
+    };
+  }
+  return out;
 }

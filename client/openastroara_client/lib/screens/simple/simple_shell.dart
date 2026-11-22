@@ -44,6 +44,8 @@ import '../../state/imaging/live_view_frame_state.dart';
 import '../../state/imaging/live_view_state.dart';
 import '../../state/night_mode_state.dart';
 import '../../models/sequence/sequence_summary.dart';
+import '../../state/sequencer/sequence_editor_state.dart'
+    show resumeWithEdits, sequenceEditorProvider;
 import '../../state/sequencer/sequence_list_state.dart';
 import '../../state/simple_calibration_state.dart' show simpleCalibrationRunStateProvider;
 import '../../state/sky_atlas/planetarium_selection_state.dart';
@@ -496,7 +498,14 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
       actions: [
         SimpleMessageAction(l10n.planResume, () async {
           try {
-            await ref.read(sequenceApiProvider)?.resume(id, recenter: false);
+            final api = ref.read(sequenceApiProvider);
+            if (api == null) return;
+            await resumeWithEdits(
+              ref.read(sequenceEditorProvider.notifier),
+              api,
+              id,
+              recenter: false,
+            );
           } catch (e) {
             if (!mounted) return;
             _messages.show(

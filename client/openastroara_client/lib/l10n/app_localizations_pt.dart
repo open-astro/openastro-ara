@@ -7472,6 +7472,18 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get polarActionMoveToStart => 'move the scope to the start position';
+
+  @override
+  String sequencerRunSaveRefused(String reason) {
+    return 'Your changes couldn\'t be saved, so the run didn\'t start: $reason';
+  }
+
+  @override
+  String get sequencerRunSaveInvalid => 'the sequence is invalid.';
+
+  @override
+  String get sequencerRunSaveFailed =>
+      'Your changes couldn\'t be saved, so the run didn\'t start. Check the connection and try again.';
 }
 
 /// The translations for Portuguese, as used in Brazil (`pt_BR`).
@@ -14997,4 +15009,16 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String get polarActionMoveToStart =>
       'mover o telescópio para a posição inicial';
+
+  @override
+  String sequencerRunSaveRefused(String reason) {
+    return 'Não foi possível salvar suas alterações, então a execução não começou: $reason';
+  }
+
+  @override
+  String get sequencerRunSaveInvalid => 'a sequência é inválida.';
+
+  @override
+  String get sequencerRunSaveFailed =>
+      'Não foi possível salvar suas alterações, então a execução não começou. Verifique a conexão e tente de novo.';
 }

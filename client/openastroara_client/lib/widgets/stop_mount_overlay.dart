@@ -7,6 +7,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/verify_position_result.dart';
 import '../state/equipment/mount_state.dart';
 import '../state/plate_solve/plate_solve_api_state.dart';
+import '../state/sequencer/sequence_editor_state.dart'
+    show resumeWithEdits, sequenceEditorProvider;
 import '../state/sequencer/sequence_list_state.dart';
 import '../state/simple_messages_state.dart';
 import '../state/ws/ws_providers.dart';
@@ -275,6 +277,7 @@ class _StopMountListenerState extends ConsumerState<StopMountListener> {
 
   Future<void> _runSequenceAction(_StopModalAction action) async {
     final api = ref.read(sequenceApiProvider);
+    final editor = ref.read(sequenceEditorProvider.notifier);
     final ids = List<String>.of(_pausedRunIds);
     final messenger = ScaffoldMessenger.of(context);
     if (api == null || ids.isEmpty) {
@@ -298,14 +301,14 @@ class _StopMountListenerState extends ConsumerState<StopMountListener> {
             // is already the emergency-stop choice surface, and a pointing
             // re-center is exactly what a run needs right after a panic stop.
             // Explicit flags so the safe default reads as chosen, not inherited.
-            await api.resume(id, recenter: true, refocus: false);
+            await resumeWithEdits(editor, api, id, recenter: true, refocus: false);
           case _StopModalAction.skipTarget:
             // §57.4 "Skip this target": skip what the run is executing now,
             // then let it continue with the rest of the plan. No re-center —
             // the skipped target's pointing is irrelevant and the next target
             // block slews itself.
             await api.skipCurrent(id);
-            await api.resume(id, recenter: false, refocus: false);
+            await resumeWithEdits(editor, api, id, recenter: false, refocus: false);
           case _StopModalAction.endSession:
             await api.stop(id);
         }

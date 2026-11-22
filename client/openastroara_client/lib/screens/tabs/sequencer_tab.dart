@@ -61,7 +61,7 @@ class _SequencerTabState extends ConsumerState<SequencerTab> {
   /// editor in place, and clears [_loadedId] so the sequence can be retried.
   /// A `draft:` id loads from the local draft store instead of the daemon (§2
   /// offline planning), so drafts open with or without a server.
-  Future<void> _loadSelectedBody(String id) async {
+  Future<void> _loadSelectedBody(String id, {bool keepEdits = false}) async {
     if (isDraftSequenceId(id)) {
       await _loadDraftBody(id);
       return;
@@ -77,7 +77,8 @@ class _SequencerTabState extends ConsumerState<SequencerTab> {
       // Drop a stale response: a newer selection landed while this was in flight,
       // so loading now would clobber the editor with the wrong (older) sequence.
       if (ref.read(selectedSequenceIdProvider) != id) return;
-      ref.read(sequenceEditorProvider.notifier).load(detail);
+      final editor = ref.read(sequenceEditorProvider.notifier);
+      keepEdits ? editor.adopt(detail) : editor.load(detail);
     } catch (e) {
       debugPrint('[sequencer] failed to load sequence body for $id: $e');
       _onLoadFailed(id);
@@ -165,7 +166,9 @@ class _SequencerTabState extends ConsumerState<SequencerTab> {
       final id = ref.read(selectedSequenceIdProvider);
       if (id == null || event.payload['sequence_id'] != id) return;
       if (event.type == 'sequence.run_items_changed') {
-        unawaited(_loadSelectedBody(id));
+        // #2168 — unsaved setting edits are moved onto the new copy, not
+        // dropped: an item added, removed or moved elsewhere shifts positions.
+        unawaited(_loadSelectedBody(id, keepEdits: true));
       } else if (event.type == 'sequence.resume_recentering' && mounted) {
         // §38.10 — the daemon is refining pointing/focus before imaging
         // continues; tell the user why frames aren't rolling yet.
