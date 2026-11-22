@@ -441,11 +441,11 @@ namespace OpenAstroAra.Server.Services {
             LogTrackingEnabled();
         }
 
-        /// <summary>The message of a start too close to the pole (the <c>polar-align-on-axis</c> refusal and the run's
-        /// <c>on_axis</c> failure).</summary>
         /// <summary>#2166 — the <see cref="System.Exception.Data"/> key of an on-axis refusal's Dec reading (degrees).</summary>
         internal const string OnAxisDecKey = "polar_align.on_axis_dec_deg";
 
+        /// <summary>The message of a start too close to the pole (the <c>polar-align-on-axis</c> refusal and the run's
+        /// <c>on_axis</c> failure).</summary>
         internal const string OnAxisMessage =
             "The scope points within 3° of the pole: point it 2–5° from the pole, counterweights down, then start again";
 

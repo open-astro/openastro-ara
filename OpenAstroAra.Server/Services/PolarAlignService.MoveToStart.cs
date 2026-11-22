@@ -73,11 +73,29 @@ namespace OpenAstroAra.Server.Services {
         // A move to the start position is under way (it holds _opLock and the motion owner). Guarded by _gate.
         private bool _movingToStart;
 
+        // Calls of MoveToStartAsync under way, from before they wait on _opLock to their end: a Start during the move's
+        // pre-checks is refused too, not queued behind the whole move. Guarded by _gate.
+        private int _moveToStartCalls;
+
         /// <inheritdoc />
         public async Task<PolarAlignMoveToStartResultDto> MoveToStartAsync(PolarAlignMoveToStartConfirmation? confirmation, CancellationToken ct) {
             // #2066 — the stop count at the call, as a start reads it: a Stop Mount from here on ends the move before it moves.
             var abortEpochAtCall = _motionControl.AbortEpoch;
             var ownAbortsAtCall = Interlocked.Read(ref _ownAborts);
+            lock (_gate) {
+                _moveToStartCalls++;
+            }
+            try {
+                return await MoveToStartLockedAsync(confirmation, abortEpochAtCall, ownAbortsAtCall, ct).ConfigureAwait(false);
+            } finally {
+                lock (_gate) {
+                    _moveToStartCalls--;
+                }
+            }
+        }
+
+        private async Task<PolarAlignMoveToStartResultDto> MoveToStartLockedAsync(
+                PolarAlignMoveToStartConfirmation? confirmation, long abortEpochAtCall, long ownAbortsAtCall, CancellationToken ct) {
             await _opLock.WaitAsync(ct).ConfigureAwait(false);
             IDisposable? hold = null;
             try {
@@ -123,7 +141,7 @@ namespace OpenAstroAra.Server.Services {
         /// (<c>polar-align-run-active</c>), never left waiting for the move to end.</summary>
         private void ThrowIfMovingToStart() {
             lock (_gate) {
-                if (!_movingToStart) {
+                if (!_movingToStart && _moveToStartCalls == 0) {
                     return;
                 }
             }

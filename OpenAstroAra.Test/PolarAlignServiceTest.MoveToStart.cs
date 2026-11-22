@@ -15,6 +15,8 @@
 using Moq;
 using NUnit.Framework;
 using OpenAstroAra.Astrometry;
+using OpenAstroAra.Equipment.Equipment.MyTelescope;
+using OpenAstroAra.Equipment.Interfaces.Mediator;
 using OpenAstroAra.Server.Contracts;
 using OpenAstroAra.Server.Contracts.Refusals;
 using OpenAstroAra.Server.Services;
@@ -318,6 +320,33 @@ namespace OpenAstroAra.Test {
             });
         }
 
+        [Test]
+        public async Task A_Start_during_the_move_to_starts_pre_checks_is_refused_at_once_as_run_active() {
+            var mount = PolledGemNearThePole();
+            using var svc = NewGemService(mount, new WsRecorder());
+            Task<Exception?>? start = null;
+            var reads = 0;
+            var movedAtStart = -1;
+            mount.OnFullRead = () => {
+                if (++reads == 1) {
+                    // The move's first read: its pre-flight list, before it marks the move running.
+                    movedAtStart = mount.Motions.Count;
+                    start = Task.Run(() => CaughtAsync(() => svc.StartAsync(null, new PolarAlignStartConfirmation(PolarAlignDirections.East), null, CancellationToken.None)));
+                    start.Wait(TimeSpan.FromSeconds(5));
+                }
+            };
+
+            var result = await svc.MoveToStartAsync(MoveConfirmed, CancellationToken.None).ConfigureAwait(false);
+
+            Assert.Multiple(() => {
+                Assert.That(movedAtStart, Is.Zero, "the Start came before the move moved anything");
+                Assert.That(start!.IsCompleted, Is.True, "the Start answered during the pre-checks, not after the move");
+                Assert.That((start.IsCompleted ? start.Result : null) is RefusalException { Cause: var c } && c == RefusalCatalog.PolarAlignRunActive, Is.True,
+                    "the Start is refused as run-active: " + (start.IsCompleted ? start.Result : null));
+                Assert.That(result.Outcome, Is.EqualTo(PolarAlignMoveToStartOutcomes.Arrived), result.Message);
+            });
+        }
+
         private static async Task<Exception?> CaughtAsync<T>(Func<Task<T>> call) {
             try {
                 await call().ConfigureAwait(false);
@@ -472,6 +501,91 @@ namespace OpenAstroAra.Test {
                 Assert.That(mount.MotionOwner, Is.Null);
             });
             mount.AssertNoMotionSince(emergency.At);
+        }
+
+        // ── the stops that ask IsActive (Emergency Stop, the safety park, shutdown, a sequence start) ──
+
+        /// <summary>Runs <paramref name="caller"/> mid-move (from the move's own read, on another thread) and waits for it to
+        /// reach the mount; then the move's result, the first stop the mount saw, and the caller's task.</summary>
+        private static async Task<(PolarAlignMoveToStartResultDto Result, StopEntry? Stop, Task Caller)> MoveStoppedMidMoveAsync(
+                FakeGemMount mount, PolarAlignService svc, Func<Task> caller) {
+            Task? calling = null;
+            var before = -1;
+            var reads = 0;
+            mount.OnPoseRead = () => {
+                if (++reads == 6) {
+                    before = mount.Stops.Count; // the probe's own MoveAxis 0 came earlier
+                    calling = Task.Run(caller);
+                    SpinWait.SpinUntil(() => mount.Stops.Count > before, TimeSpan.FromSeconds(5));
+                }
+            };
+            var result = await svc.MoveToStartAsync(MoveConfirmed, CancellationToken.None).ConfigureAwait(false);
+            await calling!.WaitAsync(SignalTimeout).ConfigureAwait(false);
+            return (result, mount.Stops.Count > before ? mount.Stops[before] : null, calling);
+        }
+
+        private static void AssertTheMoveWasStopped(PolarAlignMoveToStartResultDto result, StopEntry? stop, FakeGemMount mount) {
+            Assert.Multiple(() => {
+                Assert.That(stop, Is.Not.Null, "the caller stopped the move. " + mount.Describe());
+                Assert.That(result.Outcome, Is.Not.EqualTo(PolarAlignMoveToStartOutcomes.Arrived), "the move ended, it did not run on: " + result.Message);
+                Assert.That(mount.MotionOwner, Is.Null);
+            });
+            if (stop is not null) {
+                mount.AssertNoMotionSince(stop.At);
+            }
+        }
+
+        [Test]
+        public async Task Emergency_Stop_during_the_move_to_start_reaches_its_Polar_Align_rung_and_halts_the_Dec_motor() {
+            var mount = PolledGemNearThePole();
+            using var svc = NewGemService(mount, new WsRecorder());
+            var emergency = new EmergencyStopService(polarAlign: svc); // no mount of its own: only the Polar Align rung acts
+
+            var (result, stop, _) = await MoveStoppedMidMoveAsync(mount, svc, () => emergency.ExecuteAsync()).ConfigureAwait(false);
+
+            AssertTheMoveWasStopped(result, stop, mount);
+        }
+
+        [Test]
+        public async Task A_safety_or_fault_park_during_the_move_to_start_stops_the_move_first() {
+            var mount = PolledGemNearThePole();
+            using var svc = NewGemService(mount, new WsRecorder());
+
+            var (result, stop, _) = await MoveStoppedMidMoveAsync(mount, svc, () => ReactionMountStops.StopPolarAlignBeforeParkAsync(
+                () => svc, null, MountStopReasons.SafetyPark, TimeSpan.FromSeconds(10), (_, ex) => throw ex)).ConfigureAwait(false);
+
+            AssertTheMoveWasStopped(result, stop, mount);
+        }
+
+        [Test]
+        public async Task The_shutdown_ladder_during_the_move_to_start_stops_the_move() {
+            var mount = PolledGemNearThePole();
+            using var svc = NewGemService(mount, new WsRecorder());
+            // A mediator that is not the motion-control seam, so the ladder can only see the move through IsActive.
+            var ladderMount = new Mock<ITelescopeMediator>();
+            ladderMount.Setup(m => m.GetInfo()).Returns(new TelescopeInfo { Connected = true, CanFindHome = true });
+            ladderMount.Setup(m => m.FindHome(It.IsAny<IProgress<OpenAstroAra.Core.Model.ApplicationStatus>>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync(true);
+            var ladder = new ShutdownLadder(telescope: ladderMount.Object, polarAlign: () => svc);
+
+            var (result, stop, _) = await MoveStoppedMidMoveAsync(mount, svc, () => ladder.FindHomeAsync()).ConfigureAwait(false);
+
+            AssertTheMoveWasStopped(result, stop, mount);
+        }
+
+        [Test]
+        public async Task A_sequence_start_during_the_move_to_start_sees_it_active_and_ends_it() {
+            var mount = PolledGemNearThePole();
+            using var svc = NewGemService(mount, new WsRecorder());
+
+            // SequencerService.EndOpenPolarAlignAsync's own gate: end Polar Align only when it is active.
+            var (result, stop, _) = await MoveStoppedMidMoveAsync(mount, svc, async () => {
+                if (svc.IsActive) {
+                    await svc.StopForSequenceAsync(CancellationToken.None).ConfigureAwait(false);
+                }
+            }).ConfigureAwait(false);
+
+            AssertTheMoveWasStopped(result, stop, mount);
         }
 
         // ── at and next to the pole: a probe that goes over it ──────────────────────────────
