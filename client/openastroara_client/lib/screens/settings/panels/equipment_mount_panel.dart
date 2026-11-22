@@ -352,12 +352,15 @@ class _PositionUnverified extends ConsumerWidget {
             )
           else
             // #2173 — Home is the way out on a mount that can find Home (then an
-            // eye check, unless only the stop was unconfirmed); one that cannot
-            // is sent to its hand controller's search.
+            // eye check, unless only the stop was unconfirmed or the driver says
+            // its Home is a sensor search); one that cannot is sent to its hand
+            // controller's search.
             Text(
               (status.capabilities?.canFindHome ?? false)
                   ? (status.positionUnverifiedByStop
                         ? l10n.mountPositionStopUnconfirmedPressHome
+                        : (status.capabilities?.homeIsSensorSearch ?? false)
+                        ? l10n.mountPositionSensorSearchPressHome
                         : l10n.mountPositionUnverifiedPressHome)
                   : l10n.mountPositionUnverifiedRunZeroSearch,
             ),

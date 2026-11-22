@@ -8667,6 +8667,8 @@
   "@mountPositionUnverifiedPressHome": {"description": "Mount window: the unverified-position fix on a mount that can find Home, while it does not report Home, after a power loss or a position jump (#2173): Home is allowed, then the user confirms Home by eye"},
   "mountPositionStopUnconfirmedPressHome": "Press Home: the position is trusted again once the mount is seen to move and then reports Home.",
   "@mountPositionStopUnconfirmedPressHome": {"description": "Mount window: the unverified-position fix on a mount that can find Home, while it does not report Home, after polar alignment's stop was not confirmed (reason stop_unconfirmed, #2173): a completed Home trusts the position by itself"},
+  "mountPositionSensorSearchPressHome": "Press Home: this mount searches for its home sensor, so the position is trusted again once the mount is seen to move and then reports Home.",
+  "@mountPositionSensorSearchPressHome": {"description": "Mount window: the unverified-position fix on a mount that can find Home and whose driver says its Find Home is a real home-sensor search (#2173), while it does not report Home: a completed Home trusts the position by itself, for any reason"},
   "mountPositionStopUnconfirmedBody": "Ara could not confirm that the mount stopped after polar alignment moved it, or the mount reconnected while polar alignment ran, so it may have moved on. GoTo, Park and Polar Align are blocked. Home, Stop, the direction pad and tracking still work.",
   "@mountPositionStopUnconfirmedBody": {"description": "Mount window: what the unverified-position warning means when polar alignment's stop was not confirmed (reason stop_unconfirmed, #2066), and what still works"},
   "mountConfirmAtHome": "The mount IS at Home",

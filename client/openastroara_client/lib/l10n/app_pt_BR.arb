@@ -1859,6 +1859,7 @@
   "mountPositionUnverifiedRunZeroSearch": "Esta montagem não consegue buscar Home pelo Ara: rode a busca de zero pelo controle de mão ou app dela. Quando ela indicar Home, confirme aqui.",
   "mountPositionUnverifiedPressHome": "Toque em Home. Depois do Home, confirme com os próprios olhos que a montagem está mesmo em Home: a posição dela pode estar errada, então só o Home não a torna confiável.",
   "mountPositionStopUnconfirmedPressHome": "Toque em Home: a posição volta a ser confiável quando a montagem for vista se movendo e depois indicar Home.",
+  "mountPositionSensorSearchPressHome": "Toque em Home: esta montagem busca o sensor de Home dela, então a posição volta a ser confiável quando a montagem for vista se movendo e depois indicar Home.",
   "mountPositionStopUnconfirmedBody": "O Ara não conseguiu confirmar que a montagem parou depois que o alinhamento polar a moveu, ou a montagem reconectou durante o alinhamento polar, então ela pode ter continuado a se mover. GoTo, Estacionar e Alinhamento polar estão bloqueados. Home, Parar, o direcional e o rastreamento continuam funcionando.",
   "mountConfirmAtHome": "A montagem ESTÁ em Home",
   "mountConfirmAtHomeQuestion": "A montagem está fisicamente em Home, com os contrapesos para baixo e o tubo ao longo do eixo polar? Confirme só se você conferiu com os próprios olhos.",

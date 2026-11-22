@@ -6738,6 +6738,10 @@ class AppLocalizationsPt extends AppLocalizations {
       'Press Home: the position is trusted again once the mount is seen to move and then reports Home.';
 
   @override
+  String get mountPositionSensorSearchPressHome =>
+      'Press Home: this mount searches for its home sensor, so the position is trusted again once the mount is seen to move and then reports Home.';
+
+  @override
   String get mountPositionStopUnconfirmedBody =>
       'Ara could not confirm that the mount stopped after polar alignment moved it, or the mount reconnected while polar alignment ran, so it may have moved on. GoTo, Park and Polar Align are blocked. Home, Stop, the direction pad and tracking still work.';
 
@@ -14267,6 +14271,10 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String get mountPositionStopUnconfirmedPressHome =>
       'Toque em Home: a posição volta a ser confiável quando a montagem for vista se movendo e depois indicar Home.';
+
+  @override
+  String get mountPositionSensorSearchPressHome =>
+      'Toque em Home: esta montagem busca o sensor de Home dela, então a posição volta a ser confiável quando a montagem for vista se movendo e depois indicar Home.';
 
   @override
   String get mountPositionStopUnconfirmedBody =>

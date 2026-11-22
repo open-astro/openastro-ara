@@ -19,6 +19,8 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
+using System.Linq;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -32,7 +34,9 @@ namespace OpenAstroAra.Server.Services;
 // is the way out. A search seen to run that ends with the mount reporting Home trusts the position again by
 // itself only when the reason leaves the mount's own model intact (MountPoseTrust.HomeSearchMayTrust); when the
 // model may be wrong (a power loss, a reset, a jump), the user confirms Home by eye after it
-// (TrustPoseAfterHomeSearchAsync). ADR 0003 rule 2: nothing here looks at the brand or driver.
+// (TrustPoseAfterHomeSearchAsync). A mount whose driver says its FindHome is a real home-sensor search
+// (HomeIsSensorSearchAction) is trusted after such a Home for every reason. ADR 0003 rule 2: nothing here looks at
+// the brand, model or driver name; only that capability decides.
 public sealed partial class TelescopeService {
 
     // Under _gate. Internal for tests.
@@ -249,6 +253,56 @@ public sealed partial class TelescopeService {
         }
     }
 
+    /// <summary>#2173 — the Alpaca action AlpacaBridge lists in <c>SupportedActions</c> (only while connected) when the
+    /// driver can say whether its FindHome is a real home-sensor search (AlpacaBridge #2545). The one place the name lives.</summary>
+    internal const string HomeIsSensorSearchAction = "findhomeissensorsearch";
+
+    /// <summary>#2173 — read once per connect with the capabilities (never kept across a reconnect: the capabilities are
+    /// re-read for each session). True only when the action is listed (case-insensitive) and its reply says
+    /// <c>sensor_search: true</c>. Not listed, a NotConnected or any other failed call, or a reply that does not parse:
+    /// false (fail safe).</summary>
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "A driver may NotImplement SupportedActions/Action, answer NotConnected or fail the call; not a sensor search is the fail-safe answer.")]
+    internal static bool ReadHomeIsSensorSearch(ITelescopeDevice c) {
+        try {
+            var actions = c.SupportedActions;
+            if (actions is null || !actions.Any(a => string.Equals(a, HomeIsSensorSearchAction, StringComparison.OrdinalIgnoreCase))) {
+                return false;
+            }
+            return ParseHomeIsSensorSearchReply(c.Action(HomeIsSensorSearchAction, string.Empty));
+        } catch (Exception) {
+            return false;
+        }
+    }
+
+    /// <summary>#2173 — the action's reply, <c>{"sensor_search": bool, "method": "...", "model": "..."}</c>: true only for a
+    /// JSON object whose <c>sensor_search</c> is the JSON literal <c>true</c>. A missing field, another type or text that
+    /// is not JSON is false. <c>method</c> and <c>model</c> are never read: nothing branches on them (ADR 0003 rule 2).</summary>
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Malformed JSON from a third-party driver is 'not a sensor search', not a daemon fault.")]
+    internal static bool ParseHomeIsSensorSearchReply(string? reply) {
+        if (string.IsNullOrWhiteSpace(reply)) {
+            return false;
+        }
+        try {
+            using var doc = JsonDocument.Parse(reply);
+            return doc.RootElement.ValueKind == JsonValueKind.Object
+                && doc.RootElement.TryGetProperty("sensor_search", out var flag)
+                && flag.ValueKind == JsonValueKind.True;
+        } catch (Exception) {
+            return false;
+        }
+    }
+
+    // #2173 — the connect's read of the sensor-search capability (false until read, and for every new session until re-read).
+    private bool HomeIsSensorSearchKnown {
+        get {
+            lock (_gate) {
+                return _capabilities?.HomeIsSensorSearch == true;
+            }
+        }
+    }
+
     // The connect's capability read of CanFindHome (the refusals' wording only; Home itself reads it fresh).
     private bool CanFindHomeKnown {
         get {
@@ -264,15 +318,18 @@ public sealed partial class TelescopeService {
 
     /// <summary>#2173 — the user's Home (FindHome) was sent, on any mount whose CanFindHome is true. A search seen to run
     /// that ends with the mount still and reporting Home, on two polls in a row, trusts the position again with no eye
-    /// check, but only when the reason allows it (<see cref="MountPoseTrust.HomeSearchMayTrust"/>): Ara cannot tell a
+    /// check, but only when the reason, or the driver's sensor-search capability (<see cref="HomeIsSensorSearchAction"/>),
+    /// allows it (<see cref="MountPoseTrust.HomeSearchMayTrust"/>): without that capability Ara cannot tell a
     /// sensor search from a Home that drives by the mount's own model, so after a power loss, a reset or a jump the model
     /// may be the thing that is wrong, and the user confirms Home by eye after the Home. #2173 review — "seen to run" means, since the last poll that could not be
     /// read: one poll answered AtHome false with a real Dec (not AlpacaBridge's (0, 0) placeholder), and one answered
     /// Slewing true or the Dec moved more than <see cref="MountPoseTrust.PoseJumpDeg"/>. A failed AtHome is never "away
     /// from Home", and any poll that could not be read (the mount may have lost power and woken at a false zero in that
     /// gap) wipes what was seen before it. <paramref name="atSend"/> is the read just before FindHome went out. Nothing
-    /// is cleared when the mount reconnects, a stop lands after the Home (<paramref name="fence"/>), or the search does
-    /// not end at Home within <see cref="HomeSearchTimeout"/>.
+    /// is cleared when the mount reconnects or its session changes in any way (<paramref name="sessionEpoch"/>, read when
+    /// FindHome went out), a stop lands after the Home (<paramref name="fence"/>), or the search does not end at Home
+    /// within <see cref="HomeSearchTimeout"/>. Only a FindHome Ara sent in this session that returned without error is
+    /// watched: a FindHome that throws is no Home, and the reason stays.
     /// <para>"Seen to run" alone does not keep a false zero untrusted: after a pad nudge off the false zero, a model Home
     /// (a <c>:MH#</c>-style "go to where the model says Home is") drives back to it, is seen to run and lands at Home.
     /// That is why the reason decides, with no knowledge of the mount's brand or driver (ADR 0003 rule 2). "Seen to run",
@@ -280,7 +337,7 @@ public sealed partial class TelescopeService {
     /// nothing).</para></summary>
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Background watch boundary: a failed read is a poll that did not see Home; nothing escapes the fire-and-forget task.")]
-    private async Task TrustPoseAfterHomeSearchAsync(ITelescopeDevice client, long fence, PoseReading atSend) {
+    private async Task TrustPoseAfterHomeSearchAsync(ITelescopeDevice client, long fence, long sessionEpoch, PoseReading atSend) {
         var deadline = DateTime.UtcNow + HomeSearchTimeout;
         var search = new HomeSearchEvidence();
         search.Add(atSend);
@@ -289,7 +346,8 @@ public sealed partial class TelescopeService {
             while (DateTime.UtcNow < deadline) {
                 await Task.Delay(HomeSearchPollInterval, CancellationToken.None).ConfigureAwait(false);
                 lock (_gate) {
-                    if (!_lifecycle.IsLive(client)) {
+                    if (HomeWatchVoidedLocked(client, sessionEpoch)) {
+                        LogHomeSearchNotTrusted("the mount reconnected or its session changed after the Home");
                         return;
                     }
                 }
@@ -312,12 +370,13 @@ public sealed partial class TelescopeService {
                 string? device;
                 string? suspect = null;
                 lock (_gate) {
-                    if (!_lifecycle.IsLive(client) || AbortedSince(fence)) {
+                    if (HomeWatchVoidedLocked(client, sessionEpoch) || AbortedSince(fence)) {
                         return;
                     }
                     // #2173 review — the reason is read here, at the trust, so one that replaced stop_unconfirmed during
-                    // the search counts. A model-suspect reason waits for the user's eye check (confirm-home).
-                    if (!MountPoseTrust.HomeSearchMayTrust(PoseTrust.Reason)) {
+                    // the search counts. A model-suspect reason waits for the user's eye check (confirm-home), unless
+                    // this session's driver says its FindHome is a real sensor search.
+                    if (!MountPoseTrust.HomeSearchMayTrust(PoseTrust.Reason, _capabilities?.HomeIsSensorSearch == true)) {
                         suspect = PoseTrust.Reason;
                     }
                     cleared = suspect is null && PoseTrust.Confirm(pose.DecDeg);
@@ -337,6 +396,11 @@ public sealed partial class TelescopeService {
             LogHomeSearchWatchFailed(ex);
         }
     }
+
+    // #2173 — caller holds the gate. The Home watch ends on any link-lifecycle change: the client is no longer the live one,
+    // or the session was reset (a reconnect, a trip, a disconnect) since FindHome went out.
+    private bool HomeWatchVoidedLocked(ITelescopeDevice client, long sessionEpoch) =>
+        !_lifecycle.IsLive(client) || Interlocked.Read(ref _sessionEpoch) != sessionEpoch;
 
     // #2173 review — what the Home watch has seen of a search since the last poll that could not be read.
     private sealed class HomeSearchEvidence {
@@ -393,14 +457,16 @@ public sealed partial class TelescopeService {
     /// <summary>The refusal a REST move answers while the position is unverified (409, ADR 0022).</summary>
     /// <param name="canFindHome">#2173 — the mount's Alpaca CanFindHome: Home in Ara is then the way out; a mount that
     /// cannot find Home is sent to its hand controller's search.</param>
-    internal static RefusalException PositionUnverifiedRefusal(string reason, bool canFindHome = false) =>
-        new(RefusalCatalog.MountPositionUnverified, PositionUnverifiedDetail(reason, canFindHome),
+    /// <param name="homeIsSensorSearch">#2173 — the driver says its FindHome is a real sensor search: a Home then clears
+    /// the flag by itself for every reason.</param>
+    internal static RefusalException PositionUnverifiedRefusal(string reason, bool canFindHome = false, bool homeIsSensorSearch = false) =>
+        new(RefusalCatalog.MountPositionUnverified, PositionUnverifiedDetail(reason, canFindHome, homeIsSensorSearch),
             new Dictionary<string, object?> { ["position_unverified_reason"] = reason });
 
-    internal static string PositionUnverifiedDetail(string reason, bool canFindHome = false) {
+    internal static string PositionUnverifiedDetail(string reason, bool canFindHome = false, bool homeIsSensorSearch = false) {
         // #2173 review — a completed Home trusts the position by itself only when the reason leaves the mount's model intact.
         var fix = canFindHome
-            ? (MountPoseTrust.HomeSearchMayTrust(reason)
+            ? (MountPoseTrust.HomeSearchMayTrust(reason, homeIsSensorSearch)
                 ? " The way out is Home: press Home, and the position is trusted again once the mount is seen to move and then reports Home."
                     + " Or confirm the mount is physically at Home."
                 : " The way out is Home: press Home, then, after Home, confirm by eye that the mount is really at Home and confirm it in Ara"
@@ -425,7 +491,7 @@ public sealed partial class TelescopeService {
     private async Task ThrowIfPoseUnverifiedAsync(ITelescopeDevice client, string op, CancellationToken ct, bool? canFindHome = null) {
         if (await PoseBlockReasonAsync(client, ct).ConfigureAwait(false) is { } reason) {
             LogMoveRefusedUnverified(op, reason);
-            throw PositionUnverifiedRefusal(reason, canFindHome ?? CanFindHomeKnown);
+            throw PositionUnverifiedRefusal(reason, canFindHome ?? CanFindHomeKnown, HomeIsSensorSearchKnown);
         }
     }
 
@@ -437,7 +503,7 @@ public sealed partial class TelescopeService {
             bool stopTrackingOnRefusal = false) {
         if (await PoseBlockReasonAsync(client, ct).ConfigureAwait(false) is { } reason) {
             LogMoveRefusedUnverified(op, reason);
-            var detail = PositionUnverifiedDetail(reason, CanFindHomeKnown);
+            var detail = PositionUnverifiedDetail(reason, CanFindHomeKnown, HomeIsSensorSearchKnown);
             if (stopTrackingOnRefusal) {
                 var stopped = false;
                 try {
@@ -476,7 +542,7 @@ public sealed partial class TelescopeService {
                 reason = PoseTrust.Reason;
             }
             throw new InvalidOperationException(CanFindHomeKnown
-                ? (MountPoseTrust.HomeSearchMayTrust(reason)
+                ? (MountPoseTrust.HomeSearchMayTrust(reason, HomeIsSensorSearchKnown)
                     ? "the mount does not report that it is at Home, so Home cannot be confirmed: press Home (the position is trusted again once the mount is seen to move and then reports Home)"
                     : "the mount does not report that it is at Home, so Home cannot be confirmed: press Home, then, after Home, confirm by eye that the mount is really at Home and confirm it here")
                 : "the mount does not report that it is at Home, so Home cannot be confirmed: this mount cannot find Home from Ara, so run its zero (home sensor) search from its hand controller or app, then confirm");

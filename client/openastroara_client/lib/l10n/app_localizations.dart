@@ -11262,6 +11262,12 @@ abstract class AppLocalizations {
   /// **'Press Home: the position is trusted again once the mount is seen to move and then reports Home.'**
   String get mountPositionStopUnconfirmedPressHome;
 
+  /// Mount window: the unverified-position fix on a mount that can find Home and whose driver says its Find Home is a real home-sensor search (#2173), while it does not report Home: a completed Home trusts the position by itself, for any reason
+  ///
+  /// In en, this message translates to:
+  /// **'Press Home: this mount searches for its home sensor, so the position is trusted again once the mount is seen to move and then reports Home.'**
+  String get mountPositionSensorSearchPressHome;
+
   /// Mount window: what the unverified-position warning means when polar alignment's stop was not confirmed (reason stop_unconfirmed, #2066), and what still works
   ///
   /// In en, this message translates to:

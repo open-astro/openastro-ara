@@ -390,6 +390,17 @@ namespace OpenAstroAra.Test {
             }
         }
 
+        // #2173 — a driver that says its FindHome is a real home-sensor search finds the physical Home whatever the model
+        // says, so a completed Home may trust the position for every reason, the model-suspect ones included.
+        [Test]
+        public void A_sensor_search_Home_may_trust_the_position_for_every_reason() {
+            foreach (var reason in new[] { null, MountPoseTrust.StopUnconfirmed, MountPoseTrust.AtHomeOnConnect,
+                    MountPoseTrust.PoseJumpOnReconnect, MountPoseTrust.AtHomeWithoutCommand, MountPoseTrust.PoseJumpInSession,
+                    "an_older_daemons_reason" }) {
+                Assert.That(MountPoseTrust.HomeSearchMayTrust(reason, homeIsSensorSearch: true), Is.True, reason ?? "trusted");
+            }
+        }
+
         // #2173 review — a power blip after an unconfirmed stop wakes the mount at a false zero: that reading replaces
         // stop_unconfirmed, so a later Home does not trust the false zero by itself.
         [Test]
