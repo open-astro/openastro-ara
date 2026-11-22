@@ -819,12 +819,12 @@ class PolarAlignPreflight {
 /// when it lowers it. #2167: tested on the mount [mountKey] (its identity, the
 /// key its `mount_clearance` entry uses: the Alpaca UniqueID, else its name,
 /// else `unidentified-mount`) with the driver version [driverVersion] (empty
-/// when the driver reported none).
+/// when the driver reported none), at [testedUtc].
 class PolarAlignMotorDirection {
   final int sign;
   final String mountKey;
   final String driverVersion;
-  final DateTime? testedUtc;
+  final DateTime testedUtc;
 
   const PolarAlignMotorDirection({
     required this.sign,
@@ -835,7 +835,8 @@ class PolarAlignMotorDirection {
 
   /// Null for anything that is not a saved test (no object, a sign other
   /// than ±1). Strict on the key (#2167): a saved test without a string
-  /// `mount_key` or `driver_version` fails the read.
+  /// `mount_key` or `driver_version`, or without a `tested_utc` date
+  /// string, fails the read.
   static PolarAlignMotorDirection? tryParse(Object? json) {
     if (json is! Map<String, dynamic>) return null;
     final sign = (json['sign'] as num?)?.toInt();
@@ -846,11 +847,15 @@ class PolarAlignMotorDirection {
       throw const FormatException('motor direction without mount_key or driver_version');
     }
     final tested = json['tested_utc'];
+    final testedUtc = tested is String ? DateTime.tryParse(tested) : null;
+    if (testedUtc == null) {
+      throw const FormatException('motor direction without a tested_utc date');
+    }
     return PolarAlignMotorDirection(
       sign: sign!,
       mountKey: mountKey,
       driverVersion: driverVersion,
-      testedUtc: tested is String ? DateTime.tryParse(tested) : null,
+      testedUtc: testedUtc,
     );
   }
 }

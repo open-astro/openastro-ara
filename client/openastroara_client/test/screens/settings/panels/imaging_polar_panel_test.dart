@@ -340,8 +340,8 @@ void main() {
     'the saved RA motor direction shows with its driver, and Test direction again forgets it (#2081)',
     (tester) async {
       final direction = _DirectionRig(
-        const PolarAlignMotorDirectionState(
-          saved: PolarAlignMotorDirection(sign: -1, mountKey: 'hae29c-unique-id', driverVersion: '6.0.0', testedUtc: null),
+        PolarAlignMotorDirectionState(
+          saved: PolarAlignMotorDirection(sign: -1, mountKey: 'hae29c-unique-id', driverVersion: '6.0.0', testedUtc: DateTime.utc(2026, 11, 21)),
           matchesConnectedMount: true,
         ),
       );
@@ -372,8 +372,8 @@ void main() {
       live.set(const PolarAlignLive(phase: PolarAlignStates.adjusting));
       await tester.pumpAndSettle();
       // The run's 0.5° test saved a sign on the rig.
-      direction.state = const PolarAlignMotorDirectionState(
-        saved: PolarAlignMotorDirection(sign: 1, mountKey: 'hae29c-unique-id', driverVersion: '6.0.0', testedUtc: null),
+      direction.state = PolarAlignMotorDirectionState(
+        saved: PolarAlignMotorDirection(sign: 1, mountKey: 'hae29c-unique-id', driverVersion: '6.0.0', testedUtc: DateTime.utc(2026, 11, 21)),
         matchesConnectedMount: true,
       );
       live.set(const PolarAlignLive(phase: PolarAlignStates.stopped));
@@ -389,8 +389,8 @@ void main() {
     'Test direction again is off while a run is going, and on again when it ends (#2081)',
     (tester) async {
       final direction = _DirectionRig(
-        const PolarAlignMotorDirectionState(
-          saved: PolarAlignMotorDirection(sign: 1, mountKey: 'hae29c-unique-id', driverVersion: '6.0.0', testedUtc: null),
+        PolarAlignMotorDirectionState(
+          saved: PolarAlignMotorDirection(sign: 1, mountKey: 'hae29c-unique-id', driverVersion: '6.0.0', testedUtc: DateTime.utc(2026, 11, 21)),
           matchesConnectedMount: true,
         ),
       );
@@ -417,8 +417,8 @@ void main() {
     'the saved motor direction names the mount it was keyed to, and a driver version only when one was reported (#2167)',
     (tester) async {
       final direction = _DirectionRig(
-        const PolarAlignMotorDirectionState(
-          saved: PolarAlignMotorDirection(sign: 1, mountKey: 'iOptron HAE29C', driverVersion: '', testedUtc: null),
+        PolarAlignMotorDirectionState(
+          saved: PolarAlignMotorDirection(sign: 1, mountKey: 'iOptron HAE29C', driverVersion: '', testedUtc: DateTime.utc(2026, 11, 21)),
           matchesConnectedMount: true,
         ),
       );
@@ -437,8 +437,8 @@ void main() {
       await _pumpWithDirection(
         tester,
         _DirectionRig(
-          const PolarAlignMotorDirectionState(
-            saved: PolarAlignMotorDirection(sign: 1, mountKey: 'hae29c-unique-id', driverVersion: '5.0.0', testedUtc: null),
+          PolarAlignMotorDirectionState(
+            saved: PolarAlignMotorDirection(sign: 1, mountKey: 'hae29c-unique-id', driverVersion: '5.0.0', testedUtc: DateTime.utc(2026, 11, 21)),
             matchesConnectedMount: false,
           ),
         ),

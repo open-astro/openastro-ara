@@ -79,13 +79,18 @@ namespace OpenAstroAra.Server.Services {
                 : null;
 
         /// <summary><c>GET /polaralign/motor-direction</c>: the saved test, and whether it stands for the connected mount
-        /// (null when none is connected). Pure, for the endpoint and its tests.</summary>
+        /// (null when none is connected). A test saved before #2167 has no mount key and stands for no mount: it is sent as
+        /// nothing saved (never a null <c>mount_key</c> the client's strict reader refuses), so the next start tests again.
+        /// Pure, for the endpoint and its tests.</summary>
         internal static PolarAlignMotorDirectionStateDto MotorDirectionState(PolarAlignMotorDirectionDto? saved, TelescopeInfo? mount) {
+            saved = saved is { MountKey: { } key } && !string.IsNullOrWhiteSpace(key) && saved.DriverVersion is not null
+                ? saved
+                : null;
             if (mount?.Connected != true) {
                 return new(saved, null);
             }
-            var key = MountDriverOf(mount);
-            return new(saved, saved is not null && saved.IsFor(key.Mount, key.Version));
+            var driver = MountDriverOf(mount);
+            return new(saved, saved is not null && saved.IsFor(driver.Mount, driver.Version));
         }
 
         /// <summary>#2081 — when no saved RA motor direction stands for the mount's driver (<see cref="RunBand.RaMotorSign"/>

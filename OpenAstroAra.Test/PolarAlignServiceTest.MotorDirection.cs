@@ -472,5 +472,30 @@ namespace OpenAstroAra.Test {
             Assert.That(upgraded.MatchesConnectedMount, Is.False, "another driver version: the next start tests again");
             Assert.That(none.MatchesConnectedMount, Is.Null, "no mount connected");
         }
+
+        [Test]
+        public void The_motor_direction_endpoint_sends_a_test_saved_before_2167_as_nothing_saved() {
+            // A test saved before #2167 reads back with no mount_key: the client's strict reader would refuse a null one.
+            var older = System.Text.Json.JsonSerializer.Deserialize(
+                "{\"sign\":1,\"driver_info\":\"\",\"driver_version\":\"\",\"tested_utc\":\"2026-11-21T03:00:00Z\"}",
+                OpenAstroAra.Server.AraJsonSerializerContext.Default.PolarAlignMotorDirectionDto)!;
+            var store = new InMemoryProfileStore();
+            store.PutPolarAlignMotorDirection(older);
+            var info = new TelescopeInfo { Connected = true, DeviceId = "hae29c-unique-id", DriverVersion = "6.0.0" };
+            var mount = new Mock<ITelescopeMediator>();
+            mount.Setup(m => m.GetInfo()).Returns(() => info);
+            var services = new Mock<IServiceProvider>();
+            services.Setup(s => s.GetService(typeof(ITelescopeMediator))).Returns(mount.Object);
+
+            var connected = EquipmentEndpoints.PolarAlignMotorDirection(store, services.Object);
+            info.Connected = false;
+            var none = EquipmentEndpoints.PolarAlignMotorDirection(store, services.Object);
+
+            Assert.That((connected.Saved, connected.MatchesConnectedMount), Is.EqualTo(((PolarAlignMotorDirectionDto?)null, (bool?)false)));
+            Assert.That((none.Saved, none.MatchesConnectedMount), Is.EqualTo(((PolarAlignMotorDirectionDto?)null, (bool?)null)));
+            var json = System.Text.Json.JsonSerializer.Serialize(connected,
+                OpenAstroAra.Server.AraJsonSerializerContext.Default.PolarAlignMotorDirectionStateDto);
+            Assert.That(json, Does.Not.Contain("mount_key"), json);
+        }
     }
 }

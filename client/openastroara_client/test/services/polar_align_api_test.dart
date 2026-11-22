@@ -73,6 +73,17 @@ void main() {
     expect((ok.saved!.mountKey, ok.saved!.driverVersion), ('m', ''));
   });
 
+  test('a saved motor direction without a tested_utc date fails the read (#2167)', () {
+    Map<String, dynamic> saved(Object? tested) => {
+      'saved': {'sign': 1, 'mount_key': 'm', 'driver_version': '', 'tested_utc': tested},
+      'matches_connected_mount': false,
+    };
+    expect(() => PolarAlignMotorDirectionState.fromJson(saved(null)), throwsA(isA<FormatException>()));
+    expect(() => PolarAlignMotorDirectionState.fromJson(saved('not a date')), throwsA(isA<FormatException>()));
+    expect(PolarAlignMotorDirectionState.fromJson(saved('2026-11-21T01:02:03Z')).saved!.testedUtc,
+        DateTime.utc(2026, 11, 21, 1, 2, 3));
+  });
+
   test('the start plan reads where RA stands from the origin, and the start sends new_origin back (#2089)', () async {
     final d = _PlanDaemon();
     final api = PolarAlignApi(const AraServer(hostname: 'x', port: 80), dio: Dio()..httpClientAdapter = d);
