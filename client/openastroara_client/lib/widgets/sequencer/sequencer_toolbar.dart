@@ -603,6 +603,7 @@ Future<bool> _saveBeforeRun(BuildContext context, ProviderReader read) async {
     return true;
   }
   final messenger = ScaffoldMessenger.of(context);
+  final l = context.l10n;
   final sent = editor.body;
   try {
     final saved = await api.updateSequence(editor.id, body: sent);
@@ -612,10 +613,9 @@ Future<bool> _saveBeforeRun(BuildContext context, ProviderReader read) async {
   } on DioException catch (e) {
     messenger.showSnackBar(SnackBar(
       content: Text(e.response?.statusCode == 422
-          ? "Your changes couldn't be saved, so the run didn't start: "
-              '${_validationMessage(e) ?? 'the sequence is invalid.'}'
-          : "Your changes couldn't be saved, so the run didn't start. Check "
-              'the connection and try again.'),
+          ? l.sequencerRunSaveRefused(
+              _validationMessage(e) ?? l.sequencerRunSaveInvalid)
+          : l.sequencerRunSaveFailed),
       backgroundColor: AraColors.accentError,
     ));
     return false;

@@ -2045,5 +2045,8 @@
   "polarMoveToStartBlockedDec": "Esta montagem não consegue girar o eixo de Dec por velocidade do motor. Aponte-a 2–5° do polo com os próprios controles.",
   "polarMoveToStartBlockedOther": "Corrija primeiro a verificação que falhou acima.",
   "polarMoveToStartFailed": "O movimento para a posição inicial parou: {message}",
-  "polarActionMoveToStart": "mover o telescópio para a posição inicial"
+  "polarActionMoveToStart": "mover o telescópio para a posição inicial",
+  "sequencerRunSaveRefused": "Não foi possível salvar suas alterações, então a execução não começou: {reason}",
+  "sequencerRunSaveInvalid": "a sequência é inválida.",
+  "sequencerRunSaveFailed": "Não foi possível salvar suas alterações, então a execução não começou. Verifique a conexão e tente de novo."
 }

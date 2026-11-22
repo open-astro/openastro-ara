@@ -7469,4 +7469,16 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get polarActionMoveToStart => 'move the scope to the start position';
+
+  @override
+  String sequencerRunSaveRefused(String reason) {
+    return 'Your changes couldn\'t be saved, so the run didn\'t start: $reason';
+  }
+
+  @override
+  String get sequencerRunSaveInvalid => 'the sequence is invalid.';
+
+  @override
+  String get sequencerRunSaveFailed =>
+      'Your changes couldn\'t be saved, so the run didn\'t start. Check the connection and try again.';
 }
