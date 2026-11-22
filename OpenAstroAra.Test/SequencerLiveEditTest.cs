@@ -22,6 +22,7 @@ using OpenAstroAra.Server.Contracts;
 using OpenAstroAra.Server.Contracts.WsEvents;
 using OpenAstroAra.Server.Services;
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
 using System.Threading;
@@ -473,10 +474,12 @@ namespace OpenAstroAra.Test {
             public readonly System.Collections.Concurrent.ConcurrentQueue<(double Time, int Gain)> Frames = new();
             public readonly TaskCompletionSource FirstStarted = new(TaskCreationOptions.RunContinuationsAsynchronously);
             public readonly TaskCompletionSource ReleaseFirst = new(TaskCreationOptions.RunContinuationsAsynchronously);
-            public readonly HeadlessSequencerFactory Factory = HeadlessSequencerFactory.WithDefaults();
+            public readonly HeadlessSequencerFactory Factory;
             public volatile bool CameraConnected = true;
 
-            public ExposureRig() {
+            public ExposureRig(OpenAstroAra.Profile.Interfaces.IProfileService? profile = null,
+                    OpenAstroAra.Equipment.Interfaces.Mediator.IFilterWheelMediator? wheel = null) {
+                Factory = HeadlessSequencerFactory.WithDefaults(filterWheelMediator: wheel, profileService: profile);
                 var camera = new Moq.Mock<OpenAstroAra.Equipment.Interfaces.Mediator.ICameraMediator>();
                 camera.Setup(c => c.GetInfo()).Returns(() => new OpenAstroAra.Equipment.Equipment.MyCamera.CameraInfo { Connected = CameraConnected });
                 var imaging = new Moq.Mock<OpenAstroAra.Equipment.Interfaces.Mediator.IImagingMediator>();
@@ -496,18 +499,20 @@ namespace OpenAstroAra.Test {
                 Factory.Items.Add(new TakeExposure(camera.Object, imaging.Object));
             }
 
-            /// <summary>Body: one "Imaging" block looping <paramref name="iterations"/> × a 5 s frame.</summary>
-            public JsonElement Body(int iterations) => BuildBodyWith(Factory, root => {
+            /// <summary>Body: one "Imaging" block looping <paramref name="iterations"/> × a 5 s frame,
+            /// then whatever <paramref name="after"/> adds to the top.</summary>
+            public JsonElement Body(int iterations, Action<SequentialContainer>? after = null) => BuildBodyWith(Factory, root => {
                 var block = new SequentialContainer { Name = "Imaging" };
                 block.Add(new LoopCondition { Iterations = iterations });
                 var exposure = (TakeExposure)Factory.Items.OfType<TakeExposure>().First().Clone();
                 exposure.ExposureTime = 5;
                 block.Add(exposure);
                 root.Add(block);
+                after?.Invoke(root);
             });
 
-            public (SequencerService Svc, RecordingSequenceStore Store) Service(Guid id, int iterations) {
-                var store = new RecordingSequenceStore(id, Body(iterations));
+            public (SequencerService Svc, RecordingSequenceStore Store) Service(Guid id, int iterations, Action<SequentialContainer>? after = null) {
+                var store = new RecordingSequenceStore(id, Body(iterations, after));
                 var svc = new SequencerService(new SequenceBodyDeserializer(Factory), ws: null, sequencesResolver: () => store, checkpoint: null);
                 return (svc, store);
             }
@@ -638,6 +643,72 @@ namespace OpenAstroAra.Test {
             var result = await svc.SetRunFieldsAsync(id, Fields(ExposureField("ExposureTime", 180.0)), null, CancellationToken.None);
             Assert.That(result.Outcome, Is.EqualTo(SequenceLiveEditOutcome.Applied), result.Reason);
             Assert.That(store.ReplacedBody!.Value.GetRawText(), Does.Contain("\"ExposureTime\":180"));
+            await svc.StopAsync(id, null, CancellationToken.None);
+            await WaitForTerminalAsync(svc, id);
+        }
+
+        [Test]
+        public async Task Filter_change_uses_the_wheel_filter_of_that_name() {
+            // NINA lets a pending Switch Filter change mid-run. The client sends a copy of the filter;
+            // the run must use the profile's own Ha (its wheel position), not the copy.
+            var profile = new HeadlessProfileService();
+            var filters = profile.ActiveProfile.FilterWheelSettings.FilterWheelFilters;
+            filters.Add(new OpenAstroAra.Core.Model.Equipment.FilterInfo("L", 0, 0));
+            filters.Add(new OpenAstroAra.Core.Model.Equipment.FilterInfo("Ha", 0, 4));
+            var wheel = new Moq.Mock<OpenAstroAra.Equipment.Interfaces.Mediator.IFilterWheelMediator>();
+            wheel.Setup(w => w.GetInfo()).Returns(new OpenAstroAra.Equipment.Equipment.MyFilterWheel.FilterWheelInfo { Connected = true });
+            var changedTo = new System.Collections.Concurrent.ConcurrentQueue<OpenAstroAra.Core.Model.Equipment.FilterInfo>();
+            wheel.Setup(w => w.ChangeFilter(Moq.It.IsAny<OpenAstroAra.Core.Model.Equipment.FilterInfo>(),
+                    Moq.It.IsAny<IProgress<OpenAstroAra.Core.Model.ApplicationStatus>?>(), Moq.It.IsAny<CancellationToken>()))
+                .Returns((OpenAstroAra.Core.Model.Equipment.FilterInfo f, IProgress<OpenAstroAra.Core.Model.ApplicationStatus>? _, CancellationToken _) => {
+                    changedTo.Enqueue(f);
+                    return Task.FromResult(f);
+                });
+            var id = Guid.NewGuid();
+            var rig = new ExposureRig(profile, wheel.Object);
+            var (svc, _) = rig.Service(id, iterations: 1, after: root => {
+                var sw = (OpenAstroAra.Sequencer.SequenceItem.FilterWheel.SwitchFilter)rig.Factory.Items
+                    .OfType<OpenAstroAra.Sequencer.SequenceItem.FilterWheel.SwitchFilter>().First().Clone();
+                sw.Filter = filters[0];
+                root.Add(sw);
+            });
+            await PauseAfterFirstFrameAsync(svc, id, rig);
+
+            var sent = JsonSerializer.SerializeToElement(new Dictionary<string, object> {
+                ["$type"] = "OpenAstroAra.Core.Model.Equipment.FilterInfo, OpenAstroAra.Core",
+                ["_name"] = "Ha", ["_focusOffset"] = 0, ["_position"] = 4,
+            });
+            var result = await svc.SetRunFieldsAsync(id, Fields(new SequenceRunFieldChangeDto(
+                Path: [1], Target: "item", Index: null, Key: "Filter", Value: sent)), null, CancellationToken.None);
+            Assert.That(result.Outcome, Is.EqualTo(SequenceLiveEditOutcome.Applied), result.Reason);
+
+            await svc.ResumeAsync(id, null, null, CancellationToken.None);
+            await WaitForTerminalAsync(svc, id);
+            Assert.That(changedTo, Has.Count.EqualTo(1));
+            Assert.That(changedTo.Single(), Is.SameAs(filters[1]), "the profile's own Ha, not the client's copy");
+        }
+
+        [Test]
+        public async Task Filter_the_wheel_does_not_have_is_refused() {
+            var profile = new HeadlessProfileService();
+            var filters = profile.ActiveProfile.FilterWheelSettings.FilterWheelFilters;
+            filters.Add(new OpenAstroAra.Core.Model.Equipment.FilterInfo("L", 0, 0));
+            var id = Guid.NewGuid();
+            var rig = new ExposureRig(profile);
+            var (svc, store) = rig.Service(id, iterations: 1, after: root => {
+                var sw = (OpenAstroAra.Sequencer.SequenceItem.FilterWheel.SwitchFilter)rig.Factory.Items
+                    .OfType<OpenAstroAra.Sequencer.SequenceItem.FilterWheel.SwitchFilter>().First().Clone();
+                sw.Filter = filters[0];
+                root.Add(sw);
+            });
+            await PauseAfterFirstFrameAsync(svc, id, rig);
+
+            var sent = JsonSerializer.SerializeToElement(new Dictionary<string, object> { ["_name"] = "OIII", ["_position"] = 7 });
+            var result = await svc.SetRunFieldsAsync(id, Fields(new SequenceRunFieldChangeDto(
+                Path: [1], Target: "item", Index: null, Key: "Filter", Value: sent)), null, CancellationToken.None);
+            Assert.That(result.Outcome, Is.EqualTo(SequenceLiveEditOutcome.InvalidItem));
+            Assert.That(result.Reason, Does.Contain("OIII isn't one of the filter wheel's filters"));
+            Assert.That(store.ReplacedBody, Is.Null);
             await svc.StopAsync(id, null, CancellationToken.None);
             await WaitForTerminalAsync(svc, id);
         }

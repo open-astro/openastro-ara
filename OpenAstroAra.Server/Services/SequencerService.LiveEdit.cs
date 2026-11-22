@@ -228,6 +228,9 @@ public sealed partial class SequencerService {
                 }
                 undo.Add((target!, prop, prop.GetValue(target)));
                 prop.SetValue(target, value);
+                if (value is OpenAstroAra.Core.Model.Equipment.FilterInfo wanted && MatchToWheel(target!, prop) is null) {
+                    return Refuse(SequenceLiveEditOutcome.InvalidItem, $"{wanted.Name} isn't one of the filter wheel's filters.");
+                }
             }
             // Only a problem the change brought in refuses it: a camera that is off right now
             // already fails Validate and is not the edit's fault.
@@ -294,7 +297,19 @@ public sealed partial class SequencerService {
         var t = Nullable.GetUnderlyingType(type) ?? type;
         return t.IsPrimitive || t.IsEnum || t == typeof(string) || t == typeof(decimal)
             || t == typeof(DateTime) || t == typeof(DateTimeOffset) || t == typeof(TimeSpan)
-            || t == typeof(OpenAstroAra.Core.Model.Equipment.BinningMode);
+            || t == typeof(OpenAstroAra.Core.Model.Equipment.BinningMode)
+            || t == typeof(OpenAstroAra.Core.Model.Equipment.FilterInfo);
+    }
+
+    /// <summary>A filter sent by the client is a copy; the item must hold the profile's own filter
+    /// (offsets, autofocus settings, wheel position). Run Switch Filter's load-time match (by
+    /// name, then by position), the same thing that happens when a plan is opened. Null when
+    /// the wheel has no such filter.</summary>
+    private static object? MatchToWheel(object target, PropertyInfo prop) {
+        if (target is OpenAstroAra.Sequencer.SequenceItem.FilterWheel.SwitchFilter switchFilter) {
+            switchFilter.OnDeserialized(default);
+        }
+        return prop.GetValue(target);
     }
 
     private static bool TryReadFieldValue(JsonElement raw, Type type, out object? value) {
@@ -303,6 +318,8 @@ public sealed partial class SequencerService {
         try {
             var token = Newtonsoft.Json.Linq.JToken.Parse(raw.GetRawText());
             if (token is Newtonsoft.Json.Linq.JObject obj) {
+                // A reference to another node's object can't be resolved on its own.
+                if (obj.ContainsKey("$ref")) return false;
                 obj.Remove("$type");
                 obj.Remove("$id");
             }
