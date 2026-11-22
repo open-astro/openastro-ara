@@ -3032,10 +3032,23 @@ void main() {
       await tester.pumpAndSettle();
       expect(seq.calls.last, 'pause-after-frame seq-1');
       expect(find.text('Pausing after this frame'), findsOneWidget);
+    });
+
+    testWidgets('after Pause after this frame the shutter still pauses now', (tester) async {
+      // #2172 — a change of mind mid-frame: the shutter steps the pause up and the frame stops.
+      final (c, seq) = await run(tester);
+      await create(tester);
       await tester.tap(find.byKey(const Key('simple-shutter')));
-      await tester.pump();
-      expect(c.read(simpleMessagesProvider).map((m) => m.title), contains('Pausing after this frame'));
-      await tester.pump(kSimpleResultLife);
+      await tester.pumpAndSettle();
+      await imaging(tester, c, seq, _imaging(23));
+      await c.read(simpleRunProvider.notifier).pauseAfterFrame();
+      await tester.pumpAndSettle();
+      expect(find.bySemanticsLabel('Pause'), findsOneWidget, reason: 'still offered as Pause now');
+      await tester.tap(find.byKey(const Key('simple-shutter')));
+      await tester.pumpAndSettle();
+      expect(seq.calls.last, 'pause seq-1');
+      expect(c.read(simpleRunProvider).pausingAfterFrame, isFalse);
+      expect(find.text('Pausing…'), findsOneWidget);
     });
 
     testWidgets('a slowish tap (0.45 s: gloves, cold hands) still pauses; 0.6 s is a cancelled hold, not a pause (#1911)',

@@ -603,6 +603,10 @@ class _SimpleRunShutterState extends ConsumerState<SimpleRunShutter> {
           when !ref.read(simpleRunProvider).waiting(DateTime.now()) =>
         run.start,
       SimpleRunPhase.imaging => run.pause,
+      // #2172 — a change of mind: step "after this frame" up to now.
+      SimpleRunPhase.pausing
+          when ref.read(simpleRunProvider).pausingAfterFrame =>
+        run.pause,
       SimpleRunPhase.paused => run.resume,
       _ => null,
     };
@@ -636,6 +640,9 @@ class _SimpleRunShutterState extends ConsumerState<SimpleRunShutter> {
       );
     }
     final idle = (phase == SimpleRunPhase.none && !_pickable()) || waiting;
+    // Greyed out once a pause-now is on its way; a pause after the frame
+    // can still be stepped up to now (#2172).
+    final pausingNow = phase == SimpleRunPhase.pausing && !run.pausingAfterFrame;
     final tap = run.busy ? null : _tap(phase);
     final ring = switch (phase) {
       _ when idle => AraColors.textDisabled,
@@ -643,7 +650,7 @@ class _SimpleRunShutterState extends ConsumerState<SimpleRunShutter> {
       SimpleRunPhase.ready || SimpleRunPhase.none => AraColors.textPrimary,
       SimpleRunPhase.paused => simplePausedColour(ref),
       // Greyed out once the pause is asked, until the run reports Paused.
-      SimpleRunPhase.pausing => AraColors.textDisabled,
+      SimpleRunPhase.pausing when pausingNow => AraColors.textDisabled,
       _ => AraColors.textPrimary.withValues(alpha: 0.25),
     };
     final pauseBars =
@@ -662,6 +669,7 @@ class _SimpleRunShutterState extends ConsumerState<SimpleRunShutter> {
         // #2172 — the shutter pauses now; "Pause after this frame" is the
         // button under the plan.
         SimpleRunPhase.imaging => context.l10n.planPauseNow,
+        SimpleRunPhase.pausing when !pausingNow => context.l10n.planPauseNow,
         SimpleRunPhase.pausing => context.l10n.planPausingLabel,
         SimpleRunPhase.paused => context.l10n.planResume,
         _ => context.l10n.planStartImaging,
@@ -670,13 +678,11 @@ class _SimpleRunShutterState extends ConsumerState<SimpleRunShutter> {
       child: EmergencyStopHold(
         // Greyed out: a tap says why (user, 2026-11-04).
         onTap: () =>
-            tap == null && (idle || waiting || phase == SimpleRunPhase.pausing)
+            tap == null && (idle || waiting || pausingNow)
             ? simpleSayWhy(
                 context,
-                phase == SimpleRunPhase.pausing
-                    ? (run.pausingAfterFrame
-                          ? context.l10n.planPausingAfterFrame
-                          : context.l10n.planPausing)
+                pausingNow
+                    ? context.l10n.planPausing
                     : waiting
                     ? context.l10n.planRisesAtCap(
                         _hhmm(run.targets.first.rise!.toLocal()),
@@ -700,7 +706,7 @@ class _SimpleRunShutterState extends ConsumerState<SimpleRunShutter> {
               child: Icon(
                 pauseBars ? Icons.pause : Icons.play_arrow,
                 size: 40,
-                color: idle || phase == SimpleRunPhase.pausing
+                color: idle || pausingNow
                     ? AraColors.textDisabled
                     : AraColors.textPrimary,
               ),
