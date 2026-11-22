@@ -302,6 +302,23 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public void A_stop_ends_an_open_settle_so_the_next_start_without_one_samples() {
+            // #2072 — a dither whose settle_done never came (guiding stopped mid-settle), then a start from the guider's
+            // own page (no settle_begin): its frames are samples, not held back by the old run's settle.
+            var tracker = NewTracker();
+            tracker.OnMarker("guiding_started");
+            Frames(tracker, 0, 10);
+            tracker.OnMarker("dithered");
+            tracker.OnMarker("settle_begin");
+            tracker.OnMarker("guiding_stopped");
+            Assert.That(tracker.OnMarker("guiding_started"), Is.EqualTo(PaResidualAction.Started));
+            Frames(tracker, 100, 120);
+
+            Assert.That(tracker.Estimator.Frames, Is.EqualTo(11));
+            Assert.That(tracker.Estimator.SampleSeconds, Is.EqualTo(20).Within(1e-9));
+        }
+
+        [Test]
         public void A_start_the_guider_runs_no_settle_for_samples_from_its_first_frame() {
             // A start from the guider's own page: no settle_begin before its first frame, so no settle_done will come.
             var tracker = NewTracker();
