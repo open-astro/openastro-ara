@@ -220,22 +220,6 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
     return nina == null ? l10n.polarAzimuthArc : '${l10n.polarAzimuthArc} · ${l10n.polarAzimuthNina(formatArcmin(nina))}';
   }
 
-  /// #2083 a hand-turn run: the turn it asks for, or that Ara moves nothing.
-  Widget _handTurnLine(PolarAlignLive live) {
-    final ask = polarHandTurnText(context.l10n, live.handTurnWait);
-    return Text(
-      ask ?? context.l10n.polarHandTurnRunNote,
-      key: Key(ask == null ? 'polar-align-hand-note' : 'polar-align-hand-ask'),
-      textAlign: TextAlign.center,
-      style: TextStyle(
-        fontSize: ask == null ? _textFont : 16,
-        fontWeight: ask == null ? FontWeight.normal : FontWeight.w600,
-        color: ask == null ? AraColors.textSecondary : AraColors.accentBusy,
-        height: 1.4,
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final live = ref.watch(polarAlignLiveProvider);
@@ -530,15 +514,12 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
             style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
           ),
           const SizedBox(height: 6),
-          if (live.handTurn)
-            _handTurnLine(live)
-          else
-            const Text(
-              'Three solved frames around two RA turns measure the axis exactly. '
-              'Leave the mount alone — this only measures.',
-              textAlign: TextAlign.center,
-              style: TextStyle(fontSize: _textFont, color: AraColors.textSecondary, height: 1.4),
-            ),
+          const Text(
+            'Three solved frames around two RA turns measure the axis exactly. '
+            'Leave the mount alone — this only measures.',
+            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: _textFont, color: AraColors.textSecondary, height: 1.4),
+          ),
           const SizedBox(height: 20),
           TextButton(
             key: const Key('polar-align-abort-checking'),
@@ -703,8 +684,7 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
                       Icons.warning_amber_outlined,
                       key: const Key('polar-align-check-dec-spread')),
                 ],
-                // A hand-turn check has no mount turn to compare with (#2083).
-                if (r != null && !live.handTurn) ...[
+                if (r != null) ...[
                   const SizedBox(height: 14),
                   Text(
                     'Pointings ${r.coneHalfAngleDeg.toStringAsFixed(1)}° off the axis · solved turns within '
@@ -862,15 +842,12 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
             style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
           ),
           const SizedBox(height: 6),
-          if (live.handTurn)
-            _handTurnLine(live)
-          else
-            const Text(
-              'Three solved frames around two small RA turns. Leave the mount alone '
-              'until the bullseye appears.',
-              textAlign: TextAlign.center,
-              style: TextStyle(fontSize: _textFont, color: AraColors.textSecondary, height: 1.4),
-            ),
+          const Text(
+            'Three solved frames around two small RA turns. Leave the mount alone '
+            'until the bullseye appears.',
+            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: _textFont, color: AraColors.textSecondary, height: 1.4),
+          ),
           const SizedBox(height: 20),
           TextButton(
             key: const Key('polar-align-abort-seeding'),

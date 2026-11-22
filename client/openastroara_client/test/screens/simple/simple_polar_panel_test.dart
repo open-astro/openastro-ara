@@ -42,9 +42,9 @@ class _Section extends FakePolarAlignSection {
 
 class _Api implements PolarAlignClient {
   @override
-  Future<PolarAlignPreflight?> preflight({String? stage, bool handTurn = false}) async => null;
+  Future<PolarAlignPreflight?> preflight({String? stage}) async => null;
   @override
-  Future<PolarAlignStartPlan> startPlan({String? stage, bool handTurn = false}) async =>
+  Future<PolarAlignStartPlan> startPlan({String? stage}) async =>
       PolarAlignStartPlan(stage: stage, direction: PolarAlignDirections.east);
   final calls = <String>[];
   late final section = _Section(calls);
@@ -82,7 +82,7 @@ class _FailingApi extends _Api {
 /// A rig whose mount is parked: the start plan is refused (#2048), so no confirm step opens.
 class _ParkedApi extends _Api {
   @override
-  Future<PolarAlignStartPlan> startPlan({String? stage, bool handTurn = false}) async => throw const Refusal(
+  Future<PolarAlignStartPlan> startPlan({String? stage}) async => throw const Refusal(
         cause: RefusalCause.polarAlignMountParked,
         reason: 'polar-align-mount-parked',
         detail: 'Mount is parked — unpark it and point near the pole first',

@@ -11352,12 +11352,6 @@ abstract class AppLocalizations {
   /// **'The mount is not tracking and did not start tracking when Ara asked. Turn tracking on from the mount controls, then start again.'**
   String get polarAlignErrorTrackingOff;
 
-  /// Polar Align card (both modes): why the run ended, polar_align.error hand_turn_too_far: in Turn RA by hand, the user turned RA past this measurement's limit (#2067)
-  ///
-  /// In en, this message translates to:
-  /// **'RA was turned further than this measurement allows. Turn it back near where you started, then start again.'**
-  String get polarAlignErrorHandTurnTooFar;
-
   /// Polar Align card (both modes): why the run ended, polar_align.error sweep_limit: the next RA turn would pass the sweep limit from where Polar Align started (#2067)
   ///
   /// In en, this message translates to:
@@ -11460,17 +11454,11 @@ abstract class AppLocalizations {
   /// **'No meridian flip has completed on this profile yet. Watch one flip from start to end, then confirm it.'**
   String get refusalFirstFlipNotCompleted;
 
-  /// Refusal (polar-align-already-running, #2083): a Start reached the rig while a polar alignment run was active, with the other choice of turning RA by hand or with the mount's motor (for example from a second device)
+  /// Refusal (polar-align-already-running, #2081): Test direction again (the RA motor direction retest) reached the rig while a polar alignment run was going
   ///
   /// In en, this message translates to:
-  /// **'Polar alignment is already running, and it turns RA the other way than you picked (by hand or with the motor). Stop it first, then start again.'**
+  /// **'Polar alignment is running. Wait for it to end, or stop it, then try again.'**
   String get refusalPolarAlignAlreadyRunning;
-
-  /// Refusal (polar-align-clutch-turned, #2083): a polar alignment start that turns RA with the motor, after a hand-turn run saw RA turned with the clutch open (the mount's reading is off by those turns); 'Turn RA by hand' is polarConfirmHandTurn
-  ///
-  /// In en, this message translates to:
-  /// **'RA was turned by hand with the clutch open, so the mount no longer knows where it points. Sync it (Center does) or reconnect it once it is homed, then start again, or use Turn RA by hand.'**
-  String get refusalPolarAlignClutchTurned;
 
   /// Polar align start confirm dialog (#2048): title. The routine starts from where the mount points and turns its RA axis
   ///
@@ -11549,42 +11537,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Choose a start whose turns do not cross the meridian, so the tube cannot swing into the pier.'**
   String get polarConfirmGuideMeridian;
-
-  /// Polar align start confirm dialog (#2083): the hand-turn option (NINA's manual mode); 'Turn RA by hand' is polarConfirmHandTurn. With the hand pad the turn is measured from the mount's RA reading (and its angle shown); with the clutch open the reading stands, so it is judged from the frames and no angle is shown
-  ///
-  /// In en, this message translates to:
-  /// **'Or turn RA yourself: with Turn RA by hand, Ara moves nothing. It asks for each turn and measures it: with the hand pad from the mount\'s reading, with the clutch open from the frames.'**
-  String get polarConfirmHandTurnHint;
-
-  /// Polar align start confirm dialog (#2083): button that starts a run in which the user turns the RA axis by hand and the mount's motors never move
-  ///
-  /// In en, this message translates to:
-  /// **'Turn RA by hand'**
-  String get polarConfirmHandTurn;
-
-  /// Polar align hand-turn run (#2083): what the user must do now; step is whole degrees, direction is polarDirectionEast or polarDirectionWest
-  ///
-  /// In en, this message translates to:
-  /// **'Turn RA by hand about {step}° toward the {direction}, then let go.'**
-  String polarHandTurnAsk(String step, String direction);
-
-  /// Polar align hand-turn run (#2083): how far the mount's own RA reading shows the axis turned the asked way (hand pad), one decimal; not shown with the clutch open, where the mount's reading does not move
-  ///
-  /// In en, this message translates to:
-  /// **'Turned {turned}° so far.'**
-  String polarHandTurnTurned(String turned);
-
-  /// Polar align hand-turn run (#2083): the user turned RA the wrong way; direction is polarDirectionEast or polarDirectionWest
-  ///
-  /// In en, this message translates to:
-  /// **'That went the other way: turn toward the {direction}.'**
-  String polarHandTurnWrongWay(String direction);
-
-  /// Polar align hand-turn run (#2083): reminder while it measures that the mount's motors are never used
-  ///
-  /// In en, this message translates to:
-  /// **'You turn RA by hand: Ara does not move the mount.'**
-  String get polarHandTurnRunNote;
 
   /// Polar align readout (#2083): the azimuth error's convention, an arc on the sky (NINA shows the unscaled angle, larger by 1/cos(latitude))
   ///
@@ -12184,12 +12136,6 @@ abstract class AppLocalizations {
   /// **'Take back'**
   String get polarClearanceTakeBack;
 
-  /// Polar align start confirm dialog (#2068, Joey 2026-11-21): shown while the mount's clearance is not confirmed; 'Move the mount' is polarConfirmGo, 'Turn RA by hand' is polarConfirmHandTurn
-  ///
-  /// In en, this message translates to:
-  /// **'This mount\'s clearance is not confirmed, so the motor does not turn it: Move the mount is off. Turn RA by hand moves nothing, so it can start. To use the motor, confirm the clearance on the Polar align card first.'**
-  String get polarConfirmMotorNeedsClearance;
-
   /// Polar align (#2068): verb phrase completing "Couldn't …" when the clearance could not be saved
   ///
   /// In en, this message translates to:
@@ -12214,10 +12160,10 @@ abstract class AppLocalizations {
   /// **'Polar align needs an equatorial mount. This mount says it is alt-az, so turning it would turn azimuth, not RA.'**
   String get refusalPolarAlignAltAzMount;
 
-  /// Refusal (polar-align-cannot-move-axis, #2083): the mount reports CanMoveAxis false for its RA axis; a motor start is refused, a hand-turn start goes ahead; 'Turn RA by hand' is polarConfirmHandTurn
+  /// Refusal (polar-align-cannot-move-axis, #2083): the mount reports CanMoveAxis false for its RA axis, so Polar align cannot start (#2170: there is no hand-turn fallback)
   ///
   /// In en, this message translates to:
-  /// **'This mount cannot turn its RA axis by motor speed, so Polar align cannot turn it. Use Turn RA by hand.'**
+  /// **'This mount cannot turn its RA axis by motor speed, so Polar align cannot turn it. Polar align needs a mount whose driver can move the RA axis.'**
   String get refusalPolarAlignCannotMoveAxis;
 
   /// Settings › Imaging › Polar align (#2068): the connected mount's counterweight limit and clearance confirmation

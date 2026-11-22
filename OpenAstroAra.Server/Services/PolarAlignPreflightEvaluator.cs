@@ -37,8 +37,6 @@ namespace OpenAstroAra.Server.Services;
 /// <param name="Plan">The confirm step's plan from a fresh reading of the mount (its refusals: on-axis, no fresh
 /// reading, Dec past the pole, the sweep limit).</param>
 /// <param name="AlignerPresent">A Polar Aligner on the rig (#1971); null delegate when this daemon wires none.</param>
-/// <param name="HandTurn">#2068 — the start turns RA by hand (#2083: no motor move), so an unconfirmed clearance is a
-/// <c>warn</c>, not a <c>fail</c> (Joey, 2026-11-21). False for a motor start.</param>
 /// <param name="AlignmentMode">#2083 — the mount type read at connect (<see cref="IMountMotionControl.MountAlignmentMode"/>):
 /// null when unknown; null delegate when this daemon reads none.</param>
 /// <param name="CanMovePrimaryAxis">#2083 — CanMoveAxis(Primary) read at connect
@@ -52,7 +50,6 @@ internal sealed record PolarAlignPreflightInputs(
     Func<CancellationToken, Task<string?>> PoseUnverifiedReason,
     Func<CancellationToken, Task<PolarAlignStartPlanDto>> Plan,
     Func<bool>? AlignerPresent,
-    bool HandTurn = false,
     Func<AlignmentMode?>? AlignmentMode = null,
     Func<bool?>? CanMovePrimaryAxis = null);
 
@@ -68,9 +65,8 @@ internal sealed record PolarAlignPreflightResult(PolarAlignPreflightDto Dto, Exc
 /// the read's own exception, as it did before the list existed).
 /// <para>The checks, in the order a start makes them: the mount connected and not parked, the site latitude, then
 /// (#2083) the longitude and LST, #2087's mount clock gate, #2070's position trust, the per-mount clearance (ARA-8: no
-/// motor motion until it is confirmed; a hand-turn start, which moves nothing, only warns), the start pointing (the
-/// confirm step's plan), and (#2083) the mount type (alt-az refused) and CanMoveAxis(Primary) (false refuses a motor
-/// start; a hand-turn start only warns). The Polar Aligner's check passes: with no aligner or its motors off the user turns the bolts, and with its motors on
+/// motor motion until it is confirmed), the start pointing (the confirm step's plan), and (#2083) the mount type (alt-az
+/// refused) and CanMoveAxis(Primary) (false refuses: Ara turns RA only with the mount's motor, #2170). The Polar Aligner's check passes: with no aligner or its motors off the user turns the bolts, and with its motors on
 /// its Stop is verified and its turns capped (#2069). A last <c>warn</c> asks the user to set the
 /// mount's own limits.</para>
 /// </summary>
@@ -82,12 +78,6 @@ internal static class PolarAlignPreflightEvaluator {
     /// <summary>A mount's key in <see cref="PolarAlignSettingsDto.MountClearance"/>: the identity the daemon already keeps
     /// per device (its Alpaca UniqueID, <see cref="TelescopeInfo.DeviceId"/>: the pose store, #1362's equipment
     /// identity), else its name, else <see cref="UnidentifiedMountKey"/>. Null with no mount connected.</summary>
-    /// <summary>
-    /// #2083 — whether a run drives the Polar Aligner's motors: auto on and not a hand turn. A hand-turn run moves
-    /// nothing, so the person turns the bolts, as with auto off. The run and the pre-flight list share this rule.
-    /// </summary>
-    public static bool DrivesAlignerMotors(bool polarAlignerAuto, bool handTurn) => polarAlignerAuto && !handTurn;
-
     public static string? MountKey(TelescopeInfo? info) {
         if (info?.Connected != true) {
             return null;
@@ -241,8 +231,7 @@ internal static class PolarAlignPreflightEvaluator {
             }
         }
 
-        // ARA-8: no motor motion until the user confirmed this mount's clearance. A hand-turn start sends the mount no move
-        // (#2083), so it goes ahead with a warning (Joey, 2026-11-21).
+        // ARA-8: no motor motion until the user confirmed this mount's clearance.
         var clearance = ClearanceFor(settings, mountKey);
         var clearanceRow = rows[PolarAlignPreflightChecks.ClearanceConfirmed];
         if (settingsError is not null) {
@@ -252,9 +241,6 @@ internal static class PolarAlignPreflightEvaluator {
         } else if (clearance.ClearanceConfirmed) {
             clearanceRow.Ok(string.Create(CultureInfo.InvariantCulture,
                 $"You confirmed this mount clears the pier and tripod with the counterweight up to {clearance.MaxCwAngleDeg:0}° from down."));
-        } else if (inputs.HandTurn) {
-            clearanceRow.Warn(string.Create(CultureInfo.InvariantCulture,
-                $"Not confirmed for this mount: Turn RA by hand moves nothing, so it can start. The motor does not turn this mount until you confirm its clearance up to {clearance.MaxCwAngleDeg:0}° from counterweight-down."));
         } else {
             var limit = clearance.MaxCwAngleDeg;
             clearanceRow.Fail(new RefusalException(RefusalCatalog.PolarAlignClearanceNotConfirmed,
@@ -281,13 +267,13 @@ internal static class PolarAlignPreflightEvaluator {
 
         // #2083 — the mount type and CanMoveAxis(Primary), read at connect.
         EvaluateMountType(rows[PolarAlignPreflightChecks.MountType], inputs.AlignmentMode, connected);
-        EvaluateCanMoveAxis(rows[PolarAlignPreflightChecks.CanMoveAxis], inputs.CanMovePrimaryAxis, connected, inputs.HandTurn);
+        EvaluateCanMoveAxis(rows[PolarAlignPreflightChecks.CanMoveAxis], inputs.CanMovePrimaryAxis, connected);
 
         var alignerRow = rows[PolarAlignPreflightChecks.Aligner];
         try {
             if (inputs.AlignerPresent?.Invoke() != true) {
                 alignerRow.Ok("No Polar Aligner: you turn the altitude and azimuth bolts.");
-            } else if (!DrivesAlignerMotors(settings.PolarAlignerAuto, inputs.HandTurn)) {
+            } else if (!settings.PolarAlignerAuto) {
                 alignerRow.Ok("The Polar Aligner's motors are off: you turn the bolts.");
             } else {
                 alignerRow.Ok("The Polar Aligner's Stop is checked and its turns are capped.");
@@ -388,11 +374,11 @@ internal static class PolarAlignPreflightEvaluator {
         }
     }
 
-    /// <summary>#2083 — CanMoveAxis(Primary) false refuses a motor start; a hand-turn start sends no motor move, so it
-    /// only warns. An unknown answer does not refuse.</summary>
+    /// <summary>#2083 — CanMoveAxis(Primary) false refuses the start: Polar Align turns RA only with the mount's motor
+    /// (#2170). An unknown answer does not refuse.</summary>
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "The evaluator never throws (#2068): a failed read lists the check as unknown.")]
-    private static void EvaluateCanMoveAxis(Row row, Func<bool?>? read, bool connected, bool handTurn) {
+    private static void EvaluateCanMoveAxis(Row row, Func<bool?>? read, bool connected) {
         if (!connected) {
             row.Unknown(WaitsForMount);
             return;
@@ -412,12 +398,10 @@ internal static class PolarAlignPreflightEvaluator {
             row.Unknown("The mount does not say whether it can turn its RA axis by rate.");
         } else if (can.Value) {
             row.Ok("The mount can turn its RA axis by rate.");
-        } else if (handTurn) {
-            row.Warn("The mount cannot turn its RA axis by rate: Turn RA by hand moves nothing, so it can start. The motor cannot turn this mount.");
         } else {
             row.Fail(new RefusalException(RefusalCatalog.PolarAlignCannotMoveAxis,
-                    "this mount cannot turn its RA axis by rate (CanMoveAxis is false), so Polar Align cannot turn it — use Turn RA by hand"),
-                "The mount cannot turn its RA axis by rate (CanMoveAxis is false). Use Turn RA by hand.");
+                    "this mount cannot turn its RA axis by rate (CanMoveAxis is false), so Polar Align cannot turn it — Polar Align needs a mount whose driver supports MoveAxis"),
+                "The mount cannot turn its RA axis by rate (CanMoveAxis is false). Polar Align needs a mount whose driver supports MoveAxis.");
         }
     }
 }

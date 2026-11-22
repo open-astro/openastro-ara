@@ -192,21 +192,6 @@ String? polarInitialErrorText(AppLocalizations l10n, double? initialArcmin) =>
       PolarInitialErrorWarning.none => null,
     };
 
-/// #2083 what a hand-turn run asks of the user right now, in the user's
-/// language: the turn and its direction, then how far the mount's reading says
-/// the axis has turned (or that it went the other way); the ask alone with the
-/// clutch open (no angle then). Null when it waits for no turn. Pure —
-/// unit-tested.
-String? polarHandTurnText(AppLocalizations l10n, PolarAlignHandTurn? wait) {
-  if (wait == null || !wait.waiting) return null;
-  final direction = wait.direction == PolarAlignDirections.west ? l10n.polarDirectionWest : l10n.polarDirectionEast;
-  final ask = l10n.polarHandTurnAsk(wait.targetDeg.toStringAsFixed(0), direction);
-  final turned = wait.turnedDeg;
-  if (turned == null) return ask;
-  if (turned < -1.0) return '$ask ${l10n.polarHandTurnWrongWay(direction)}';
-  return '$ask ${l10n.polarHandTurnTurned(turned.toStringAsFixed(1))}';
-}
-
 /// Format a signed arcminute value like `+14.2′` / `−23.4′`.
 String formatArcmin(double? v) {
   if (v == null) return '—';

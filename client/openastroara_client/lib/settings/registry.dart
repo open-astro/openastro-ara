@@ -1590,7 +1590,7 @@ const List<Setting> settingsRegistry = [
     id: 'img.polar.clearance_confirmed',
     tier: SettingTier.advanced,
     label: 'Clearance confirmed',
-    description: 'You checked with the hand controller that this mount\'s counterweight, tube and cables clear the pier and tripod up to its counterweight limit. Polar align does not turn a mount with its motor until its clearance is confirmed; Turn RA by hand moves nothing, so it can start. A confirmation is for one limit; Take back withdraws it. Kept for each mount.',
+    description: 'You checked with the hand controller that this mount\'s counterweight, tube and cables clear the pier and tripod up to its counterweight limit. Polar align does not start on a mount until its clearance is confirmed. A confirmation is for one limit; Take back withdraws it. Kept for each mount.',
     keywords: ['polar', 'alignment', 'clearance', 'confirm', 'counterweight', 'cables', 'pier', 'safety'],
     path: ['Settings', 'Imaging', 'Polar align'],
     type: SettingType.bool(),

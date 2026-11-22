@@ -149,7 +149,6 @@ void main() {
       'turn_mismatch': (l) => l.polarAlignErrorTurnMismatch,
       'pier_flip': (l) => l.polarAlignErrorPierFlip,
       'tracking_off': (l) => l.polarAlignErrorTrackingOff,
-      'hand_turn_too_far': (l) => l.polarAlignErrorHandTurnTooFar,
       'sweep_limit': (l) => l.polarAlignErrorSweepLimit,
       'mount_parked': (l) => l.refusalPolarAlignMountParked,
       'on_axis': (l) => l.refusalPolarAlignOnAxis,

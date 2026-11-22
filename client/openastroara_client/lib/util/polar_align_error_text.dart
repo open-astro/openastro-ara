@@ -55,7 +55,6 @@ String? _guardText(AppLocalizations l, String? reason) => switch (reason) {
   'turn_mismatch' => l.polarAlignErrorTurnMismatch,
   'pier_flip' => l.polarAlignErrorPierFlip,
   'tracking_off' => l.polarAlignErrorTrackingOff,
-  'hand_turn_too_far' => l.polarAlignErrorHandTurnTooFar,
   'sweep_limit' => l.polarAlignErrorSweepLimit,
   polarAlignTurnWrongWay => l.polarAlignTurnWrongWay,
   'mount_parked' => l.refusalPolarAlignMountParked,
