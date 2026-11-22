@@ -2889,6 +2889,19 @@ void main() {
       await imaging(tester, c, seq, _imaging(24, state: SequenceRunState.paused));
       expect(button, findsNothing, reason: 'not while paused');
     });
+
+    testWidgets('the Pause after this frame button hides during the meridian wait', (tester) async {
+      // #2172 — no frame in hand while the rig waits out the meridian.
+      final seq = _Seq();
+      final c = await _pump(tester, seq, SimpleRunPanel(onAdd: () {}, onEdit: (_) {}));
+      c.read(selectedSequenceIdProvider.notifier).select('seq-1');
+      await imaging(tester, c, seq, _imaging(24));
+      expect(find.byKey(const Key('simple-run-pause-after-frame')), findsOneWidget);
+      await imaging(tester, c, seq, SequenceRunStateInfo(sequenceId: 'seq-1', state: SequenceRunState.running,
+          framesCaptured: 24, reasonCode: 'meridian', reasonText: 'Passing meridian — 00:04:32',
+          meridianWaitSecondsLeft: 272));
+      expect(find.byKey(const Key('simple-run-pause-after-frame')), findsNothing);
+    });
   });
 
   group('the tracker and the shutter', () {
