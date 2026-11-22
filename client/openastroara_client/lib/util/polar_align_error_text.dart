@@ -5,12 +5,19 @@ import '../state/polar_align/polar_align_state.dart';
 /// the run (Stop Mount, Emergency Stop, the direction pad, a reaction, …).
 const polarAlignSlewAbortedExternally = 'slew_aborted_externally';
 
+/// #2081 the `polar_align.error` reason of a turn that went the other way
+/// from the saved RA motor direction (never the Polar Aligner's
+/// `wrong_direction`).
+const polarAlignTurnWrongWay = 'turn_wrong_way';
+
 /// #2107 why a failed polar alignment ended, in the app's language where the
 /// app knows the cause: a stop from outside is worded from the event's
 /// `stopped_by`, with the cut-power warning when the run could not confirm
 /// its stop afterwards (#2066: the daemon's sentence carries it, and no
 /// `mount_did_not_stop` follows). #2067 a reason the app can word in full
-/// (`_guardText`) reads in the app's language too, with the same warnings.
+/// (`_guardText`) reads in the app's language too, with the same warnings;
+/// #2081 a turn the wrong way is one of them, and says where to test the
+/// direction again.
 /// Anything else shows the daemon's own sentence, then its reason token; null
 /// when the run did not fail with a reason.
 String? polarAlignErrorText(AppLocalizations l, PolarAlignLive live) {
@@ -50,6 +57,7 @@ String? _guardText(AppLocalizations l, String? reason) => switch (reason) {
   'tracking_off' => l.polarAlignErrorTrackingOff,
   'hand_turn_too_far' => l.polarAlignErrorHandTurnTooFar,
   'sweep_limit' => l.polarAlignErrorSweepLimit,
+  polarAlignTurnWrongWay => l.polarAlignTurnWrongWay,
   'mount_parked' => l.refusalPolarAlignMountParked,
   'on_axis' => l.refusalPolarAlignOnAxis,
   'pointing_unknown' => l.refusalPolarAlignPointingUnknown,

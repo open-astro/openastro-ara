@@ -26,6 +26,7 @@ const rigPolarAlign = PolarAlignSettings(
   camera: PolarAlignCameras.guide,
   framesPerPoint: 3,
   mountClearance: {},
+  eastDirection: null,
 );
 
 /// The profile's polar-align section for a widget test, with no HTTP (a Dio

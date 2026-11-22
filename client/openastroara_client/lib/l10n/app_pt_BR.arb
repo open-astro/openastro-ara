@@ -2020,5 +2020,20 @@
   "polarKnobClearanceNotConfirmed": "{deg}° a partir do contrapeso para baixo, não confirmado: o alinhamento polar não move esta montagem",
   "polarKnobClearanceNoMount": "Conecte a montagem para ver e confirmar a folga",
   "polarKnobClearanceHint": "Guardado para cada montagem. Meça com o controle de mão.",
-  "polarDecSpreadWarning": "A leitura de Dec da montagem variou {arcsec}″ entre os três pontos (mais de 2″), então esta medição pode estar errada. Verifique se a trava de Dec está firme e meça de novo."
+  "polarDecSpreadWarning": "A leitura de Dec da montagem variou {arcsec}″ entre os três pontos (mais de 2″), então esta medição pode estar errada. Verifique se a trava de Dec está firme e meça de novo.",
+  "polarKnobEastDirection": "Direção do giro",
+  "polarKnobEastDirectionAuto": "Automática",
+  "polarKnobEastDirectionEast": "Leste",
+  "polarKnobEastDirectionWest": "Oeste",
+  "polarKnobEastDirectionHint": "Automática é leste no norte e oeste no sul. Um novo início gira para este lado; os seguintes voltam em direção a ele",
+  "polarMotorDirection": "Direção do motor de AR",
+  "polarMotorDirectionSaved": "Testada em {driver} {version}: a velocidade positiva do motor gira a AR para {direction}.",
+  "polarMotorDirectionOtherDriver": "Testada em outro driver ({driver} {version}): o próximo início testa de novo com um giro de 0,5°.",
+  "polarMotorDirectionUntested": "Ainda não testada: o próximo início primeiro gira a montagem 0,5° para descobri-la.",
+  "polarMotorDirectionUnknown": "Este setup não salva uma direção do motor.",
+  "polarMotorDirectionReadFailed": "Não foi possível ler do setup a direção do motor salva.",
+  "polarMotorDirectionRetest": "Testar a direção de novo",
+  "polarMotorDirectionRetestDone": "O próximo início testa a direção do motor de novo.",
+  "polarConfirmDirectionTest": "Primeiro ela gira a montagem {deg}° para descobrir a direção do motor (ainda não testada para esta montagem e driver).",
+  "polarAlignTurnWrongWay": "A montagem girou para o lado contrário da direção do motor salva, então o alinhamento polar a parou e nunca a girou de volta. Verifique a montagem, toque em Testar a direção de novo em Configurações › Imagem › Alinhamento polar e comece de novo."
 }

@@ -2468,6 +2468,34 @@ paths:
       responses:
         '200':
           description: OK
+  /api/v1/equipment/polaralign/motor-direction:
+    get:
+      tags:
+        - Equipment
+      summary: 'The RA motor direction Polar Align tested and saved for this profile''s mount, and whether it stands for the connected mount''s driver.'
+      operationId: GetPolarAlignMotorDirection
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PolarAlignMotorDirectionStateDto'
+  /api/v1/equipment/polaralign/motor-direction/retest:
+    post:
+      tags:
+        - Equipment
+      summary: 'Forget the saved RA motor direction: the next Polar Align start tests it again with a 0.5° turn its confirm step shows. 409 while a run is going.'
+      operationId: RetestPolarAlignMotorDirection
+      responses:
+        '204':
+          description: No Content
+        '409':
+          description: Conflict
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
   /api/v1/equipment/polaralign/frame.jpg:
     get:
       tags:
@@ -14762,6 +14790,41 @@ components:
           type:
             - 'null'
             - string
+    PolarAlignMotorDirectionDto:
+      required:
+        - sign
+        - driver_info
+        - driver_version
+        - tested_utc
+      type: object
+      properties:
+        sign:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - integer
+            - string
+          format: int32
+        driver_info:
+          type: string
+        driver_version:
+          type: string
+        tested_utc:
+          type: string
+          format: date-time
+    PolarAlignMotorDirectionStateDto:
+      required:
+        - saved
+        - matches_connected_mount
+      type: object
+      properties:
+        saved:
+          oneOf:
+            - type: 'null'
+            - $ref: '#/components/schemas/PolarAlignMotorDirectionDto'
+        matches_connected_mount:
+          type:
+            - 'null'
+            - boolean
     PolarAlignMountClearanceDto:
       type: object
       properties:
@@ -14977,6 +15040,10 @@ components:
             - string
           format: int32
           default: 3
+        east_direction:
+          type:
+            - 'null'
+            - boolean
         mount_clearance:
           type:
             - 'null'
@@ -15039,6 +15106,13 @@ components:
         hand_turn_available:
           type: boolean
           default: true
+        direction_test_deg:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - number
+            - string
+          format: double
+          default: 0
     PolarAlignStartRequestDto:
       type: object
       properties:
@@ -15057,6 +15131,9 @@ components:
           type: boolean
           default: false
         hand_turn:
+          type: boolean
+          default: false
+        direction_test:
           type: boolean
           default: false
     PreflightChecklistDto:
@@ -15497,6 +15574,10 @@ components:
           oneOf:
             - type: 'null'
             - $ref: '#/components/schemas/DomeSettingsDto'
+        polar_align_motor_direction:
+          oneOf:
+            - type: 'null'
+            - $ref: '#/components/schemas/PolarAlignMotorDirectionDto'
     QualityScoreBreakdownDto:
       required:
         - composite

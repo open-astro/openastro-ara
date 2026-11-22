@@ -52,10 +52,12 @@ namespace OpenAstroAra.Server.Services {
     /// mount (tube near the pole, counterweights down). It never sends the mount Home, never slews it and never unparks
     /// it: a parked mount is refused, and the mount moves only after the user confirmed the start and the RA turn
     /// direction (<see cref="GetStartPlanAsync"/>). Every RA turn of the run stays inside the band the user confirmed:
-    /// from the start pose up to <see cref="PolarAlignStartPlanDto.MaxSweepDeg"/> away from the meridian.</para>
+    /// from the start pose up to <see cref="PolarAlignStartPlanDto.MaxSweepDeg"/> the way the confirm step showed (#2081:
+    /// <c>polar_align.east_direction</c> at a new sweep origin, back toward it after).</para>
     ///
     /// <para><b>Fine-stage state machine</b> (the <c>state</c> string in <see cref="PolarAlignStateDto"/>):
-    /// <c>idle</c> → Start → <c>seeding</c> (frame A → RA-motor turn Δ away from the meridian → frame B →
+    /// <c>idle</c> → Start → <c>seeding</c> (the 0.5° RA motor-direction test when none is saved for the mount's driver,
+    /// #2081 → frame A → RA-motor turn Δ the confirmed way → frame B →
     /// another turn → frame C → three-point axis fit) → <c>adjusting</c> (tracking stopped; continuous capture→solve, each
     /// solve's alt/az delta from the seed pointing is the user's knob adjustment seen from the camera — §45.8
     /// reverse-projection, no re-slewing) → Stop → <c>stopped</c>. Five consecutive failed solves
@@ -338,13 +340,19 @@ namespace OpenAstroAra.Server.Services {
 
         /// <summary>#2048 — the run's RA turns: the way the user confirmed (+1 east, −1 west in RA-reading terms) and how far
         /// they take the axis (this measurement's two turns). <c>HandTurn</c> (#2083): the user makes those turns by hand,
-        /// and the run sends the mount no move (PolarAlignService.HandTurn.cs).</summary>
-        private sealed record RunBand(double AwaySign, double MaxSweepDeg, bool HandTurn = false);
+        /// and the run sends the mount no move (PolarAlignService.HandTurn.cs).
+        /// <para>#2081 — <c>RaMotorSign</c>: the saved RA motor direction for the mount's <c>Driver</c>, or null when none
+        /// stands for it and the run tests it first (<see cref="TestRaMotorDirectionIfOwedAsync"/>).</para></summary>
+        /// <para><c>ProfileId</c>: the profile active when the run was planned; the test's sign is saved only while it still
+        /// is (a profile switch swaps the store, so the sign would land on a profile the test never ran for).</para>
+        private sealed record RunBand(double AwaySign, double MaxSweepDeg, bool HandTurn = false, double? RaMotorSign = null,
+            MountDriverKey? Driver = null, Guid? ProfileId = null);
 
         /// <summary>The plan of a start at <paramref name="stage"/> from the mount's pointing read now, with the turns the
         /// run makes and their place against the session's sweep origin (#2089, <see cref="PlanSweep"/>). At a new origin
-        /// the first turn goes away from the meridian (<see cref="AwayFromMeridianSign"/>), unchanged; a later start turns
-        /// back toward the origin, and one whose turns would go past the limit is refused. A pointing within 3° of the
+        /// the first turn goes the profile's <c>polar_align.east_direction</c> (#2081); a later start turns back toward the
+        /// origin, and one whose turns would go past the limit is refused. A mount with no saved RA motor direction for its
+        /// driver gets the 0.5° direction test first (<see cref="PolarAlignStartPlanDto.DirectionTestDeg"/>). A pointing within 3° of the
         /// pole is refused (#2082, <c>polar-align-on-axis</c>): nothing tilts the camera off the axis any more.</summary>
         private async Task<(PolarAlignStartPlanDto Plan, RunBand Band, SweepPlan Sweep)> PlanStartAsync(
                 string? stage, PolarAlignSettingsDto settings, CancellationToken ct) {
@@ -360,12 +368,17 @@ namespace OpenAstroAra.Server.Services {
             // #2082 — one measurement per Start: its own two turns, nothing after them.
             var stepDeg = stage == PolarAlignStages.Check ? settings.CheckStepDeg : settings.SeedRotationDeg;
             var maxSweepDeg = 2.0 * stepDeg;
-            var sweep = PlanSweep(raDeg, decDeg, maxSweepDeg, session, side);
+            // #2081 — the saved RA motor direction for this driver, or the 0.5° test that learns it (inside the sweep limit).
+            var driver = ReadMountDriver();
+            var savedSign = SavedRaMotorSign(driver);
+            var testDeg = savedSign is null ? DirectionTestDeg : 0.0;
+            var newOriginSign = PolarAlignEastDirection.Sign(settings.EastDirection, _profileStore.GetSiteSettings().LatitudeDeg);
+            var sweep = PlanSweep(raDeg, decDeg, maxSweepDeg, session, side, newOriginSign, testDeg);
             var awaySign = sweep.DirSign;
             var plan = new PolarAlignStartPlanDto(stage, awaySign > 0 ? PolarAlignDirections.East : PolarAlignDirections.West,
                 stepDeg, Turns: 2, maxSweepDeg, sweep.NewOrigin, Math.Round(sweep.OffsetDeg, 1), sweep.LimitDeg,
-                CameraFor(stage ?? PolarAlignStages.Fine, settings));
-            return (plan, new RunBand(awaySign, maxSweepDeg), sweep);
+                CameraFor(stage ?? PolarAlignStages.Fine, settings), DirectionTestDeg: testDeg);
+            return (plan, new RunBand(awaySign, maxSweepDeg, RaMotorSign: savedSign, Driver: driver, ProfileId: ActiveProfileId?.Invoke()), sweep);
         }
 
         /// <summary>#2082 — the camera a start at <paramref name="stage"/> measures with: the main camera for the coarse stage
@@ -680,19 +693,30 @@ namespace OpenAstroAra.Server.Services {
 
         /// <summary>#2048, #2089 — nothing moves without the user's confirmation of this start and its RA turn direction,
         /// read from the mount now: a direction that changed since the user saw it (the hour angle crossed the meridian)
-        /// is asked again, and so is a pose that changed between a new start and a continued one.</summary>
+        /// is asked again, and so is a pose that changed between a new start and a continued one. #2081 — a motor start
+        /// whose plan has the 0.5° motor-direction test the user did not see (or no longer has the one they saw) too: every
+        /// move a run makes is shown before it moves.</summary>
         private void ThrowIfNotConfirmed(PolarAlignStartConfirmation? confirmation, PolarAlignStartPlanDto plan) {
+            var testOwed = plan.DirectionTestDeg > 0;
+            var testSeen = confirmation is null || confirmation.HandTurn || confirmation.DirectionTest == testOwed;
             if (confirmation is not null && string.Equals(confirmation.Direction, plan.Direction, StringComparison.Ordinal)
-                    && confirmation.NewOrigin == plan.NewOrigin) {
+                    && confirmation.NewOrigin == plan.NewOrigin && testSeen) {
                 return;
             }
             LogStartNotConfirmed(confirmation?.Direction ?? "none", plan.Direction);
+            var test = testOwed
+                ? string.Create(CultureInfo.InvariantCulture, $"; first it turns ~{plan.DirectionTestDeg:F1}° to learn the RA motor's direction")
+                : string.Empty;
             throw new RefusalException(RefusalCatalog.PolarAlignUnconfirmed,
                 confirmation is null
-                    ? $"confirm the start first: tube near the pole, counterweights down; RA will turn ~{plan.StepDeg:F0}° twice toward the {plan.Direction}; keep a hand on the mount's power"
+                    ? $"confirm the start first: tube near the pole, counterweights down; RA will turn ~{plan.StepDeg:F0}° twice toward the {plan.Direction}{test}; keep a hand on the mount's power"
                     : confirmation.NewOrigin != plan.NewOrigin
                         ? "the mount moved since you confirmed the start, or Polar Align's start pose changed — confirm the start again"
-                        : $"the RA turn direction changed since you confirmed it (it is {plan.Direction} now) — confirm the start again",
+                        : !string.Equals(confirmation.Direction, plan.Direction, StringComparison.Ordinal)
+                            ? $"the RA turn direction changed since you confirmed it (it is {plan.Direction} now) — confirm the start again"
+                            : testOwed
+                                ? string.Create(CultureInfo.InvariantCulture, $"this start first turns the mount ~{plan.DirectionTestDeg:F1}° to learn its RA motor's direction, which the step you confirmed did not show — confirm the start again")
+                                : "the RA motor's direction is saved now, so this start makes no direction test — confirm the start again",
                 new Dictionary<string, object?> { ["direction"] = plan.Direction });
         }
 
@@ -1021,7 +1045,8 @@ namespace OpenAstroAra.Server.Services {
             Task<bool> EndAlignerOnceAsync() => alignerEnd ??= EndAlignerRunAsync(alignerRun);
             var alignerEndReported = false;
             lock (_gate) {
-                _raMotorSign = 1.0; // a new run learns the RA motor's sign afresh
+                // #2081 — the saved sign for the mount's driver; a run with none tests it before its first turn.
+                _raMotorSign = band.RaMotorSign ?? 1.0;
             }
             // #2048 — the exit every path takes once: stop the mount and confirm it, then tracking. Before a failure or the
             // check's verdict is reported (the mount is safe by the time the client hears of the end), else in the finally.

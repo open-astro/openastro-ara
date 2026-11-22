@@ -943,15 +943,25 @@ public static class PolarAlignStages {
 /// <para>#2083 — <c>HandTurn</c> (NINA's manual mode): the user turns the RA axis by hand (the hand pad, or the clutch)
 /// between the three solves, and the run detects each turn from the solves. Such a run sends the mount no motor move,
 /// no GoTo and no Find Home, never drives a Polar Aligner's motors, and never turns tracking on while it runs (its end
-/// gives back the tracking it found where every run does). Per run, not a profile setting.</para></summary>
+/// gives back the tracking it found where every run does). Per run, not a profile setting.</para>
+/// <para>#2081 — <c>DirectionTest</c> echoes the plan's <see cref="PolarAlignStartPlanDto.DirectionTestDeg"/> (true when it
+/// is over 0): the user saw that the run first turns the mount 0.5° to learn its motor's direction. A motor start whose
+/// plan has a test the confirmation did not see, or the other way round, is refused like a changed direction. A
+/// hand-turn start makes no test and needs none.</para></summary>
 public sealed record PolarAlignStartRequestDto(string? Stage = null, bool Confirmed = false, string? Direction = null, bool NewOrigin = false,
-    bool HandTurn = false);
+    bool HandTurn = false, bool DirectionTest = false);
 
 /// <summary>#2048 — what a confirmed start will do, for the confirm step the user answers before the mount moves
 /// (<c>GET /polaralign/start-plan</c>). <c>Direction</c> (<c>east</c> | <c>west</c>) is the way the RA axis turns
-/// first, chosen away from the meridian from the mount's current pointing; <c>StepDeg</c> is each of the
+/// first (#2081: from the profile at a new sweep origin, else back toward it); <c>StepDeg</c> is each of the
 /// <c>Turns</c> turns; <c>MaxSweepDeg</c> is how far the run turns the RA axis from where it starts (its two turns:
 /// one measurement per Start, #2082). <c>Stage</c> echoes the request.
+/// <para>#2081 — at a new sweep origin <c>Direction</c> is the profile's <c>polar_align.east_direction</c> (east in the
+/// north and west in the south by default), never the mount's hour angle; a later start of the session turns back toward
+/// the origin. <c>DirectionTestDeg</c> (0.5, or 0) is the test move a run makes before its first turn when no saved RA
+/// motor direction stands for the mount's driver (<c>polar_align_motor_direction</c>): the mount turns that far toward
+/// <c>Direction</c> (or the other way, on a driver whose positive rate lowers RA) and the run saves which way it went. The
+/// test counts toward the sweep limit.</para>
 /// <para>#2089 — the session's sweep origin, from RA differences the mount reports (never its clock, LST or absolute
 /// RA): <c>NewOrigin</c> is true when this start's pose becomes Polar Align's origin (the first start since the mount
 /// connected, or the mount was moved by other means since Polar Align last turned it); otherwise
@@ -965,7 +975,7 @@ public sealed record PolarAlignStartRequestDto(string? Stage = null, bool Confir
 /// daemon would ignore <c>hand_turn</c> and turn the mount with its motor.</para></summary>
 public sealed record PolarAlignStartPlanDto(string? Stage, string Direction, double StepDeg, int Turns, double MaxSweepDeg,
     bool NewOrigin = true, double OriginOffsetDeg = 0.0, double SweepLimitDeg = 30.0, string Camera = PolarAlignCameras.Guide,
-    bool HandTurnAvailable = true);
+    bool HandTurnAvailable = true, double DirectionTestDeg = 0.0);
 
 /// <summary>#2068 (ARA-18) — Polar Align's pre-flight list (<c>GET /polaralign/preflight</c>): every safety check a start
 /// makes, in the order a start makes them, with what the next Start would do. <c>Ready</c> is true when no check
@@ -1043,8 +1053,9 @@ public static class PolarAlignPreflightChecks {
 /// <summary>#2048 — the user's answer to the confirm step: they were shown the plan and the RA turn direction
 /// (<see cref="PolarAlignStartPlanDto.Direction"/>), and agreed the mount may move. <c>NewOrigin</c> (#2089): the plan
 /// they saw made this pose Polar Align's new origin. <c>HandTurn</c> (#2083): the user turns RA by hand, so the run
-/// moves nothing (<see cref="PolarAlignStartRequestDto"/>).</summary>
-public sealed record PolarAlignStartConfirmation(string Direction, bool NewOrigin = false, bool HandTurn = false);
+/// moves nothing (<see cref="PolarAlignStartRequestDto"/>). <c>DirectionTest</c> (#2081): the plan they saw had the 0.5°
+/// motor-direction test.</summary>
+public sealed record PolarAlignStartConfirmation(string Direction, bool NewOrigin = false, bool HandTurn = false, bool DirectionTest = false);
 
 /// <summary>#2083 — a hand-turn run waiting for the user to turn the RA axis (<c>hand_turn_wait</c> on the status, and
 /// the <c>polar_align.hand_turn</c> payload). <c>Point</c> is the solve it waits for (2 or 3 of three);

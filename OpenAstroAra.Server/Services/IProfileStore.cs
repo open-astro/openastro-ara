@@ -162,6 +162,12 @@ public interface IProfileStore {
     TrackingCalibrationDto? GetTrackingCalibration();
     void PutTrackingCalibration(TrackingCalibrationDto? value);
 
+    /// <summary>#2081 — the RA motor direction Polar Align's 0.5° test learned on this profile's mount: daemon-owned,
+    /// written by a Polar Align run (one at a time), never by the client. Null means "never tested"; Put(null) forgets it
+    /// ("Test direction again"), so the next start tests again.</summary>
+    PolarAlignMotorDirectionDto? GetPolarAlignMotorDirection();
+    void PutPolarAlignMotorDirection(PolarAlignMotorDirectionDto? value);
+
     /// <summary>#1140 P2 sky-model calibration — daemon-owned derived data fitted from the library's frames,
     /// never written by the client. Null means "never fitted"; Put(null) clears. Single-writer.</summary>
     SkyModelCalibrationDto? GetSkyModelCalibration();
