@@ -95,15 +95,15 @@ namespace OpenAstroAra.Server.Services {
 
         /// <summary>One point's solves averaged (<see cref="PolarAlignGeometry.MeanDirection"/>) at their mean time, with
         /// the rms scatter about the mean and the mean's 1σ from it (<see cref="PolarAlignGeometry.MeanStandardErrorArcsec"/>,
-        /// floored later by <see cref="PointSigmaArcsec"/>). With <paramref name="tracking"/> off the field runs on with the Earth's turn between frames, about 1.3″/s at Dec 85°: each solve is first
-        /// moved to the mean time, as the fit moves its points, so the scatter is the solves' own and not that drift.</summary>
+        /// floored later by <see cref="PointSigmaArcsec"/>). The mount tracks while a point's frames are taken, so the
+        /// field stands still and the solves are averaged as they are.</summary>
         internal static (PolarAlignSolveOutcome Point, DateTimeOffset At, double ScatterArcsec) AveragePointSolves(
-                IReadOnlyList<(PolarAlignSolveOutcome S, DateTimeOffset At)> solves, bool tracking) {
+                IReadOnlyList<(PolarAlignSolveOutcome S, DateTimeOffset At)> solves) {
             ArgumentNullException.ThrowIfNull(solves);
             var first = solves[0].At;
             var meanAt = first + TimeSpan.FromTicks((long)solves.Average(p => (p.At - first).Ticks));
             var (ra, dec, scatter) = PolarAlignGeometry.MeanDirection(solves.Select(p =>
-                (p.S.RaDegJnow + (tracking ? 0.0 : (meanAt - p.At).TotalSeconds * SiderealDegPerSecond), p.S.DecDegJnow)).ToList());
+                (p.S.RaDegJnow, p.S.DecDegJnow)).ToList());
             var sigma = PolarAlignGeometry.MeanStandardErrorArcsec(scatter, solves.Count);
             // The point's frames come from one camera: its pixel scale sets the point's floor.
             var scale = solves.Select(p => p.S.PixelScaleArcsec).FirstOrDefault(v => v is double x && double.IsFinite(x) && x > 0);

@@ -1474,7 +1474,7 @@ namespace OpenAstroAra.Server.Services {
             }
             if (solves.Count > 0) {
                 // #2072 — the mean carries its 1σ from the scatter, for the fit's uncertainty.
-                var (point, meanAt, scatter) = AveragePointSolves(solves, tracking: true); // a motor run tracks while a point's frames are taken
+                var (point, meanAt, scatter) = AveragePointSolves(solves);
                 // #2067 ARA-13 — the point keeps its frames' position angle, so the field check sees every point.
                 var positionAngle = MeanPositionAngleDeg(solves.ConvertAll(p => p.S.PositionAngleDeg));
                 return new PointSet(point with { PositionAngleDeg = positionAngle }, meanAt, solves.Count, failed, scatter, attempt);

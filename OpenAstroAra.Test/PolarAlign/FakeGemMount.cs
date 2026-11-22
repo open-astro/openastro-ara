@@ -406,17 +406,12 @@ namespace OpenAstroAra.Test.PolarAlign {
             }
         }
 
-        /// <summary>The mount is moved by other means: by its own motors (the hand pad, another app's slew), so it
-        /// knows where it is (<paramref name="encodersFollow"/>), or by hand with the clutches open, so it does not.</summary>
-        public void MoveByOtherMeans(GemPose truePose, bool encodersFollow = true) {
+        /// <summary>The mount is moved by other means, by its own motors (the hand pad, another app's slew), so it
+        /// knows where it is.</summary>
+        public void MoveByOtherMeans(GemPose truePose) {
             lock (_lock) {
                 IntegrateLocked();
-                var believed = BelievedLocked();
                 _true = Normalized(truePose);
-                if (!encodersFollow) {
-                    _zeroErrHaDeg = GemGeometry.Wrap180(believed.MechHaDeg - _true.MechHaDeg);
-                    _zeroErrDecDeg = believed.DecAxisDeg - _true.DecAxisDeg;
-                }
                 _homeFlag = false;
                 _sample = null;
                 NotePoseLocked();

@@ -88,6 +88,10 @@ namespace OpenAstroAra.Test {
 
             var planRefusal = await Assert.ThrowsAsync<RefusalException>(() => svc.GetStartPlanAsync(null, CancellationToken.None));
             Assert.That(planRefusal!.Cause, Is.EqualTo(RefusalCatalog.PolarAlignClearanceNotConfirmed), "start-plan refuses on the same check");
+            foreach (var stage in new[] { PolarAlignStages.Fine, PolarAlignStages.Coarse, PolarAlignStages.Check }) {
+                var stageRefusal = await Assert.ThrowsAsync<RefusalException>(() => svc.GetStartPlanAsync(stage, CancellationToken.None));
+                Assert.That(stageRefusal!.Cause, Is.EqualTo(RefusalCatalog.PolarAlignClearanceNotConfirmed), $"the {stage} plan refuses too");
+            }
             var refusal = await Assert.ThrowsAsync<RefusalException>(() => svc.StartAsync(PolarAlignStages.Fine,
                 new PolarAlignStartConfirmation(preflight.Planned.Direction!, preflight.Planned.NewOrigin ?? true), null, CancellationToken.None));
             Assert.That(refusal!.Cause, Is.EqualTo(RefusalCatalog.PolarAlignClearanceNotConfirmed));
