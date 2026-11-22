@@ -441,6 +441,9 @@ namespace OpenAstroAra.Server.Services {
             LogTrackingEnabled();
         }
 
+        /// <summary>#2166 — the <see cref="System.Exception.Data"/> key of an on-axis refusal's Dec reading (degrees).</summary>
+        internal const string OnAxisDecKey = "polar_align.on_axis_dec_deg";
+
         /// <summary>The message of a start too close to the pole (the <c>polar-align-on-axis</c> refusal and the run's
         /// <c>on_axis</c> failure).</summary>
         internal const string OnAxisMessage =

@@ -219,6 +219,8 @@ namespace OpenAstroAra.Test.PolarAlign {
         /// <summary>#2070 — why the daemon does not trust the reported pose (a routine's motor move is refused); null = trusted.</summary>
         public string? PositionUnverifiedReason { get; set; }
         public bool CanFindHome { get; set; } = true;
+        /// <summary>#2166 — CanMoveAxis(Secondary), as the telescope service read it at connect (null: unknown).</summary>
+        public bool? CanMoveSecondaryAxis { get; set; } = true;
         /// <summary>Where a park takes the mount, as the mount believes it (Home by default).</summary>
         public GemPose? ParkPose { get; set; }
         /// <summary>How long one fresh driver read (position, Slewing, <see cref="ReadNowAsync"/>) takes on a
@@ -356,6 +358,14 @@ namespace OpenAstroAra.Test.PolarAlign {
                 }
             }
         }
+
+        /// <summary>#2166 — the frame the fresh readings are labelled in. J2000: a mount that reports its own axes as J2000
+        /// coordinates (no precession), so the daemon's JNOW conversion moves its RA near the pole as the Dec axis turns.</summary>
+        public Epoch ReportedFrame { get; set; } = Epoch.JNOW;
+
+        /// <summary>#2166 — through the pole the mount reports its Dec axis unfolded (Dec past ±90°, the RA and the
+        /// hour-angle pier side of the axis as it is), the way some drivers do.</summary>
+        public bool DecPastPoleUnfolded { get; set; }
 
         /// <summary>#2066 — the reported Dec is off by this much and never folded over the pole: a synced mount whose Dec
         /// axis zero is off reads past ±90° near the pole (an iOptron HAE29C read 90.9°, #2075).</summary>
@@ -750,7 +760,7 @@ namespace OpenAstroAra.Test.PolarAlign {
                 _staleReads--;
                 age = StaleReadAge;
             }
-            return new MountReading(s.RaDeg / 15.0, s.DecDeg, slewing, side, _t0 + s.At - age, _sessionEpoch, Epoch.JNOW);
+            return new MountReading(s.RaDeg / 15.0, s.DecDeg, slewing, side, _t0 + s.At - age, _sessionEpoch, ReportedFrame);
         }
 
         private void TakeFreshReadTime() {
@@ -1535,7 +1545,10 @@ namespace OpenAstroAra.Test.PolarAlign {
             if (_frozenReading is { } frozen) {
                 return frozen;
             }
-            var (ha, dec) = GemGeometry.Pointing(BelievedLocked(), South);
+            var believed = BelievedLocked();
+            var (ha, dec) = DecPastPoleUnfolded && GemGeometry.ThroughThePole(believed, South)
+                ? (believed.MechHaDeg, believed.DecAxisDeg)
+                : GemGeometry.Pointing(believed, South);
             return (GemGeometry.Wrap360(MountLstDeg - ha + (RaJumpHours * 15.0)), dec + ReportedDecOffsetDeg);
         }
 

@@ -111,6 +111,11 @@ class _PolarLive extends PolarAlignLiveNotifier {
 /// The daemon's polar status: green tonight, ended `failed`.
 class _FailedPolarApi implements PolarAlignClient {
   @override
+  Future<PolarAlignMoveToStartResult> moveToStart(
+    PolarAlignMoveToStartOffer offer,
+  ) =>
+      throw UnimplementedError();
+  @override
   Future<PolarAlignStatus?> getStatus() async => PolarAlignStatus(
     state: PolarAlignStates.failed,
     lastResult: PolarAlignLastResult(

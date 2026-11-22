@@ -40,6 +40,11 @@ public interface IMountMotionControl {
     /// connection; null when not connected, not read yet, or the driver would not answer. Polar Align's motor turn needs it.</summary>
     bool? CanMovePrimaryAxis => null;
 
+    /// <summary>#2166 — whether the mount can turn its Dec axis by rate (ASCOM <c>CanMoveAxis(Secondary)</c>), read once
+    /// per connection; null when not connected, not read yet, or the driver would not answer. Polar Align's move to the
+    /// start position needs it.</summary>
+    bool? CanMoveSecondaryAxis => null;
+
     /// <summary>#2089 — counts every mount session the daemon starts or ends: a connect, a disconnect, a fault trip. A
     /// routine that keeps a pose across runs (Polar Align's sweep origin) reads it and forgets the pose once it changes,
     /// and a run that sees it change mid-run ends (#2066 ARA-5): a reconnected mount may have been moved, re-homed or

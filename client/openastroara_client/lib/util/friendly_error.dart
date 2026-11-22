@@ -140,6 +140,12 @@ String? _refusalWords(AppLocalizations l, Refusal r) {
     RefusalCause.polarAlignSiteNotSet => l.refusalPolarAlignSiteNotSet,
     RefusalCause.polarAlignAltAzMount => l.refusalPolarAlignAltAzMount,
     RefusalCause.polarAlignCannotMoveAxis => l.refusalPolarAlignCannotMoveAxis,
+    RefusalCause.polarAlignRunActive => l.refusalPolarAlignRunActive,
+    RefusalCause.polarAlignCannotMoveDec => l.refusalPolarAlignCannotMoveDec,
+    RefusalCause.polarAlignMoveToStartNotNeeded =>
+      l.refusalPolarAlignMoveToStartNotNeeded,
+    RefusalCause.polarAlignMoveNotConfirmed =>
+      l.refusalPolarAlignMoveNotConfirmed,
     null => _firstLine(r.detail),
   };
 }

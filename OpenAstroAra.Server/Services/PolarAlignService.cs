@@ -156,7 +156,7 @@ namespace OpenAstroAra.Server.Services {
         public bool IsActive {
             get {
                 lock (_gate) {
-                    return _active || _exitsInFlight > 0;
+                    return _active || _exitsInFlight > 0 || _movingToStart; // #2166 — the move to the start position too
                 }
             }
         }
@@ -360,7 +360,9 @@ namespace OpenAstroAra.Server.Services {
             // #2066 (ARA-2) — a mount that slews, or a guider that guides, would move beside Polar Align's turns.
             ThrowIfBusyAtStart(slewing);
             if (Math.Abs(decDeg) > OnAxisDecDeg) {
-                throw new RefusalException(RefusalCatalog.PolarAlignOnAxis, OnAxisMessage);
+                // #2166 — the reading's Dec rides along (not on the wire), so the move-to-start offer is made only near the
+                // site's own pole, the one POST /polaralign/move-to-start moves from.
+                throw new RefusalException(RefusalCatalog.PolarAlignOnAxis, OnAxisMessage) { Data = { [OnAxisDecKey] = decDeg } };
             }
             // #2082 — one measurement per Start: its own two turns, nothing after them.
             var stepDeg = stage == PolarAlignStages.Check ? settings.CheckStepDeg : settings.SeedRotationDeg;
@@ -389,6 +391,7 @@ namespace OpenAstroAra.Server.Services {
             if (stage is not null && !PolarAlignStages.IsValid(stage)) {
                 throw new ArgumentException($"unknown polar-align stage '{stage}' — use coarse, fine or check");
             }
+            ThrowIfMovingToStart();
             // #2068 — the same pre-flight list as Start, refused on its first failing check. #2066: an unverified position
             // comes before the start pointing, so a false Home at the pole after a power cycle names the unconfirmed stop,
             // not the on-axis refusal (#2082). A start that names no stage is the fine measurement; the plan echoes it.
@@ -453,6 +456,9 @@ namespace OpenAstroAra.Server.Services {
         /// <param name="handOver">This Start is the Check that ends the adjust loop first.</param>
         private async Task<OperationAcceptedDto> StartRunAsync(
                 string stage, PolarAlignStartConfirmation? confirmation, string? idempotencyKey, bool handOver, CancellationToken ct) {
+            // #2166 — a Start (or Check) during the move to the start position is refused at once, not queued on _opLock
+            // behind the whole move.
+            ThrowIfMovingToStart();
             // #2066 — the run's one reading of the mount's stop count, taken at the call like a REST GoTo's: a Stop Mount,
             // Emergency Stop, park or Find Home from here on ends the run before it moves (ThrowIfStoppedFromOutside).
             var abortEpochAtCall = _motionControl.AbortEpoch;

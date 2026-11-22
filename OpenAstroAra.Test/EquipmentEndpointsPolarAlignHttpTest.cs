@@ -41,7 +41,8 @@ namespace OpenAstroAra.Test {
             Checks: [new PolarAlignPreflightCheckDto(PolarAlignPreflightChecks.MountConnected, PolarAlignPreflightStatuses.Ok, "Connected.")],
             Planned: new PolarAlignPreflightPlannedDto(PolarAlignStages.Fine, PolarAlignDirections.East, 10.0, 10.0, 2, 20.0,
                 true, 0.0, 30.0, 60.0, null, null),
-            MountKey: "ZWO_AM5_1");
+            MountKey: "ZWO_AM5_1",
+            MoveToStart: null);
 
         private static readonly PolarAlignStartPlanDto Plan = new(PolarAlignStages.Fine, PolarAlignDirections.East, 10.0, 2, 20.0);
 
@@ -55,6 +56,8 @@ namespace OpenAstroAra.Test {
                 Svc.Setup(s => s.GetStartPlanAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>())).ReturnsAsync(Plan);
                 Svc.Setup(s => s.StartAsync(It.IsAny<string?>(), It.IsAny<PolarAlignStartConfirmation?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
                     .ReturnsAsync(new OperationAcceptedDto(Guid.NewGuid(), "polar-align.start", DateTimeOffset.UtcNow, null));
+                Svc.Setup(s => s.MoveToStartAsync(It.IsAny<PolarAlignMoveToStartConfirmation?>(), It.IsAny<CancellationToken>()))
+                    .ReturnsAsync(new PolarAlignMoveToStartResultDto(PolarAlignMoveToStartOutcomes.Arrived, null, null, List));
                 var builder = WebApplication.CreateSlimBuilder();
                 builder.WebHost.UseUrls("http://127.0.0.1:0");
                 builder.Services.AddSingleton(Svc.Object);
@@ -76,6 +79,11 @@ namespace OpenAstroAra.Test {
             public async Task<int> PostJsonAsync(string path, string json) {
                 using var content = new StringContent(json, System.Text.Encoding.UTF8, "application/json");
                 using var response = await _http.PostAsync(new Uri("/api/v1/equipment/polaralign" + path, UriKind.Relative), content);
+                return (int)response.StatusCode;
+            }
+
+            public async Task<int> PostEmptyAsync(string path) {
+                using var response = await _http.PostAsync(new Uri("/api/v1/equipment/polaralign" + path, UriKind.Relative), null);
                 return (int)response.StatusCode;
             }
 
@@ -131,6 +139,22 @@ namespace OpenAstroAra.Test {
             Assert.That(status, Is.EqualTo(202));
             host.Svc.Verify(s => s.StartAsync(PolarAlignStages.Fine, new PolarAlignStartConfirmation(PolarAlignDirections.East, true),
                 null, It.IsAny<CancellationToken>()), Times.Once, "the confirmation of a motor start, nothing else");
+        }
+    
+        // #2166 — the move to the start position's body: only confirmed: true with the offer's numbers reaches the service
+        // as a confirmation; no body and confirmed: false reach it as none, which it refuses with nothing moved.
+        [Test]
+        public async Task A_move_to_start_body_carries_the_confirmation_and_its_offer_numbers() {
+            await using var host = new Host();
+            await host.StartAsync();
+
+            Assert.That(await host.PostEmptyAsync("/move-to-start"), Is.EqualTo(200));
+            Assert.That(await host.PostJsonAsync("/move-to-start", """{"confirmed":false,"target_off_pole_deg":4.0,"reach_deg":4.3}"""), Is.EqualTo(200));
+            Assert.That(await host.PostJsonAsync("/move-to-start", """{"confirmed":true,"target_off_pole_deg":4.0,"reach_deg":4.3}"""), Is.EqualTo(200));
+
+            host.Svc.Verify(s => s.MoveToStartAsync(null, It.IsAny<CancellationToken>()), Times.Exactly(2), "no body, and confirmed false: no confirmation");
+            host.Svc.Verify(s => s.MoveToStartAsync(new PolarAlignMoveToStartConfirmation(4.0, 4.3), It.IsAny<CancellationToken>()), Times.Once,
+                "the confirmation with the numbers the confirm showed");
         }
     }
 }

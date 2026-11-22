@@ -60,6 +60,62 @@ Future<void> confirmAndStartPolarAlign(
   if (go == true) await api.start(plan);
 }
 
+/// #2166 the motion confirm before "Move to start position": the Dec axis
+/// alone turns until the scope points [PolarAlignMoveToStartOffer.targetOffPoleDeg]
+/// from the pole, a small probe first, the RA axis and counterweights stay;
+/// the hand on the power switch. Pops true for "Move the mount", null for
+/// Cancel. Nothing moves before it pops true.
+class PolarMoveToStartConfirmDialog extends StatelessWidget {
+  const PolarMoveToStartConfirmDialog({super.key, required this.offer});
+
+  final PolarAlignMoveToStartOffer offer;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = context.l10n;
+    final format = NumberFormat('0.#', Localizations.localeOf(context).toString());
+    return adaptiveAlertDialog(
+      scrollable: true,
+      icon: const Icon(Icons.warning_amber_rounded),
+      title: Text(l10n.polarMoveToStartTitle),
+      content: Column(
+        key: const Key('polar-move-to-start-confirm'),
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Text(
+              l10n.polarMoveToStartConfirmBody(
+                format.format(offer.targetOffPoleDeg),
+                // The rig's reach is the target plus the probe it moves first.
+                format.format(offer.reachDeg - offer.targetOffPoleDeg),
+              ),
+            ),
+          ),
+          Text(l10n.polarConfirmPower),
+        ],
+      ),
+      actions: [
+        adaptiveDialogAction(
+          context,
+          key: const Key('polar-move-to-start-confirm-cancel'),
+          onPressed: () => Navigator.of(context).pop(),
+          child: Text(l10n.polarConfirmCancel),
+        ),
+        adaptiveDialogAction(
+          context,
+          key: const Key('polar-move-to-start-confirm-go'),
+          isDefault: true,
+          filled: true,
+          onPressed: () => Navigator.of(context).pop(true),
+          child: Text(l10n.polarConfirmGo),
+        ),
+      ],
+    );
+  }
+}
+
 /// The confirm step's dialog: where to point the mount (with NINA's guidance,
 /// #2083), the RA turns and their direction, the most the run turns, and the
 /// hand on the power switch. Pops true for "Move the mount", null for Cancel.

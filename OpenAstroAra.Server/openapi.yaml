@@ -2399,6 +2399,32 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
+  /api/v1/equipment/polaralign/move-to-start:
+    post:
+      tags:
+        - Equipment
+      summary: 'Move the scope''s Dec axis alone from within 3° of the pole to 4° from it (the Polar Align start position), then answer with the outcome and the fresh pre-flight list.'
+      operationId: PolarAlignMoveToStart
+      requestBody:
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - type: 'null'
+                - $ref: '#/components/schemas/PolarAlignMoveToStartRequestDto'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PolarAlignMoveToStartResultDto'
+        '409':
+          description: Conflict
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
   /api/v1/equipment/polaralign/start:
     post:
       tags:
@@ -14835,6 +14861,69 @@ components:
             - number
             - string
           format: double
+    PolarAlignMoveToStartOfferDto:
+      required:
+        - blocked_by
+        - target_off_pole_deg
+        - reach_deg
+      type: object
+      properties:
+        blocked_by:
+          type:
+            - 'null'
+            - string
+        target_off_pole_deg:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - number
+            - string
+          format: double
+        reach_deg:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - number
+            - string
+          format: double
+    PolarAlignMoveToStartRequestDto:
+      type: object
+      properties:
+        confirmed:
+          type: boolean
+          default: false
+        target_off_pole_deg:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
+        reach_deg:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
+    PolarAlignMoveToStartResultDto:
+      required:
+        - outcome
+        - reason
+        - message
+        - preflight
+      type: object
+      properties:
+        outcome:
+          type: string
+        reason:
+          type:
+            - 'null'
+            - string
+        message:
+          type:
+            - 'null'
+            - string
+        preflight:
+          $ref: '#/components/schemas/PolarAlignPreflightDto'
     PolarAlignPreflightCheckDto:
       required:
         - id
@@ -14854,6 +14943,7 @@ components:
         - checks
         - planned
         - mount_key
+        - move_to_start
       type: object
       properties:
         ready:
@@ -14868,6 +14958,10 @@ components:
           type:
             - 'null'
             - string
+        move_to_start:
+          oneOf:
+            - type: 'null'
+            - $ref: '#/components/schemas/PolarAlignMoveToStartOfferDto'
     PolarAlignPreflightPlannedDto:
       required:
         - stage
@@ -15659,6 +15753,10 @@ components:
         - polar-align-site-not-set
         - polar-align-alt-az-mount
         - polar-align-cannot-move-axis
+        - polar-align-run-active
+        - polar-align-cannot-move-dec
+        - polar-align-move-to-start-not-needed
+        - polar-align-move-not-confirmed
       type: string
       description: 'The cause of a refusal: the `reason` extension of a 409 or 422 problem. See ADR 0022.'
     ReleaseNotesDto:

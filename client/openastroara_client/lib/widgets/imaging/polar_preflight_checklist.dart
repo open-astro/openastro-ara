@@ -3,8 +3,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../l10n/l10n.dart';
 import '../../models/polar_align.dart';
+import '../../state/polar_align/polar_align_move_to_start_state.dart';
 import '../../state/polar_align/polar_align_preflight_state.dart';
 import '../../state/polar_align/polar_align_routine_state.dart';
+import '../../state/polar_align/polar_align_state.dart';
 import '../../state/settings/loaded_section.dart';
 import '../../state/settings/polar_align_settings_state.dart';
 import '../../theme/ara_colors.dart';
@@ -14,6 +16,7 @@ import '../adaptive_controls.dart';
 import '../adaptive_dialog.dart';
 import '../help_icon.dart';
 import '../settings/settings_row.dart';
+import 'polar_start_confirm.dart';
 
 /// #2068 (ARA-18) the Start card's pre-flight list, in the Full UI and in
 /// Simple Mode alike: every check the rig refuses a start on, the failing and
@@ -21,6 +24,14 @@ import '../settings/settings_row.dart';
 /// clearance check offers the clearance dialog ([confirmPolarClearance]).
 /// #2165: with a mount connected it always says how far the run turns RA
 /// each way (the rig's reach), so the limit is never hidden.
+/// #2166: a start pointing that fails because the scope points within 3° of
+/// the pole offers "Move to start position" under its row (the rig's
+/// [PolarAlignPreflight.moveToStart]): off with the reason while the rig says
+/// it is blocked, else a tap opens the motion confirm and only then asks the
+/// rig to move; the move shows its progress and Stop above the list until the
+/// rig answers, whatever the list reads meanwhile, and after a tab or mode
+/// switch ([polarMoveToStartProvider]). The row stays, so pointing
+/// the scope yourself works as before.
 /// Renders the rig's list as data, loading and error; shows nothing for a rig
 /// that predates the list.
 class PolarPreflightChecklist extends ConsumerStatefulWidget {
@@ -39,8 +50,9 @@ class _PolarPreflightChecklistState
   Widget build(BuildContext context) {
     final l10n = context.l10n;
     final preflight = ref.watch(polarAlignPreflightProvider);
+    final moving = ref.watch(polarMoveToStartProvider);
     void refresh() => ref.read(polarAlignPreflightProvider.notifier).refresh();
-    return switch (preflight) {
+    final list = switch (preflight) {
       AsyncData(:final value) =>
         value == null ? const SizedBox.shrink() : _list(value, refresh),
       AsyncError() => Row(
@@ -86,10 +98,20 @@ class _PolarPreflightChecklistState
         ],
       ),
     };
+    // #2166 while the mount moves, its progress and Stop stay whatever the
+    // list reads meanwhile: a re-read mid-move sees a busy mount, or a start
+    // pointing that passes, and makes no offer.
+    if (!moving) return list;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [_moveProgress(), list],
+    );
   }
 
   Widget _list(PolarAlignPreflight preflight, VoidCallback refresh) {
     final l10n = context.l10n;
+    final moving = ref.watch(polarMoveToStartProvider);
     final shown = [
       for (final c in preflight.checks)
         if (_all ||
@@ -143,7 +165,14 @@ class _PolarPreflightChecklistState
               ),
             ),
           ),
-        for (final c in shown) _row(c),
+        for (final c in shown) ...[
+          _row(c),
+          if (!moving &&
+              c.id == PolarAlignPreflightChecks.startPointing &&
+              c.fails &&
+              preflight.moveToStart != null)
+            _moveToStart(preflight.moveToStart!),
+        ],
         Wrap(
           spacing: 8,
           crossAxisAlignment: WrapCrossAlignment.center,
@@ -187,6 +216,96 @@ class _PolarPreflightChecklistState
         ),
       ],
     );
+  }
+
+  /// #2166 the move's progress and Stop, shown above the list while the
+  /// move runs.
+  Widget _moveProgress() {
+    final l10n = context.l10n;
+    const style = TextStyle(fontSize: 13, color: AraColors.textSecondary);
+    return Padding(
+      key: const Key('polar-move-to-start-progress'),
+      padding: const EdgeInsets.only(bottom: 4),
+      child: Row(
+        children: [
+          const SizedBox.square(
+            dimension: 14,
+            child: AdaptiveProgressIndicator(strokeWidth: 2),
+          ),
+          const SizedBox(width: 8),
+          Expanded(child: Text(l10n.polarMoveToStartMoving, style: style)),
+          TextButton(
+            key: const Key('polar-move-to-start-stop'),
+            onPressed: _stopMove,
+            child: Text(l10n.polarMoveToStartStop),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// #2166 the "Move to start position" button under the failing start
+  /// pointing row, and its reason while blocked.
+  Widget _moveToStart(PolarAlignMoveToStartOffer offer) {
+    final l10n = context.l10n;
+    const style = TextStyle(fontSize: 13, color: AraColors.textSecondary);
+    final blocked = polarMoveToStartBlockedText(l10n, offer);
+    return Padding(
+      key: const Key('polar-move-to-start'),
+      padding: const EdgeInsets.only(left: 22, bottom: 4),
+      child: Wrap(
+        spacing: 8,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        children: [
+          OutlinedButton(
+            key: const Key('polar-move-to-start-button'),
+            onPressed: blocked == null ? () => _move(offer) : null,
+            child: Text(l10n.polarMoveToStartButton),
+          ),
+          if (blocked != null)
+            Text(
+              blocked,
+              key: const Key('polar-move-to-start-blocked'),
+              style: style,
+            ),
+        ],
+      ),
+    );
+  }
+
+  /// #2166 the motion confirm first; nothing moves before the user confirms.
+  Future<void> _move(PolarAlignMoveToStartOffer offer) async {
+    final api = ref.read(polarAlignApiProvider);
+    if (api == null) return;
+    final confirmed = await showAdaptiveAlert<bool>(
+      context: context,
+      builder: (_) => PolarMoveToStartConfirmDialog(offer: offer),
+    );
+    if (confirmed != true || !mounted) return;
+    final l10n = context.l10n;
+    await ref
+        .read(polarMoveToStartProvider.notifier)
+        .move(
+          offer,
+          failed: (result) => l10n.polarMoveToStartFailed(
+            result.message ?? result.reason ?? '',
+          ),
+          describe: (e) =>
+              friendlyError(l10n, e, action: l10n.polarActionMoveToStart),
+        );
+  }
+
+  /// #2166 Stop during the move: the rig's Polar Align stop, which stops the
+  /// mount and confirms it stopped.
+  Future<void> _stopMove() async {
+    final api = ref.read(polarAlignApiProvider);
+    final action = ref.read(polarAlignActionProvider.notifier);
+    final l10n = context.l10n;
+    try {
+      await api?.stop();
+    } catch (e) {
+      action.fail(friendlyError(l10n, e, action: l10n.polarActionMoveToStart));
+    }
   }
 
   Widget _row(PolarAlignPreflightCheck c) {
@@ -247,6 +366,25 @@ class _PolarPreflightChecklistState
     );
   }
 }
+
+/// #2166 why "Move to start position" is off, in the user's language; null
+/// when it may be asked for. Pure — unit-tested through the list.
+String? polarMoveToStartBlockedText(
+  AppLocalizations l10n,
+  PolarAlignMoveToStartOffer offer,
+) => switch (offer.blockedBy) {
+  null => null,
+  PolarMoveToStartBlocks.mountParked => l10n.polarMoveToStartBlockedParked,
+  PolarMoveToStartBlocks.siteLatitude => l10n.polarMoveToStartBlockedSite,
+  PolarMoveToStartBlocks.poseUnverified => l10n.polarMoveToStartBlockedPose,
+  PolarMoveToStartBlocks.clearanceNotConfirmed =>
+    l10n.polarMoveToStartBlockedClearance(
+      polarReachText(offer.reachDeg, l10n.localeName),
+    ),
+  PolarMoveToStartBlocks.altAzMount => l10n.polarMoveToStartBlockedAltAz,
+  PolarMoveToStartBlocks.cannotMoveDec => l10n.polarMoveToStartBlockedDec,
+  _ => l10n.polarMoveToStartBlockedOther,
+};
 
 /// The name of a pre-flight check in the user's language; the rig's id for a
 /// check this app does not know. Pure — unit-tested through the list.

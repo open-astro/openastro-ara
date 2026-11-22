@@ -20,6 +20,11 @@ import '../support/settings_values.dart';
 
 class _Api implements PolarAlignClient {
   @override
+  Future<PolarAlignMoveToStartResult> moveToStart(
+    PolarAlignMoveToStartOffer offer,
+  ) =>
+      throw UnimplementedError();
+  @override
   Future<PolarAlignPreflight?> preflight({String? stage}) async => null;
   @override
   Future<PolarAlignStartPlan> startPlan({String? stage}) async =>

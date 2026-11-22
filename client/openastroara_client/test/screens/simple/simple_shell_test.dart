@@ -737,6 +737,11 @@ class _PolarAlignerDown extends _PolarAligner {
 /// [FakePolarAlignSection], ADR 0015.)
 class _PolarProfile implements PolarAlignClient {
   @override
+  Future<PolarAlignMoveToStartResult> moveToStart(
+    PolarAlignMoveToStartOffer offer,
+  ) =>
+      throw UnimplementedError();
+  @override
   Future<PolarAlignPreflight?> preflight({String? stage}) async => null;
   @override
   Future<PolarAlignStartPlan> startPlan({String? stage}) async =>

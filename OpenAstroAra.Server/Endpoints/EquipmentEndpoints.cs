@@ -993,6 +993,18 @@ public static partial class EquipmentEndpoints {
             .WithName("GetPolarAlignPreflight")
             .WithSummary("Polar Align's pre-flight checks for the next start (ok, warn, fail or unknown each), and what that start would do.")
             .Produces<PolarAlignPreflightDto>().ProducesProblem(StatusCodes.Status400BadRequest);
+        // #2166 — "Move to start position": the start pointing failed because the scope points within 3° of the pole. The
+        // Dec motor alone moves it to 4° from the pole (no GoTo), under the guards of every turn; 200 with the outcome and
+        // the fresh pre-flight list once it moved, a 409 Refusal before anything moves. POST /polaralign/stop ends it.
+        // Body {confirmed, target_off_pole_deg, reach_deg}: the offer the app's confirm showed; without it, or with numbers
+        // the offer no longer has, the polar-align-move-not-confirmed Refusal and nothing moves.
+        polar.MapPost("/move-to-start", async (
+                [FromBody(EmptyBodyBehavior = Microsoft.AspNetCore.Mvc.ModelBinding.EmptyBodyBehavior.Allow)] PolarAlignMoveToStartRequestDto? body,
+                IPolarAlignService svc, CancellationToken ct) =>
+                await PolarAlignMoveToStartAsync(svc, body, ct))
+            .WithName("PolarAlignMoveToStart")
+            .WithSummary("Move the scope's Dec axis alone from within 3° of the pole to 4° from it (the Polar Align start position), then answer with the outcome and the fresh pre-flight list.")
+            .Produces<PolarAlignMoveToStartResultDto>().ProducesProblem(StatusCodes.Status409Conflict);
         // Body {stage: coarse|fine|check, confirmed, direction}; stage none = fine (guide-camera solves). One measurement
         // per Start (#2082). The routine starts from where the mount points (no Home, no GoTo) and moves only with
         // confirmed: true and the plan's direction (#2048); else the polar-align-unconfirmed Refusal. A parked mount is the
@@ -1372,6 +1384,22 @@ public static partial class EquipmentEndpoints {
             return Results.Problem($"unknown polar-align stage '{stage}' — use coarse, fine or check", statusCode: StatusCodes.Status400BadRequest);
         }
         return Results.Ok(await svc.GetPreflightAsync(stage, ct));
+    }
+
+    /// <summary>#2166 — the move's confirmation: <c>confirmed</c> with the offer's numbers the user was shown, else none
+    /// (the service refuses a move without one).</summary>
+    internal static PolarAlignMoveToStartConfirmation? MoveToStartConfirmation(PolarAlignMoveToStartRequestDto? body) =>
+        body is { Confirmed: true, TargetOffPoleDeg: double target, ReachDeg: double reach } ? new PolarAlignMoveToStartConfirmation(target, reach) : null;
+
+    /// <summary>#2166 — <c>POST /polaralign/move-to-start</c>: a declared Refusal keeps its own answer (RefusalHandler); any
+    /// other refusal before the move (the mount not connected) is a 409.</summary>
+    public static async Task<IResult> PolarAlignMoveToStartAsync(IPolarAlignService svc, PolarAlignMoveToStartRequestDto? body, CancellationToken ct) {
+        ArgumentNullException.ThrowIfNull(svc);
+        try {
+            return Results.Ok(await svc.MoveToStartAsync(MoveToStartConfirmation(body), ct));
+        } catch (System.InvalidOperationException ex) when (ex is not RefusalException) {
+            return Results.Problem(ex.Message, statusCode: StatusCodes.Status409Conflict);
+        }
     }
 
     public static async Task<IResult> PolarAlignNextAsync(IPolarAlignService svc, string? idempotencyKey, CancellationToken ct) {
