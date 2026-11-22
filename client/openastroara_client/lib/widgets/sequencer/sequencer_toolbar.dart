@@ -28,9 +28,9 @@ import 'sequence_new_dialog.dart';
 /// the §38 sequence picker; Run / Pause / Resume / Skip / Abort drive the
 /// lifecycle endpoints on the selected sequence, gated by its live run state;
 /// Save / Validate / Export / Import act on the loaded body. Pause is real
-/// since the daemon grew its instruction-boundary pause gate (§38): the run
-/// suspends between instructions (the in-flight instruction finishes first),
-/// reports Paused, and Run relabels to Resume.
+/// since the daemon grew its pause gate (§38): Pause stops the frame in
+/// progress (taken again on Resume, #2172), "Pause after this frame" lets it
+/// finish first; the run reports Paused, and Run relabels to Resume.
 class SequencerToolbar extends ConsumerWidget {
   const SequencerToolbar({super.key});
 

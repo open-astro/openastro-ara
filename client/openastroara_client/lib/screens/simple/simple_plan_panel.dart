@@ -569,7 +569,9 @@ class _PlanSquare extends StatelessWidget {
 
 /// The rail's shutter in Plan. Plan ready: a play triangle in a ring; a tap
 /// starts it. Imaging: pause bars, with a blue ring filling as the frame
-/// exposes; a tap pauses (after the frame in hand). Paused: a play triangle
+/// exposes; a tap pauses now (the frame in hand stops and is taken again on
+/// Resume, #2172); after "Pause after this frame" a tap still pauses now.
+/// Paused: a play triangle
 /// in an amber ring; a tap resumes. Like every shutter, a 2 s hold is
 /// Emergency Stop ([EmergencyStopHold], #1911); stopping the plan alone is
 /// Stop plan… in the panel. Keyboards: Tab reaches it, Enter / Space taps it,
