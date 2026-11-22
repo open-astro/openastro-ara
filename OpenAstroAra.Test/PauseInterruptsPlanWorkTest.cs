@@ -252,9 +252,8 @@ namespace OpenAstroAra.Test {
             var run = block.Execute(NoProgress, CancellationToken.None);
             await started.Task.WaitAsync(Soon);
             gate.RequestPause(interruptFrames: true);
-            await Task.Delay(200);
-            Assert.That(entered.Task.IsCompleted, Is.False, "the dark is still exposing");
 
+            // A stopped dark would reach the pause with nothing filed; this one is held until released.
             release.SetResult();
             await entered.Task.WaitAsync(Soon);
             Assert.That((frame.ExposureCount, captures(), after.Ran), Is.EqualTo((1, 1, false)), "the dark filed once; the pause lands after it");

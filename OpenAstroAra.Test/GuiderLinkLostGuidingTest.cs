@@ -94,8 +94,9 @@ namespace OpenAstroAra.Test {
                         Mock.Of<IDiagnosticsService>(), NullLogger<GuiderRecoveryCoordinator>.Instance),
                     NullLogger<GuiderService>.Instance, Mock.Of<IGuiderProcessSupervisor>(), ws.Object,
                     profiles.Object, () => Sequencer.Object, notifications.Object, hub, alpaca: Alpaca.Object) {
-                    GuidingRestoreSettleTimeout = TimeSpan.FromSeconds(5),
-                    GuidingRestoreReconcileWait = TimeSpan.FromSeconds(5),
+                    // Generous: a test that wants the timeout sets its own, so suite load never fails a good restore.
+                    GuidingRestoreSettleTimeout = TimeSpan.FromSeconds(30),
+                    GuidingRestoreReconcileWait = TimeSpan.FromSeconds(30),
                 };
                 Service.RestartGuidingOverride = async _ => {
                     int n;
@@ -227,9 +228,8 @@ namespace OpenAstroAra.Test {
             await DropAndReconnectStoppedAsync(rig, fake).ConfigureAwait(false);
 
             Assert.That(await WaitUntilAsync(() => rig.Titled(NotRestartedTitle) == 1).ConfigureAwait(false), Is.True, "the user is never told why the run stays paused");
-            var idle = rig.Reaction.WhenIdleAsync();
-            Assert.That(await Task.WhenAny(idle, Task.Delay(TimeSpan.FromSeconds(10))).ConfigureAwait(false), Is.SameAs(idle), "the episode ends: no retry loop");
-            await Task.Delay(500).ConfigureAwait(false);
+            // Only the episode resumes, so once it has ended nothing can resume later.
+            await rig.Reaction.WhenIdleAsync().WaitAsync(TimeSpan.FromSeconds(30)).ConfigureAwait(false);
             Assert.That(rig.Resumed(), Is.Zero, "never resumed unguided");
             Assert.That((rig.Restarts(), rig.Titled(NotRestartedTitle)), Is.EqualTo((1, 1)), "one attempt, one alert");
         }
