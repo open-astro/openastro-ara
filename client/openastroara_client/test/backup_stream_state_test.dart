@@ -425,6 +425,7 @@ void main() {
     final c = controller();
     final requested = <Duration>[];
     c.pacer = (d) async => requested.add(d);
+    c.newStopwatch = _FixedStopwatch.new; // every download takes 2 ms
     fake.addFrame('frame-1', 'X' * 1000);
     fake.addFrame('frame-2', 'Y' * 1000);
 
@@ -436,12 +437,11 @@ void main() {
     await settle();
 
     expect(fake.acked, containsAll(['frame-1', 'frame-2', 'frame-3']));
-    expect(requested, isNotEmpty, reason: 'the capped pull must pace');
-    expect(requested.first.inMilliseconds, greaterThanOrEqualTo(4),
-        reason: 'the requested wait is the 8 ms floor minus the (tiny) real elapsed');
+    expect(requested, [const Duration(milliseconds: 6)],
+        reason: 'only the capped pull paces: the 8 ms floor minus its 2 ms download');
     final state = container.read(backupStreamProvider);
-    expect(state.measuredMbps, isNotNull,
-        reason: 'the first pull doubles as the link measurement');
+    expect(state.measuredMbps, 4.0,
+        reason: 'the first pull doubles as the link measurement: 8000 bits in 2 ms');
   });
 
   test('the bandwidth cap persists across restarts', () async {
@@ -637,4 +637,11 @@ class _FixedServers extends SavedServersNotifier {
   Future<List<AraServer>> build() async => const [AraServer(hostname: 'pi-test', port: 5555)];
 
   void switchTo(AraServer server) => state = AsyncValue.data([server]);
+}
+
+/// A stopwatch that always reads 2 ms, so pacing math does not depend on how
+/// busy the test machine is (a macOS runner once took 6 ms for a fake download).
+class _FixedStopwatch extends Stopwatch {
+  @override
+  Duration get elapsed => const Duration(milliseconds: 2);
 }

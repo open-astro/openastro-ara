@@ -9255,5 +9255,11 @@
   "polarMoveToStartFailed": "The move to the start position stopped: {message}",
   "@polarMoveToStartFailed": {"description": "Polar align (#2166): the move failed; {message} is the rig's English sentence", "placeholders": {"message": {"type": "String"}}},
   "polarActionMoveToStart": "move the scope to the start position",
-  "@polarActionMoveToStart": {"description": "Polar align (#2166): verb phrase completing \"Couldn't …\" when the move to the start position was refused or failed"}
+  "@polarActionMoveToStart": {"description": "Polar align (#2166): verb phrase completing \"Couldn't …\" when the move to the start position was refused or failed"},
+  "sequencerRunSaveRefused": "Your changes couldn't be saved, so the run didn't start: {reason}",
+  "@sequencerRunSaveRefused": {"description": "Sequencer Run (#2168): the daemon refused the save of unsaved edits made before Run; {reason} is its sentence", "placeholders": {"reason": {"type": "String"}}},
+  "sequencerRunSaveInvalid": "the sequence is invalid.",
+  "@sequencerRunSaveInvalid": {"description": "Sequencer Run (#2168): the reason when the daemon's refusal had no sentence"},
+  "sequencerRunSaveFailed": "Your changes couldn't be saved, so the run didn't start. Check the connection and try again.",
+  "@sequencerRunSaveFailed": {"description": "Sequencer Run (#2168): saving unsaved edits before Run failed to reach the rig"}
 }

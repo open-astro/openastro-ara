@@ -73,6 +73,11 @@ public static class SequenceEndpoints {
             title: "Item has already started",
             statusCode: StatusCodes.Status409Conflict,
             detail: $"Sequence {id}: {result.Reason}"),
+        SequenceLiveEditOutcome.PlanChanged => Results.Problem(
+            type: "https://openastro.net/errors/sequence-plan-changed",
+            title: "The plan changed",
+            statusCode: StatusCodes.Status409Conflict,
+            detail: $"Sequence {id}: {result.Reason}"),
         SequenceLiveEditOutcome.InvalidPath or SequenceLiveEditOutcome.InvalidItem =>
             Results.UnprocessableEntity(new { error = result.Reason }),
         _ => Results.Problem(
@@ -285,6 +290,16 @@ public static class SequenceEndpoints {
            .ProducesProblem(StatusCodes.Status409Conflict)
            .ProducesProblem(StatusCodes.Status422UnprocessableEntity)
            .WithName("MoveRunItem");
+
+        // #2168 — change settings on the live run (NINA: later steps use the new values).
+        seq.MapPost("/{id:guid}/run/fields",
+                async (Guid id, [FromBody] SequenceRunFieldsRequestDto request, [FromHeader(Name = "Idempotency-Key")] string? key, ISequencerService svc, CancellationToken ct) =>
+                    LiveEditResultToHttp(id, await svc.SetRunFieldsAsync(id, request, key, ct)))
+           .Accepts<SequenceRunFieldsRequestDto>("application/json")
+           .Produces<SequenceDto>(StatusCodes.Status200OK)
+           .ProducesProblem(StatusCodes.Status409Conflict)
+           .ProducesProblem(StatusCodes.Status422UnprocessableEntity)
+           .WithName("SetRunFields");
 
         seq.MapPost("/{id:guid}/abort",
                 async (Guid id, [FromHeader(Name = "Idempotency-Key")] string? key, ISequencerService svc, CancellationToken ct) =>

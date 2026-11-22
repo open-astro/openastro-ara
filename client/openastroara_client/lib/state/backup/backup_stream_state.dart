@@ -128,6 +128,10 @@ class BackupStreamController extends Notifier<BackupStreamState> {
   /// actually waiting.
   Future<void> Function(Duration) pacer = (d) => Future<void>.delayed(d);
 
+  /// Times each download for pacing and the link measurement — a seam so tests
+  /// set the elapsed time instead of reading a busy machine's real clock.
+  Stopwatch Function() newStopwatch = Stopwatch.new;
+
   BackupStreamClient? _client;
   String? _clientServerId;
 
@@ -511,7 +515,7 @@ class BackupStreamController extends Notifier<BackupStreamState> {
     try {
       // Stopwatch, not DateTime.now(): Windows' wall clock ticks ~1-16 ms,
       // coarse enough to read a fast transfer as zero elapsed.
-      final stopwatch = Stopwatch()..start();
+      final stopwatch = newStopwatch()..start();
       final bytes = await client.downloadFrame(entry.id);
       stopwatch.stop();
       final downloadTime = stopwatch.elapsed;

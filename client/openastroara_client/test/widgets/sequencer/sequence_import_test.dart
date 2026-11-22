@@ -9,6 +9,7 @@ import 'package:openastroara/models/sequence/sequence_summary.dart';
 import 'package:openastroara/models/sequence/sequence_share_export.dart';
 import 'package:openastroara/models/sequence/draft_sequence.dart';
 import 'package:openastroara/services/draft_sequence_service.dart';
+import 'package:openastroara/models/sequence/nina_dom.dart';
 import 'package:openastroara/services/sequence_api.dart';
 import 'package:openastroara/state/sequencer/draft_sequences_state.dart';
 import 'package:openastroara/state/sequencer/sequence_list_state.dart';
@@ -29,6 +30,10 @@ class _ImportClient implements SequenceClient {
       throw UnimplementedError();
   @override
   Future<SequenceDetail> moveRunItem(String id, List<int> path, int newIndex) =>
+      throw UnimplementedError();
+  @override
+  Future<SequenceDetail> setRunFields(String id, List<FieldChange> changes,
+          {String? baseModifiedUtc}) =>
       throw UnimplementedError();
 
   /// When set, create() throws this instead of throwOnImport's Exception —

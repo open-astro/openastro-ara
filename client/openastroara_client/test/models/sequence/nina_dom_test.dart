@@ -450,4 +450,91 @@ void main() {
     expect(withConditions(node, const [])['Conditions'].keys.first, r'$type');
     expect(withTriggers(node, const [])['Triggers'].keys.first, r'$type');
   });
+
+  group('scalarFieldChanges (#2168 live save)', () {
+    Map<String, dynamic> withRules() => withTriggers(
+        withConditions(sampleBody(), [
+          {r'$type': 'X.LoopCondition', 'Iterations': 60, 'CompletedIterations': 3},
+        ]),
+        [
+          {r'$type': 'X.AutofocusAfterExposures', 'AfterExposures': 10},
+        ]);
+
+    test('finds item, condition and trigger changes and skips identical keys', () {
+      final original = withRules();
+      var edited = setField(original, const [1, 0], 'ExposureTime', 180.0);
+      edited = setConditionField(edited, const [], 0, 'Iterations', 80);
+      edited = setTriggerField(edited, const [], 0, 'AfterExposures', 5);
+
+      final changes = scalarFieldChanges(original, edited)!;
+      expect(changes.map((c) => c.toJson()), [
+        {'path': [], 'target': 'condition', 'index': 0, 'key': 'Iterations', 'value': 80},
+        {'path': [], 'target': 'trigger', 'index': 0, 'key': 'AfterExposures', 'value': 5},
+        {'path': [1, 0], 'target': 'item', 'index': null, 'key': 'ExposureTime', 'value': 180.0},
+      ]);
+    });
+
+    test('an unchanged body has no changes; a changed shape is not a field edit', () {
+      final original = withRules();
+      expect(scalarFieldChanges(original, withRules()), isEmpty);
+      expect(scalarFieldChanges(original, removeConditionAt(original, const [], 0)), isNull);
+      expect(scalarFieldChanges(original, removeAt(original, const [0])), isNull);
+    });
+  });
+
+  group('moving setting edits onto a newer copy (#2168)', () {
+    Map<String, dynamic> target(String name, {String ns = 'X', double t = 5}) =>
+        withConditions(
+            withChildren({
+              r'$type': '$ns.Container.DeepSkyObjectContainer, $ns.Sequencer',
+              'Name': name,
+            }, [
+              {r'$type': '$ns.Imaging.TakeExposure, $ns.Sequencer', 'ExposureTime': t},
+            ]),
+            [
+              {r'$type': '$ns.Conditions.LoopCondition, $ns.Sequencer', 'Iterations': 60},
+            ]);
+    Map<String, dynamic> plan(List<Map<String, dynamic>> targets) =>
+        withChildren(sampleBody(), targets);
+
+    test('mapNodePath follows an item that moved and one removed before it', () {
+      final from = plan([target('A'), target('B'), target('C')]);
+      expect(mapNodePath(from, plan([target('A'), target('C'), target('B')]), const [2, 0]),
+          [1, 0], reason: 'C moved ahead of B');
+      expect(mapNodePath(from, plan([target('A'), target('C')]), const [2, 0]), [1, 0],
+          reason: 'B removed');
+      expect(mapNodePath(from, plan([target('A'), target('B')]), const [2, 0]), isNull,
+          reason: 'C itself removed');
+    });
+
+    test("mapNodePath matches a NINA import's type to the daemon's own name", () {
+      final from = plan([target('A', ns: 'NINA.Sequencer')]);
+      final to = plan([target('A', ns: 'OpenAstroAra.Sequencer')]);
+      expect(mapNodePath(from, to, const [0, 0]), [0, 0]);
+    });
+
+    test('a renamed item still matches by its edited name', () {
+      final from = plan([target('A'), target('B')]);
+      final edited = setField(from, const [1], 'Name', 'B2');
+      final to = plan([target('B2'), target('A')]);
+      expect(mapNodePath(from, to, const [1], edited: edited), [0]);
+    });
+
+    test('rebaseFieldChanges re-addresses edits and reports a gone item as lost', () {
+      final from = plan([target('A'), target('B'), target('C')]);
+      var edited = setField(from, const [2, 0], 'ExposureTime', 180.0);
+      edited = setConditionField(edited, const [1], 0, 'Iterations', 80);
+      final changes = scalarFieldChanges(from, edited)!;
+      final to = plan([target('A'), target('C')]); // B removed elsewhere
+
+      final moved = rebaseFieldChanges(from, edited, to, changes);
+      expect(moved.kept.map((c) => c.toJson()), [
+        {'path': [1, 0], 'target': 'item', 'index': null, 'key': 'ExposureTime', 'value': 180.0},
+      ]);
+      expect(moved.lost.single.key, 'Iterations');
+      final applied = applyFieldChanges(to, moved.kept);
+      expect(nodeAt(applied, const [1, 0])!['ExposureTime'], 180.0, reason: "C's frame, not A's");
+      expect(nodeAt(applied, const [0, 0])!['ExposureTime'], 5);
+    });
+  });
 }
