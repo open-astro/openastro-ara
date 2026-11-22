@@ -160,12 +160,13 @@ namespace OpenAstroAra.Server.Services {
         /// checked like a poll of the turn (Dec, pier side). A mount that runs on more than <see cref="RunawayPastStepDeg"/>
         /// past the step, or does not stand still within <see cref="AxisSteadyWindow"/>, did not obey the stop: the confirmed
         /// stop goes out at once (<see cref="FailTurnNotStoppedAsync"/>). Returns the last reading: where the turn ended.
-        /// <paramref name="checkPose"/> (#2166) replaces the RA turn's Dec and pier-side check for a Dec move.
+        /// <paramref name="checkPose"/> (#2166) replaces the RA turn's Dec and pier-side check for a Dec move, whose
+        /// readings fold a Dec past the pole back over it (<paramref name="foldPastPole"/>).
         /// </summary>
         private async Task<(double RaDeg, double DecDeg, PierSide Side)> SettleAfterTurnAsync(
                 (double RaDeg, double DecDeg) start, PierSide startSide, double degrees,
                 Func<(double RaDeg, double DecDeg), (double RaDeg, double DecDeg), double> progress, int gen, CancellationToken ct,
-                Action<double, double, PierSide>? checkPose = null) {
+                Action<FreshPointing>? checkPose = null, bool foldPastPole = false) {
             var began = Clock.GetTimestamp(); // monotonic: a wall clock that steps must not stretch or cut the settle
             (double RaDeg, double DecDeg, long At)? anchor = null;
             while (true) {
@@ -174,14 +175,14 @@ namespace OpenAstroAra.Server.Services {
                     throw new OperationCanceledException("the run was superseded while the turn settled");
                 }
                 ThrowIfStoppedFromOutside(gen);
-                var r = await RunReadingAsync(gen, MountReadKind.Full, ct).ConfigureAwait(false);
+                var r = await RunReadingAsync(gen, MountReadKind.Full, ct, foldPastPole).ConfigureAwait(false);
                 var at = Clock.GetTimestamp();
                 var side = r.Side is PierSide.pierUnknown ? startSide : r.Side;
                 NoteMountLeft((r.RaDeg, r.DecDeg), side);
                 if (checkPose is null) {
                     ThrowIfTurnLeftItsAxis(start.DecDeg, startSide, r.DecDeg, r.Side);
                 } else {
-                    checkPose(r.RaDeg, r.DecDeg, r.Side);
+                    checkPose(r);
                 }
                 var past = progress(start, (r.RaDeg, r.DecDeg)) - degrees;
                 if (past > RunawayPastStepDeg) {

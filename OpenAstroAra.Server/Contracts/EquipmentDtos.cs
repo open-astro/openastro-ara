@@ -990,7 +990,7 @@ public sealed record PolarAlignPreflightDto(
     IReadOnlyList<PolarAlignPreflightCheckDto> Checks,
     PolarAlignPreflightPlannedDto Planned,
     string? MountKey,
-    PolarAlignMoveToStartOfferDto? MoveToStart = null);
+    PolarAlignMoveToStartOfferDto? MoveToStart);
 
 /// <summary>#2166 — the "Move to start position" offer on the pre-flight list: Polar Align can move the mount's Dec
 /// axis alone to <see cref="PolarAlignMoveToStartOfferDto.TargetOffPoleDeg"/> from the pole (counterweights stay where

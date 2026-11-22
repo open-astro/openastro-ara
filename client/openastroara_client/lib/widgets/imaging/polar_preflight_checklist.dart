@@ -27,8 +27,9 @@ import 'polar_start_confirm.dart';
 /// the pole offers "Move to start position" under its row (the rig's
 /// [PolarAlignPreflight.moveToStart]): off with the reason while the rig says
 /// it is blocked, else a tap opens the motion confirm and only then asks the
-/// rig to move; the move shows its progress and Stop. The row stays, so
-/// pointing by hand works as before.
+/// rig to move; the move shows its progress and Stop above the list until the
+/// rig answers, whatever the list reads meanwhile. The row stays, so pointing
+/// by hand works as before.
 /// Renders the rig's list as data, loading and error; shows nothing for a rig
 /// that predates the list.
 class PolarPreflightChecklist extends ConsumerStatefulWidget {
@@ -51,7 +52,7 @@ class _PolarPreflightChecklistState
     final l10n = context.l10n;
     final preflight = ref.watch(polarAlignPreflightProvider);
     void refresh() => ref.read(polarAlignPreflightProvider.notifier).refresh();
-    return switch (preflight) {
+    final list = switch (preflight) {
       AsyncData(:final value) =>
         value == null ? const SizedBox.shrink() : _list(value, refresh),
       AsyncError() => Row(
@@ -97,6 +98,15 @@ class _PolarPreflightChecklistState
         ],
       ),
     };
+    // #2166 while the mount moves, its progress and Stop stay whatever the
+    // list reads meanwhile: a re-read mid-move sees a busy mount, or a start
+    // pointing that passes, and makes no offer.
+    if (!_moving) return list;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [_moveProgress(), list],
+    );
   }
 
   Widget _list(PolarAlignPreflight preflight, VoidCallback refresh) {
@@ -156,7 +166,8 @@ class _PolarPreflightChecklistState
           ),
         for (final c in shown) ...[
           _row(c),
-          if (c.id == PolarAlignPreflightChecks.startPointing &&
+          if (!_moving &&
+              c.id == PolarAlignPreflightChecks.startPointing &&
               c.fails &&
               preflight.moveToStart != null)
             _moveToStart(preflight.moveToStart!),
@@ -206,32 +217,37 @@ class _PolarPreflightChecklistState
     );
   }
 
+  /// #2166 the move's progress and Stop, shown above the list while the
+  /// move runs.
+  Widget _moveProgress() {
+    final l10n = context.l10n;
+    const style = TextStyle(fontSize: 13, color: AraColors.textSecondary);
+    return Padding(
+      key: const Key('polar-move-to-start-progress'),
+      padding: const EdgeInsets.only(bottom: 4),
+      child: Row(
+        children: [
+          const SizedBox.square(
+            dimension: 14,
+            child: AdaptiveProgressIndicator(strokeWidth: 2),
+          ),
+          const SizedBox(width: 8),
+          Expanded(child: Text(l10n.polarMoveToStartMoving, style: style)),
+          TextButton(
+            key: const Key('polar-move-to-start-stop'),
+            onPressed: _stopMove,
+            child: Text(l10n.polarMoveToStartStop),
+          ),
+        ],
+      ),
+    );
+  }
+
   /// #2166 the "Move to start position" button under the failing start
-  /// pointing row, its reason while blocked, and the move's progress and Stop.
+  /// pointing row, and its reason while blocked.
   Widget _moveToStart(PolarAlignMoveToStartOffer offer) {
     final l10n = context.l10n;
     const style = TextStyle(fontSize: 13, color: AraColors.textSecondary);
-    if (_moving) {
-      return Padding(
-        key: const Key('polar-move-to-start-progress'),
-        padding: const EdgeInsets.only(left: 22, bottom: 4),
-        child: Row(
-          children: [
-            const SizedBox.square(
-              dimension: 14,
-              child: AdaptiveProgressIndicator(strokeWidth: 2),
-            ),
-            const SizedBox(width: 8),
-            Expanded(child: Text(l10n.polarMoveToStartMoving, style: style)),
-            TextButton(
-              key: const Key('polar-move-to-start-stop'),
-              onPressed: _stopMove,
-              child: Text(l10n.polarMoveToStartStop),
-            ),
-          ],
-        ),
-      );
-    }
     final blocked = polarMoveToStartBlockedText(l10n, offer);
     return Padding(
       key: const Key('polar-move-to-start'),

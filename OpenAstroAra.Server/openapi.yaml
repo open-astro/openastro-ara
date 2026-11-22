@@ -14917,6 +14917,7 @@ components:
         - checks
         - planned
         - mount_key
+        - move_to_start
       type: object
       properties:
         ready:

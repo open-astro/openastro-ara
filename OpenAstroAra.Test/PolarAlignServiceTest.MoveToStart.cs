@@ -34,10 +34,28 @@ namespace OpenAstroAra.Test {
 
         /// <summary>A counterweight-down mount on its normal side (HA 2 h) at <paramref name="decDeg"/>, on a clock that only
         /// the routine's reads move.</summary>
-        private static FakeGemMount PolledGemNearThePole(double decDeg = 88.0) {
-            var mount = FakeGemMount.CounterweightDownAt(2.0, decDeg, lstHours: 20.0, clock: new ManualMountClock());
+        private static FakeGemMount PolledGemNearThePole(double decDeg = 88.0, double latitudeDeg = SiteLatDeg) {
+            var mount = FakeGemMount.CounterweightDownAt(2.0, decDeg, lstHours: 20.0, latitudeDeg: latitudeDeg, clock: new ManualMountClock());
             mount.FreshReadTakes = FreshRead;
             return mount;
+        }
+
+        /// <summary>The scope's true distance from the site's own pole (south too).</summary>
+        private static double OffOwnPoleDeg(FakeGemMount mount) => 90.0 - (Math.Sign(mount.LatitudeDeg) * mount.TrueSky.DecDeg);
+
+        private static void AssertArrivedOnItsSide(PolarAlignMoveToStartResultDto result, FakeGemMount mount, double phiBefore,
+                double nearDeg = 3.9, double farDeg = 4.5) {
+            var dec = DecMoves(mount);
+            Assert.Multiple(() => {
+                Assert.That(result.Outcome, Is.EqualTo(PolarAlignMoveToStartOutcomes.Arrived), result.Message + " " + mount.Describe());
+                Assert.That(StatusOf(result.Preflight, PolarAlignPreflightChecks.StartPointing), Is.EqualTo(PolarAlignPreflightStatuses.Ok));
+                Assert.That(OffOwnPoleDeg(mount), Is.InRange(nearDeg, farDeg), "inside the 2–5° start band");
+                Assert.That(mount.TrueSide, Is.EqualTo(mount.InitialTrueSide), "it ends on the side of the pier it started on");
+                Assert.That(mount.TruePhiDeg, Is.EqualTo(phiBefore).Within(0.05), "the counterweights stay: the RA axis did not turn");
+                Assert.That(mount.Motions.Where(m => m.Kind != MotionKind.DecMotor), Is.Empty, "Dec alone. " + mount.Describe());
+                Assert.That(dec.Select(m => m.End), Has.None.EqualTo(MotionEnd.Reversed), "never reversed mid-move");
+                Assert.That(mount.MotionOwner, Is.Null);
+            });
         }
 
         private static MotionEntry[] DecMoves(FakeGemMount mount) =>
@@ -275,7 +293,7 @@ namespace OpenAstroAra.Test {
             mount.OnPoseRead = () => {
                 if (++reads == 2) {
                     var pose = mount.TruePose;
-                    mount.MoveByOtherMeans(pose with { MechHaDeg = pose.MechHaDeg + 1.0 });
+                    mount.MoveByOtherMeans(pose with { MechHaDeg = pose.MechHaDeg + 5.0 });
                 }
             };
             using var svc = NewGemService(mount, new WsRecorder());
@@ -359,6 +377,162 @@ namespace OpenAstroAra.Test {
                 Assert.That(mount.MotionOwner, Is.Null);
             });
             mount.AssertNoMotionSince(emergency.At);
+        }
+
+        // ── at and next to the pole: a probe that goes over it ──────────────────────────────
+
+        [TestCase(90.0, 1.0)]
+        [TestCase(90.0, -1.0)]
+        [TestCase(89.9, -1.0)]
+        public async Task From_Home_or_next_to_the_pole_the_move_arrives_on_the_side_it_started_whichever_way_the_Dec_motor_turns(
+                double decDeg, double decMotorSign) {
+            var mount = PolledGemNearThePole(decDeg);
+            mount.DecMotorSign = decMotorSign;
+            var phiBefore = mount.TruePhiDeg;
+            using var svc = NewGemService(mount, new WsRecorder());
+
+            var result = await svc.MoveToStartAsync(CancellationToken.None).ConfigureAwait(false);
+
+            AssertArrivedOnItsSide(result, mount, phiBefore);
+            mount.AssertEndedStopped(tracking: true);
+        }
+
+        [Test]
+        public async Task A_probe_over_the_pole_on_a_driver_that_reads_Dec_past_90_is_folded_back_and_the_move_arrives() {
+            var mount = PolledGemNearThePole(90.0);
+            mount.DecMotorSign = -1.0; // a positive rate raises the Dec axis: over the pole from Home
+            mount.DecPastPoleUnfolded = true;
+            var phiBefore = mount.TruePhiDeg;
+            using var svc = NewGemService(mount, new WsRecorder());
+
+            var result = await svc.MoveToStartAsync(CancellationToken.None).ConfigureAwait(false);
+
+            AssertArrivedOnItsSide(result, mount, phiBefore);
+            Assert.That(DecMoves(mount)[0].TrueTo.DecAxisDeg, Is.GreaterThan(90.0), "the probe went over the pole. " + mount.Describe());
+        }
+
+        // ── the RA guard on the sky ──────────────────────────────────────────────────────────
+
+        [Test]
+        public async Task A_mount_that_reports_J2000_moves_to_the_start_with_no_ra_moved() {
+            var mount = PolledGemNearThePole();
+            mount.ReportedFrame = Epoch.J2000; // its axes read as J2000: the JNOW conversion near the pole moves the RA
+            var phiBefore = mount.TruePhiDeg;
+            using var svc = NewGemService(mount, new WsRecorder());
+
+            var result = await svc.MoveToStartAsync(CancellationToken.None).ConfigureAwait(false);
+
+            // The JNOW pole is about 0.15° off the J2000 one: the move ends 4° from the JNOW pole.
+            AssertArrivedOnItsSide(result, mount, phiBefore, nearDeg: 3.7, farDeg: 4.5);
+        }
+
+        // ── the southern hemisphere ──────────────────────────────────────────────────────────
+
+        [TestCase(1.0)]
+        [TestCase(-1.0)]
+        public async Task At_a_southern_site_the_move_takes_the_scope_4_degrees_from_the_south_pole(double decMotorSign) {
+            var mount = PolledGemNearThePole(-88.0, latitudeDeg: -SiteLatDeg);
+            mount.DecMotorSign = decMotorSign;
+            var phiBefore = mount.TruePhiDeg;
+            var store = TenDegreeStore();
+            store.PutSiteSettings(store.GetSiteSettings() with { LatitudeDeg = -SiteLatDeg });
+            using var svc = NewGemService(mount, new WsRecorder(), store);
+
+            var preflight = await svc.GetPreflightAsync(null, CancellationToken.None).ConfigureAwait(false);
+            var result = await svc.MoveToStartAsync(CancellationToken.None).ConfigureAwait(false);
+
+            Assert.That(preflight.MoveToStart, Is.Not.Null, "within 3° of the south pole: the move is offered");
+            AssertArrivedOnItsSide(result, mount, phiBefore);
+            Assert.That(mount.TrueSky.DecDeg, Is.LessThan(-85.0), "near the south pole, not the north");
+        }
+
+        // ── the second move and the end check ────────────────────────────────────────────────
+
+        [Test]
+        public async Task A_second_move_that_goes_toward_the_pole_is_stopped_and_fails_as_turn_wrong_way_and_is_never_reversed() {
+            var mount = PolledGemNearThePole();
+            var flipped = false;
+            mount.OnPoseRead = () => {
+                // The Dec motor turns the other way from the probe's lesson once the second move runs.
+                if (!flipped && DecMoves(mount).Length == 2) {
+                    flipped = true;
+                    mount.DecMotorSign = -mount.DecMotorSign;
+                }
+            };
+            using var svc = NewGemService(mount, new WsRecorder());
+
+            var result = await svc.MoveToStartAsync(CancellationToken.None).ConfigureAwait(false);
+
+            var dec = DecMoves(mount);
+            Assert.Multiple(() => {
+                Assert.That(result.Outcome, Is.EqualTo(PolarAlignMoveToStartOutcomes.Failed), mount.Describe());
+                Assert.That(result.Reason, Is.EqualTo(PolarAlignService.TurnWrongWay), result.Message);
+                Assert.That(dec, Has.Length.EqualTo(2), "no move after the wrong way. " + mount.Describe());
+                Assert.That(dec.Select(m => m.End), Has.All.EqualTo(MotionEnd.Stopped), "stopped, never reversed");
+                Assert.That(mount.IsMoving, Is.False);
+                Assert.That(mount.MotionOwner, Is.Null);
+            });
+        }
+
+        [Test]
+        public async Task A_move_that_ends_outside_2_to_5_degrees_from_the_pole_fails_as_turn_mismatch() {
+            var mount = PolledGemNearThePole();
+            var shifted = false;
+            mount.OnFullRead = () => {
+                // Once the second move's motor stopped, the Dec reading jumps 2.5° toward the pole: it ends 1.5° from it.
+                if (!shifted && DecMoves(mount) is { Length: 2 } dec && dec[1].End != MotionEnd.Running) {
+                    shifted = true;
+                    mount.ReportedDecOffsetDeg = 2.5;
+                }
+            };
+            using var svc = NewGemService(mount, new WsRecorder());
+
+            var result = await svc.MoveToStartAsync(CancellationToken.None).ConfigureAwait(false);
+
+            Assert.Multiple(() => {
+                Assert.That(result.Outcome, Is.EqualTo(PolarAlignMoveToStartOutcomes.Failed), mount.Describe());
+                Assert.That(result.Reason, Is.EqualTo(PolarAlignService.TurnMismatch), result.Message);
+                Assert.That(result.Message, Does.Contain("not 2–5°"));
+                Assert.That(mount.IsMoving, Is.False);
+            });
+        }
+
+        // ── more refusals ────────────────────────────────────────────────────────────────────
+
+        [Test]
+        public async Task Move_to_start_is_refused_on_an_alt_az_mount_and_nothing_moves() {
+            var mount = NewMount();
+            var service = mount.As<ITelescopeService>();
+            service.Setup(t => t.MountAlignmentMode).Returns(ASCOM.Common.DeviceInterfaces.AlignmentMode.AltAz);
+            service.Setup(t => t.ReadNowAsync(It.IsAny<CancellationToken>())).ReturnsAsync(() => FreshReading(0.0, 88.0));
+            using var svc = NewService(NewFake(), new ScriptedSolver(), mount);
+
+            var preflight = await svc.GetPreflightAsync(null, CancellationToken.None).ConfigureAwait(false);
+            var refusal = await Assert.ThrowsAsync<RefusalException>(() => svc.MoveToStartAsync(CancellationToken.None));
+
+            Assert.Multiple(() => {
+                Assert.That(preflight.MoveToStart!.BlockedBy, Is.EqualTo(PolarAlignMoveToStartBlocks.AltAzMount));
+                Assert.That(refusal!.Cause, Is.EqualTo(RefusalCatalog.PolarAlignAltAzMount));
+            });
+            mount.Verify(m => m.MoveAxis(It.IsAny<TelescopeAxes>(), It.IsNotIn(0.0)), Times.Never, "nothing moved");
+            service.Verify(t => t.MoveAxisAsync(It.IsAny<int>(), It.IsNotIn(0.0), It.IsAny<int?>(), It.IsAny<long?>(), It.IsAny<CancellationToken>()), Times.Never);
+        }
+
+        [Test]
+        public async Task Move_to_start_is_refused_with_no_site_set_and_nothing_moves() {
+            var mount = PolledGemNearThePole();
+            var store = TenDegreeStore();
+            store.PutSiteSettings(store.GetSiteSettings() with { LatitudeDeg = 0.0, LongitudeDeg = 0.0 });
+            using var svc = NewGemService(mount, new WsRecorder(), store);
+
+            var preflight = await svc.GetPreflightAsync(null, CancellationToken.None).ConfigureAwait(false);
+            var refusal = await Assert.ThrowsAsync<RefusalException>(() => svc.MoveToStartAsync(CancellationToken.None));
+
+            Assert.Multiple(() => {
+                Assert.That(preflight.MoveToStart?.BlockedBy, Is.EqualTo(PolarAlignMoveToStartBlocks.SiteLatitude));
+                Assert.That(refusal!.Cause, Is.EqualTo(RefusalCatalog.PolarAlignSiteNotSet));
+                Assert.That(mount.Motions, Is.Empty, mount.Describe());
+            });
         }
     }
 }

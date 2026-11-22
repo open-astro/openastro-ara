@@ -826,4 +826,53 @@ void main() {
     expect(rig.stops, 1);
     expect(find.byKey(const Key('polar-move-to-start-progress')), findsNothing);
   });
+
+  testWidgets(
+    'Stop stays while the mount moves even when the list read mid-move offers no move',
+    (tester) async {
+      final rig = await _pumpMoveToStart(tester);
+      rig.moveGate = Completer<void>();
+
+      await tester.tap(find.byKey(const Key('polar-move-to-start-button')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('polar-move-to-start-confirm-go')));
+      await tester.pump();
+      // Mid-move the rig's list passes the start pointing (or reads the mount
+      // busy): no offer. The list is read again, as a mount change does.
+      rig.onAxis = false;
+      await tester.tap(find.byKey(const Key('polar-preflight-refresh')));
+      await tester.pump();
+      await tester.pump();
+      expect(
+        find.byKey(const Key('polar-move-to-start-stop')),
+        findsOneWidget,
+        reason: 'the motor still runs: Stop must not go',
+      );
+
+      await tester.tap(find.byKey(const Key('polar-move-to-start-stop')));
+      await tester.pumpAndSettle();
+      expect(rig.stops, 1);
+    },
+  );
+
+  testWidgets('The move confirm names the probe the rig sends with its offer', (
+    tester,
+  ) async {
+    await _pumpMoveToStart(
+      tester,
+      offer: const PolarAlignMoveToStartOffer(
+        blockedBy: null,
+        targetOffPoleDeg: 4,
+        reachDeg: 4.5,
+      ),
+    );
+
+    await tester.tap(find.byKey(const Key('polar-move-to-start-button')));
+    await tester.pumpAndSettle();
+    expect(
+      find.textContaining('It first moves Dec 0.5° to learn'),
+      findsOneWidget,
+      reason: 'the probe is the reach past the target',
+    );
+  });
 }

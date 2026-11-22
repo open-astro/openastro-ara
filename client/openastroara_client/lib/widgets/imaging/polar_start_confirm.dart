@@ -109,9 +109,6 @@ class PolarMoveToStartConfirmDialog extends StatelessWidget {
 
   final PolarAlignMoveToStartOffer offer;
 
-  /// The probe the rig moves first (PolarAlignService.MoveToStartProbeDeg).
-  static const probeDeg = 0.3;
-
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
@@ -130,7 +127,8 @@ class PolarMoveToStartConfirmDialog extends StatelessWidget {
             child: Text(
               l10n.polarMoveToStartConfirmBody(
                 format.format(offer.targetOffPoleDeg),
-                format.format(probeDeg),
+                // The rig's reach is the target plus the probe it moves first.
+                format.format(offer.reachDeg - offer.targetOffPoleDeg),
               ),
             ),
           ),

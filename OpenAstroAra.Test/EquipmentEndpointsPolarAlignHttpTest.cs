@@ -40,7 +40,8 @@ namespace OpenAstroAra.Test {
             Checks: [new PolarAlignPreflightCheckDto(PolarAlignPreflightChecks.MountConnected, PolarAlignPreflightStatuses.Ok, "Connected.")],
             Planned: new PolarAlignPreflightPlannedDto(PolarAlignStages.Fine, PolarAlignDirections.East, 10.0, 10.0, 2, 20.0,
                 true, 0.0, 30.0, 60.0, null, null),
-            MountKey: "ZWO_AM5_1");
+            MountKey: "ZWO_AM5_1",
+            MoveToStart: null);
 
         private static readonly PolarAlignStartPlanDto Plan = new(PolarAlignStages.Fine, PolarAlignDirections.East, 10.0, 2, 20.0);
 

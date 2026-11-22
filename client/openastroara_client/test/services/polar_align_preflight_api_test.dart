@@ -69,6 +69,7 @@ const _list = {
     'start_cw_angle_deg': 12.5,
     'min_altitude_deg': null,
   },
+  'move_to_start': null,
 };
 
 PolarAlignApi _api(_Rig rig) => PolarAlignApi(
@@ -134,6 +135,11 @@ void main() {
       expect((p.startCwAngleDeg, p.minAltitudeDeg), (12.5, null));
     },
   );
+
+  test('a preflight list without move_to_start is a FormatException', () async {
+    final missing = Map<String, Object?>.of(_list)..remove('move_to_start');
+    expect(_api(_Rig(reply: missing)).preflight(), throwsFormatException);
+  });
 
   test('preflight from a rig without the list (404) is null', () async {
     expect(await _api(_Rig(status: 404)).preflight(), isNull);

@@ -34,10 +34,11 @@ namespace OpenAstroAra.Server.Services {
     /// It is a Polar Align move under the mount's motion owner with the guards of every turn (#2067): a fresh reading
     /// every <see cref="AxisMovePoll"/>, the stall bound, twice the planned time plus slack, Stop, Stop Mount and Emergency
     /// Stop obeyed, MoveAxis 0 on every exit, a pier side that changes stops and fails it, and the RA reading may not move
-    /// more than <see cref="TurnDecLimitDeg"/> (<see cref="RaMoved"/>, the mirror of <c>dec_moved</c>). ASCOM leaves the
-    /// Dec motor's sign to the driver, so a <see cref="MoveToStartProbeDeg"/> probe goes first; a probe that took Dec
-    /// toward the pole is stopped and settled, and a new move then goes the other way (never a reversal mid-move). Then
-    /// the exit's confirmed stop, the tracking the mount had handed back, and a fresh pre-flight list.
+    /// more than <see cref="DecMoveRaSkyLimitDeg"/> on the sky (<see cref="RaMoved"/>, the mirror of <c>dec_moved</c>).
+    /// ASCOM leaves the Dec motor's sign to the driver, so a <see cref="MoveToStartProbeDeg"/> probe goes first; a probe
+    /// that took Dec toward the pole, or over it from Home, is stopped and settled, and a new move then goes the other way
+    /// (never a reversal mid-move) and must end on the side of the pier it started on. Then the exit's confirmed stop,
+    /// the tracking the mount had handed back, and a fresh pre-flight list.
     /// </summary>
     public sealed partial class PolarAlignService {
 
@@ -54,6 +55,12 @@ namespace OpenAstroAra.Server.Services {
         /// <summary>The band, from the pole, the start asks for: the move must end inside it.</summary>
         internal const double StartBandNearDeg = 2.0;
         internal const double StartBandFarDeg = 5.0;
+
+        /// <summary>Within this of the pole a reading whose RA and pier side flip is the Dec axis going over the pole.</summary>
+        internal const double PoleCrossingDeg = 1.0;
+
+        /// <summary>The most the RA reading may move east or west on the sky during a Dec move (degrees, ΔRA × cos Dec).</summary>
+        internal const double DecMoveRaSkyLimitDeg = 0.1;
 
         /// <summary>The reason of a Dec move during which the RA reading moved (the mirror of <see cref="DecMoved"/>).</summary>
         internal const string RaMoved = "ra_moved";
@@ -118,6 +125,8 @@ namespace OpenAstroAra.Server.Services {
         private async Task<PolarAlignMoveToStartResultDto> RunMoveToStartAsync(
                 IDisposable hold, double poleSign, long session, long abortEpochAtCall, long ownAbortsAtCall, CancellationToken ct) {
             using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct); // a client that goes away stops the move
+            // Read before the move is marked: a read that throws leaves nothing marked running (the caller frees the hold).
+            var priorTracking = _mount.GetInfo().TrackingEnabled;
             var end = new RunEnd();
             end.Hold(hold);
             int gen;
@@ -137,7 +146,6 @@ namespace OpenAstroAra.Server.Services {
                 _trackingTouched = false;
                 EndMotion();
             }
-            var priorTracking = _mount.GetInfo().TrackingEnabled;
             end.PriorTracking = priorTracking;
             LogMoveToStartBegins(MoveToStartOffPoleDeg, poleSign > 0 ? "north" : "south");
             string outcome;
@@ -213,30 +221,39 @@ namespace OpenAstroAra.Server.Services {
             return stopped;
         }
 
-        /// <summary>The probe, then the move off the pole, then the check that the scope points 2–5° from it. Tracking is on
-        /// first, so the RA reading stands still while the Dec axis turns (the RA guard reads it).</summary>
+        /// <summary>The probe, then the move off the pole, then the check that the scope points 2–5° from it, on the side
+        /// of the pier it started on. Tracking is on first, so the RA reading stands still while the Dec axis turns (the
+        /// RA guard reads it). Distances are signed from the pole on the start's side (<see cref="DecMoveTrack"/>): a probe
+        /// at or within <see cref="MoveToStartProbeDeg"/> of the pole that goes over it reads as having gone toward it, and
+        /// the move the other way comes back over the pole first.</summary>
         private async Task MoveDecToStartAsync(double poleSign, int gen, CancellationToken ct) {
             ThrowIfStoppedFromOutside(gen);
             await EnsureTrackingOnAsync(gen, ct).ConfigureAwait(false);
-            (double RaDeg, double DecDeg)? from = null;
-            var probed = await MoveDecAxisUntilAsync(1.0, MoveToStartProbeDeg,
-                (start, now) => Math.Abs(now.DecDeg - start.DecDeg), checkDirection: false, gen, ct,
-                beforeMove: start => from = start).ConfigureAwait(false);
-            var towardPole = poleSign * (probed.DecDeg - from!.Value.DecDeg);
+            var track = new DecMoveTrack(poleSign);
+            var (from, probed) = await MoveDecAxisUntilAsync(1.0, MoveToStartProbeDeg, track,
+                (start, now) => Math.Abs(now - start), checkDirection: false, gen, ct).ConfigureAwait(false);
+            var towardPole = from - probed;
             if (Math.Abs(towardPole) < MoveToStartProbeDeg / 2) {
                 throw new RoutineFailedException(TurnMismatch, string.Create(CultureInfo.InvariantCulture,
                     $"the mount's Dec reading moved only {Math.Abs(towardPole):F2}° in the {MoveToStartProbeDeg:F1}° probe, so its Dec motor's direction is not known — check the mount, then try again"));
             }
-            // A probe toward the pole has stopped and settled: the next move is a new one, the other way.
+            // A probe toward (or over) the pole has stopped and settled: the next move is a new one, the other way.
             var awaySign = towardPole > 0 ? -1.0 : 1.0;
             LogMoveToStartProbed(towardPole, awaySign);
-            var remaining = MoveToStartOffPoleDeg - (90.0 - (poleSign * probed.DecDeg));
+            var remaining = MoveToStartOffPoleDeg - probed;
             if (remaining > StopStillDeg) {
-                await MoveDecAxisUntilAsync(awaySign, remaining,
-                    (start, now) => poleSign * (start.DecDeg - now.DecDeg), checkDirection: true, gen, ct).ConfigureAwait(false);
+                await MoveDecAxisUntilAsync(awaySign, remaining, track,
+                    (start, now) => now - start, checkDirection: true, gen, ct).ConfigureAwait(false);
             }
-            var final = await RunPointingJnowAsync(gen, ct).ConfigureAwait(false);
-            var offPole = 90.0 - (poleSign * final.DecDeg);
+            var final = await RunReadingAsync(gen, MountReadKind.Full, ct, foldPastPole: true).ConfigureAwait(false);
+            ObserveDecMove(track, final);
+            if (track.OverThePole) {
+                var (origin, ended) = (track.OriginSide, track.ExpectedSide(overThePole: true));
+                LogTurnPierChanged(origin, ended);
+                throw new RoutineFailedException(PierChanged,
+                    "the move to the start position ended over the pole, on the other side of the pier — Polar Align never flips the mount; check where it points, then point it 2–5° from the pole with its own controls");
+            }
+            var offPole = track.SignedOffPoleDeg;
             if (offPole < StartBandNearDeg || offPole > StartBandFarDeg) {
                 throw new RoutineFailedException(TurnMismatch, string.Create(CultureInfo.InvariantCulture,
                     $"the move ended with the scope {offPole:F1}° from the pole, not 2–5° — check the mount, then point it with its own controls"));
@@ -245,24 +262,27 @@ namespace OpenAstroAra.Server.Services {
         }
 
         /// <summary>
-        /// The Dec twin of <see cref="MoveAxisUntilAsync"/>: run the Dec motor until <paramref name="progress"/> reaches
+        /// The Dec twin of <see cref="MoveAxisUntilAsync"/>: run the Dec motor until <paramref name="progress"/> (from the
+        /// move's start to now, on <paramref name="track"/>'s signed distance from the pole) reaches
         /// <paramref name="degrees"/> by the mount's own reading, polled every <see cref="AxisMovePoll"/>, fast until the
         /// last <see cref="AxisSlowZoneDeg"/> and slow for the rest, at the rates the mount offers at or below Polar Align's.
         /// The same guards: steady first, the stall, twice the planned time plus slack, a stop from outside, a reading that
-        /// jumps, the pier side, and (mirroring <c>dec_moved</c>) an RA reading that moves more than
-        /// <see cref="TurnDecLimitDeg"/>. With <paramref name="checkDirection"/>, a move that goes the wrong way is stopped
-        /// and fails, never reversed. Every exit stops the motor; then the settle on fresh readings.
+        /// jumps, and <see cref="ObserveDecMove"/> on every reading (the pier side, and the RA reading that moves). With
+        /// <paramref name="checkDirection"/>, a move that goes the wrong way is stopped and fails, never reversed. Every exit
+        /// stops the motor; then the settle on fresh readings. Returns the signed distance at the start and at the end.
         /// </summary>
         [SuppressMessage("Design", "CA1031:Do not catch general exception types",
             Justification = "A refused motor command is this move's slew_failed with the mount's message, never internal_error.")]
-        private async Task<(double RaDeg, double DecDeg)> MoveDecAxisUntilAsync(
-                double sign, double degrees, Func<(double RaDeg, double DecDeg), (double RaDeg, double DecDeg), double> progress,
-                bool checkDirection, int gen, CancellationToken ct, Action<(double RaDeg, double DecDeg)>? beforeMove = null) {
+        private async Task<(double From, double To)> MoveDecAxisUntilAsync(
+                double sign, double degrees, DecMoveTrack track, Func<double, double, double> progress,
+                bool checkDirection, int gen, CancellationToken ct) {
             const TelescopeAxes axis = TelescopeAxes.Secondary;
-            var (startRa, startDec, startSide) = await EnsureMountSteadyAsync(gen, ct).ConfigureAwait(false);
-            var start = (startRa, startDec);
+            var steady = await EnsureMountSteadyReadingAsync(gen, ct, foldPastPole: true).ConfigureAwait(false);
+            ObserveDecMove(track, steady);
+            var from = track.SignedOffPoleDeg;
+            var startSide = steady.Side;
+            var start = (steady.RaDeg, steady.DecDeg);
             var (fastRate, slowRate) = MatchTurnRates(axis);
-            beforeMove?.Invoke(start);
             var direction = sign >= 0 ? 1.0 : -1.0;
             var abortEpoch = RunAbortEpoch(gen);
             var fast = degrees > AxisSlowZoneDeg;
@@ -272,30 +292,29 @@ namespace OpenAstroAra.Server.Services {
             var settled = false;
             var startRate = Rate();
             LogAxisMove(axis, degrees, startRate);
-            (double RaDeg, double DecDeg, PierSide Side) after;
             BeginMotion(MountMotion.AxisMove, gen, ct);
             try {
                 await RunAxisAsync(axis, Rate(), abortEpoch).ConfigureAwait(false);
                 var began = Clock.GetTimestamp();
                 var bestAt = began;
-                var last = (Dec: startDec, At: began);
+                var last = (OffPole: from, At: began);
                 while (true) {
                     await Task.Delay(AxisMovePoll, ct).ConfigureAwait(false);
                     if (!IsCurrent(gen)) {
                         throw new OperationCanceledException("the move was stopped while the mount moved");
                     }
                     ThrowIfStoppedFromOutside(gen);
-                    var (nowRa, nowDec, nowSide) = await RunPoseJnowAsync(gen, ct, MountReadKind.Pose).ConfigureAwait(false);
+                    var r = await RunReadingAsync(gen, MountReadKind.Pose, ct, foldPastPole: true).ConfigureAwait(false);
                     var at = Clock.GetTimestamp();
-                    var now = (nowRa, nowDec);
-                    NoteMountLeft(now, nowSide is PierSide.pierUnknown ? startSide : nowSide);
-                    var change = nowDec - last.Dec;
+                    NoteMountLeft((r.RaDeg, r.DecDeg), r.Side is PierSide.pierUnknown ? startSide : r.Side);
+                    ObserveDecMove(track, r);
+                    var now = track.SignedOffPoleDeg;
+                    var change = now - last.OffPole;
                     if (change != 0) {
                         ThrowIfReadingJumped(change, fastRate, Clock.GetElapsedTime(last.At, at), "Dec");
-                        last = (nowDec, at);
+                        last = (now, at);
                     }
-                    ThrowIfDecMoveLeftItsAxis(startRa, startSide, nowRa, nowSide);
-                    var p = progress(start, now);
+                    var p = progress(from, now);
                     if (p >= degrees - 1e-9) {
                         break;
                     }
@@ -330,8 +349,9 @@ namespace OpenAstroAra.Server.Services {
                 }
                 await StopAxisBestEffortAsync(axis).ConfigureAwait(false);
                 settled = true;
-                after = await SettleAfterTurnAsync(start, startSide, degrees, progress, gen, ct,
-                    checkPose: (ra, _, side) => ThrowIfDecMoveLeftItsAxis(startRa, startSide, ra, side)).ConfigureAwait(false);
+                // The settle's progress reads the track, which checkPose has just moved on to the settle's reading.
+                await SettleAfterTurnAsync(start, startSide, degrees, (_, _) => progress(from, track.SignedOffPoleDeg), gen, ct,
+                    checkPose: r => ObserveDecMove(track, r), foldPastPole: true).ConfigureAwait(false);
             } catch (OperationCanceledException) {
                 throw;
             } catch (Exception) when (!IsCurrent(gen)) {
@@ -352,25 +372,103 @@ namespace OpenAstroAra.Server.Services {
                 }
             }
             EndMotion();
-            var moved = progress(start, (after.RaDeg, after.DecDeg));
+            var to = track.SignedOffPoleDeg;
+            var moved = progress(from, to);
             LogAxisMoveDone(axis, moved);
-            return (after.RaDeg, after.DecDeg);
+            return (from, to);
         }
 
-        /// <summary>One poll's checks on a Dec move against its start: the RA reading moved more than
-        /// <see cref="TurnDecLimitDeg"/> (<see cref="RaMoved"/>; tracking holds it still), or the pier side changed.</summary>
-        private void ThrowIfDecMoveLeftItsAxis(double startRaDeg, PierSide startSide, double nowRaDeg, PierSide nowSide) {
-            var raMoved = Math.Abs(Wrap180(nowRaDeg - startRaDeg));
-            if (raMoved > TurnDecLimitDeg) {
+        /// <summary>
+        /// #2166 — the move to the start position's readings, one after another: where the scope points from the site's
+        /// pole, signed for the side of the pier the move started on (negative once the Dec axis went over the pole), and
+        /// the guards every reading passes.
+        /// </summary>
+        internal sealed class DecMoveTrack(double poleSign) {
+            public double PoleSign { get; } = poleSign;
+            public bool Started { get; set; }
+            /// <summary>The pier side the move started on, from the first reading that says (<c>pierUnknown</c> until then).</summary>
+            public PierSide OriginSide { get; set; } = PierSide.pierUnknown;
+            /// <summary>The Dec axis is over the pole from where the move started (the reading's RA flipped by 12 h there).</summary>
+            public bool OverThePole { get; set; }
+            public double LastRawRaDeg { get; set; }
+            public double LastJnowRaDeg { get; set; }
+            /// <summary>The last reading's distance from the pole (degrees, unsigned).</summary>
+            public double LastOffPoleDeg { get; set; }
+            /// <summary>How far the RA reading went east or west on the sky (degrees, summed reading to reading), in the
+            /// mount's own frame and in JNOW.</summary>
+            public double RaSkyRawDeg { get; set; }
+            public double RaSkyJnowDeg { get; set; }
+            /// <summary>The distance from the pole on the start's side: negative over the pole.</summary>
+            public double SignedOffPoleDeg => OverThePole ? -LastOffPoleDeg : LastOffPoleDeg;
+
+            /// <summary>The side a reading must report: the start's, or the other one over the pole (unknown while the
+            /// start's is).</summary>
+            public PierSide ExpectedSide(bool overThePole) => (OriginSide, overThePole) switch {
+                (PierSide.pierUnknown, _) => PierSide.pierUnknown,
+                (var side, false) => side,
+                (PierSide.pierEast, true) => PierSide.pierWest,
+                _ => PierSide.pierEast,
+            };
+        }
+
+        /// <summary>
+        /// One reading of the move to the start position, against the one before it on <paramref name="track"/>:
+        /// <list type="bullet">
+        /// <item>The RA reading flipping by about 12 h between two readings within <see cref="PoleCrossingDeg"/> of the pole
+        /// is the Dec axis going over it (the same pointing, read from the other side): allowed, and the readings after it
+        /// are measured from the far side.</item>
+        /// <item>The reading's pier side must be the start's, or the other one while over the pole; any other fails it
+        /// (<see cref="PierChanged"/>). A reading that does not say is not checked.</item>
+        /// <item>The RA reading must not move (tracking holds it): its moves east or west are summed as sky angles
+        /// (ΔRA × cos Dec, so the 1/cos Dec spread of a pointing model near the pole does not count), in the mount's own
+        /// frame and in JNOW. Past <see cref="DecMoveRaSkyLimitDeg"/> in both, the RA axis turned
+        /// (<see cref="RaMoved"/>). Both, because a mount that reports J2000 may hold either one still.</item>
+        /// </list>
+        /// </summary>
+        private void ObserveDecMove(DecMoveTrack track, FreshPointing r) {
+            var offPole = 90.0 - (track.PoleSign * r.DecDeg);
+            if (!track.Started) {
+                track.Started = true;
+                (track.LastRawRaDeg, track.LastJnowRaDeg, track.LastOffPoleDeg) = (r.RawRaDeg, r.RaDeg, offPole);
+                track.OriginSide = r.Side;
+                return;
+            }
+            var rawStep = Wrap180(r.RawRaDeg - track.LastRawRaDeg);
+            var jnowStep = Wrap180(r.RaDeg - track.LastJnowRaDeg);
+            var over = track.OverThePole;
+            var crossed = Math.Abs(rawStep) > 90.0 && offPole <= PoleCrossingDeg && track.LastOffPoleDeg <= PoleCrossingDeg;
+            if (crossed) {
+                over = !over;
+                rawStep = Wrap180(rawStep - 180.0);
+                jnowStep = Wrap180(jnowStep - 180.0);
+            }
+            if (r.Side is not PierSide.pierUnknown) {
+                if (track.OriginSide is PierSide.pierUnknown) {
+                    track.OriginSide = over ? (r.Side == PierSide.pierEast ? PierSide.pierWest : PierSide.pierEast) : r.Side;
+                }
+                var expected = track.ExpectedSide(over);
+                if (r.Side != expected) {
+                    var reported = r.Side;
+                    LogTurnPierChanged(expected, reported);
+                    throw new RoutineFailedException(PierChanged,
+                        "the mount reported a different side of the pier during the Dec move — Polar Align never flips the mount; check where it points, then try again");
+                }
+            }
+            if (crossed) {
+                LogDecMoveCrossedPole(over ? "over" : "back over");
+            }
+            // cos Dec of the reading farther from the pole: the stricter of the two.
+            var cosDec = Math.Sin(Math.Max(offPole, track.LastOffPoleDeg) * Math.PI / 180.0);
+            track.RaSkyRawDeg += Math.Abs(rawStep) * cosDec;
+            track.RaSkyJnowDeg += Math.Abs(jnowStep) * cosDec;
+            var raMoved = Math.Min(track.RaSkyRawDeg, track.RaSkyJnowDeg);
+            if (raMoved > DecMoveRaSkyLimitDeg) {
                 LogDecMoveRaMoved(raMoved);
                 throw new RoutineFailedException(RaMoved, string.Create(CultureInfo.InvariantCulture,
-                    $"the mount's RA reading moved {raMoved:F2}° during a Dec move (a Dec move should not move it) — check the RA clutch is tight and the mount moves only in Dec, then try again"));
+                    $"the mount's RA reading moved {raMoved:F2}° on the sky during a Dec move (a Dec move should not move it) — check the RA clutch is tight and the mount moves only in Dec, then try again"));
             }
-            if (startSide is not PierSide.pierUnknown && nowSide is not PierSide.pierUnknown && nowSide != startSide) {
-                LogTurnPierChanged(startSide, nowSide);
-                throw new RoutineFailedException(PierChanged,
-                    "the mount reported a different side of the pier during the Dec move — Polar Align never flips the mount; check where it points, then try again");
-            }
+            track.OverThePole = over;
+            (track.LastRawRaDeg, track.LastJnowRaDeg, track.LastOffPoleDeg) = (r.RawRaDeg, r.RaDeg, offPole);
         }
 
         [LoggerMessage(Level = LogLevel.Information, Message = "§45 polar-align: moving the scope to the start position, {OffPoleDeg:F1}° from the {Pole} pole, with the Dec motor alone")]
@@ -385,7 +483,10 @@ namespace OpenAstroAra.Server.Services {
         [LoggerMessage(Level = LogLevel.Information, Message = "§45 polar-align: the move to the start position ended: {Outcome} ({Reason})")]
         private partial void LogMoveToStartEnded(string outcome, string reason);
 
-        [LoggerMessage(Level = LogLevel.Warning, Message = "§45 polar-align: the RA reading moved {MovedDeg:F3}° during a Dec move — stopped (ra_moved)")]
+        [LoggerMessage(Level = LogLevel.Warning, Message = "§45 polar-align: the RA reading moved {MovedDeg:F3}° on the sky during a Dec move — stopped (ra_moved)")]
         private partial void LogDecMoveRaMoved(double movedDeg);
+
+        [LoggerMessage(Level = LogLevel.Information, Message = "§45 polar-align: the Dec axis went {Which} the pole during the move to the start position")]
+        private partial void LogDecMoveCrossedPole(string which);
     }
 }

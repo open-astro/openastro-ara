@@ -864,9 +864,15 @@ class PolarAlignPreflight {
           json['planned'] as Map<String, dynamic>,
         ),
         mountKey: json['mount_key'] as String?,
-        moveToStart: switch (json['move_to_start'] as Map<String, dynamic>?) {
-          final offer? => PolarAlignMoveToStartOffer.fromJson(offer),
-          null => null,
+        // #2166 a required key: a list without it is malformed, never "no
+        // offer".
+        moveToStart: switch (json['move_to_start']) {
+          final Map<String, dynamic> offer =>
+            PolarAlignMoveToStartOffer.fromJson(offer),
+          null when json.containsKey('move_to_start') => null,
+          _ => throw const FormatException(
+            'polar-align preflight: move_to_start missing or not an object',
+          ),
         },
       );
 }
