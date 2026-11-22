@@ -377,5 +377,29 @@ namespace OpenAstroAra.Test {
             var later = T0 + TimeSpan.FromMinutes(5);
             Assert.That(Twice(trust, false, false, 60, later), Is.True);
         }
+
+        // #2173 review — a completed Home trusts the position by itself only when the mount's own model is intact (an
+        // unconfirmed stop); after a power loss, a reset or a jump the model may be wrong, so the user confirms by eye.
+        [Test]
+        public void Only_an_unconfirmed_stop_lets_a_completed_Home_trust_the_position() {
+            Assert.That(MountPoseTrust.HomeSearchMayTrust(MountPoseTrust.StopUnconfirmed), Is.True);
+            Assert.That(MountPoseTrust.HomeSearchMayTrust(null), Is.True, "already trusted");
+            foreach (var suspect in new[] { MountPoseTrust.AtHomeOnConnect, MountPoseTrust.PoseJumpOnReconnect,
+                    MountPoseTrust.AtHomeWithoutCommand, MountPoseTrust.PoseJumpInSession, "an_older_daemons_reason" }) {
+                Assert.That(MountPoseTrust.HomeSearchMayTrust(suspect), Is.False, suspect);
+            }
+        }
+
+        // #2173 review — a power blip after an unconfirmed stop wakes the mount at a false zero: that reading replaces
+        // stop_unconfirmed, so a later Home does not trust the false zero by itself.
+        [Test]
+        public void A_power_blip_after_an_unconfirmed_stop_replaces_it_with_a_model_suspect_reason() {
+            var trust = Session();
+            trust.Observe(false, false, 5, T0);
+            trust.Flag(MountPoseTrust.StopUnconfirmed);
+
+            Assert.That(Twice(trust, atHome: true, slewing: false, decDeg: 90, T0 + TimeSpan.FromSeconds(2)), Is.True);
+            Assert.That(trust.Reason, Is.EqualTo(MountPoseTrust.AtHomeWithoutCommand));
+        }
     }
 }

@@ -303,7 +303,7 @@ public sealed record TelescopeStateDto(
     string? TrackingRate = null,
     // #2070 — the mount's reported position is not trusted (it reported Home right after it
     // connected, or its position jumped with nothing commanded): GoTo, Park and polar alignment
-    // are refused until a Home search ends at Home (#2173) or the user confirms Home. The reason is one of
+    // are refused until the user confirms Home (#2173: for stop_unconfirmed only, a Home search that ends at Home is enough). The reason is one of
     // at_home_on_connect | pose_jump_on_reconnect | at_home_without_command | pose_jump_in_session.
     bool PositionUnverified = false,
     string? PositionUnverifiedReason = null);

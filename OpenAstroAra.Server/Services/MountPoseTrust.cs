@@ -42,8 +42,9 @@ namespace OpenAstroAra.Server.Services;
 /// While a verdict waits for its second reading, motion is refused (<see cref="BlockReason"/>), and a command or move in
 /// that window does not wash it out: the next still reading settles it (see <see cref="Observe"/>).
 /// A routine that drove the motors flags it too (<see cref="StopUnconfirmed"/>): its stop was not confirmed, or the mount
-/// reconnected while it ran (#2066).
-/// Only <see cref="Confirm"/> (the user says the mount is at Home, or #2173 an Ara Home seen to run ended at Home) clears it; a new session for the
+/// reconnected while it ran (#2066). A reading that suggests one of the model-suspect reasons replaces it (#2173 review, see
+/// <see cref="HomeSearchMayTrust"/>).
+/// Only <see cref="Confirm"/> (the user says the mount is at Home, or #2173 an Ara Home seen to run ended at Home while the reason allows it, <see cref="HomeSearchMayTrust"/>) clears it; a new session for the
 /// same device keeps it, and the owner persists it per device so a daemon restart keeps it too.
 /// Until a session's first read is observed the mount is not trusted either (<see cref="Observed"/>).
 ///
@@ -64,6 +65,33 @@ internal sealed class MountPoseTrust {
 
     /// <summary>Not a stored reason: the session's first position read has not been observed yet.</summary>
     public const string NotReadYet = "not_read_yet";
+
+    /// <summary>#2173 review — whether an Ara Home seen to run that ends at Home may trust the position by itself, with no
+    /// eye check. Ara cannot tell a real home-sensor search from a Home that drives to where the mount's own position model
+    /// says Home is (an iOptron <c>:MH#</c>), and ADR 0003 rule 2 forbids asking the brand. So a completed Home trusts the
+    /// position only when the reason leaves the mount's own model intact and only Ara's knowledge is in doubt. When the
+    /// model itself may be wrong, a model Home drives back to the model's false zero (a pad nudge first, then Home, is
+    /// seen to run and lands at Home), so Home stays allowed as the way out but the user confirms Home by eye after it
+    /// (<c>confirm-home</c>). Each reason:
+    /// <list type="bullet">
+    /// <item><see cref="StopUnconfirmed"/>: may trust. The mount kept power and its model; only Ara did not see it stop. A
+    /// power cycle while the routine ran also wakes the mount reporting Home, and that reading replaces this reason with a
+    /// model-suspect one (<see cref="Observe"/>).</item>
+    /// <item><see cref="AtHomeOnConnect"/>: eye check. A mount with no absolute encoders that lost power wakes at a false
+    /// zero: its model is what is wrong.</item>
+    /// <item><see cref="PoseJumpOnReconnect"/>: eye check. The model moved while Ara was away, as after a power loss or a
+    /// reset.</item>
+    /// <item><see cref="AtHomeWithoutCommand"/>: eye check. The model jumped to Home in session, as after a power blip.</item>
+    /// <item><see cref="PoseJumpInSession"/>: eye check. The model jumped with nothing commanded: a blip, a reset or a
+    /// slipped clutch.</item>
+    /// <item>Any other stored reason (an older daemon's, or an unknown one): eye check, fail safe.</item>
+    /// </list>
+    /// Null (already trusted) may trust: the Home then only renews the trusted pose.</summary>
+    public static bool HomeSearchMayTrust(string? reason) => reason is null or StopUnconfirmed;
+
+    // #2173 review — a verdict the mount's readings make may still land while only Ara's knowledge is in doubt
+    // (StopUnconfirmed): a model-suspect reason replaces it, so a power cycle after an unconfirmed stop needs the eye check.
+    private bool VerdictsOpen => _reason is null or StopUnconfirmed;
 
     /// <summary>A Dec change larger than this between two still readings, with nothing commanded, is a jump.</summary>
     public const double PoseJumpDeg = 2.0;
@@ -228,7 +256,7 @@ internal sealed class MountPoseTrust {
         // it out (a moving or quiet-window reading decides nothing, so the jumped pose would become the trusted one).
         // A reading that agrees with it confirms it; the mount back where it was before calls it an outlier; the mount
         // still somewhere else after the move flags it (fail safe: Ara cannot tell the jump from the move).
-        if (_reason is null && _pending is { } waiting && _lastMotionAt >= waiting.At) {
+        if (VerdictsOpen && _pending is { } waiting && _lastMotionAt >= waiting.At) {
             if (Agrees(waiting, atHome, dec)) {
                 return now - waiting.At >= ConfirmGap && Settle(waiting.Reason, atHome, dec);
             }
@@ -242,14 +270,14 @@ internal sealed class MountPoseTrust {
         }
         string? verdict = null;
         if (!_observed) {
-            if (_reason is null && !slewing) {
+            if (VerdictsOpen && !slewing) {
                 if (atHome && _lastTrusted is not { AtHome: true }) {
                     verdict = AtHomeOnConnect;
                 } else if (_lastTrusted is { } trusted && Math.Abs(dec - trusted.DecDeg) > PoseJumpDeg) {
                     verdict = PoseJumpOnReconnect;
                 }
             }
-        } else if (_reason is null && !moving && _previous is { } prev && now - _lastMotionAt > QuietWindow) {
+        } else if (VerdictsOpen && !moving && _previous is { } prev && now - _lastMotionAt > QuietWindow) {
             if (atHome && !prev.AtHome) {
                 verdict = AtHomeWithoutCommand;
             } else if (Math.Abs(dec - prev.DecDeg) > PoseJumpDeg && !AtCommandedTarget(dec)) {

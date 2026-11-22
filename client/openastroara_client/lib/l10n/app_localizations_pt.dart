@@ -6708,7 +6708,7 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get refusalMountPositionUnverified =>
-      'The mount\'s position is unverified: it may have lost power, and it reports Home wherever it points. Press Home: the position is trusted again once the mount is seen to move and then reports Home. If the mount has no Home in Ara, run its zero search from its hand controller or app, then confirm Home.';
+      'The mount\'s position is unverified: it may have lost power, and it reports Home wherever it points. Press Home, then, after Home, confirm by eye that the mount is really at Home: its own position may be wrong, so a Home alone does not trust it. If the mount has no Home in Ara, run its zero search from its hand controller or app, then confirm Home.';
 
   @override
   String get refusalMountPositionNotReadYet =>
@@ -6731,6 +6731,10 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get mountPositionUnverifiedPressHome =>
+      'Press Home. After Home, confirm by eye that the mount is really at Home: its own position may be wrong, so a Home alone does not trust it.';
+
+  @override
+  String get mountPositionStopUnconfirmedPressHome =>
       'Press Home: the position is trusted again once the mount is seen to move and then reports Home.';
 
   @override
@@ -14234,7 +14238,7 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get refusalMountPositionUnverified =>
-      'A posição da montagem não está verificada: ela pode ter perdido energia e diz estar em Home para onde quer que aponte. Toque em Home: a posição volta a ser confiável quando a montagem for vista se movendo e depois indicar Home. Se a montagem não tiver Home no Ara, rode a busca de zero pelo controle de mão ou app dela e depois confirme Home.';
+      'A posição da montagem não está verificada: ela pode ter perdido energia e diz estar em Home para onde quer que aponte. Toque em Home e, depois do Home, confirme com os próprios olhos que a montagem está mesmo em Home: a posição dela pode estar errada, então só o Home não a torna confiável. Se a montagem não tiver Home no Ara, rode a busca de zero pelo controle de mão ou app dela e depois confirme Home.';
 
   @override
   String get refusalMountPositionNotReadYet =>
@@ -14258,6 +14262,10 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get mountPositionUnverifiedPressHome =>
+      'Toque em Home. Depois do Home, confirme com os próprios olhos que a montagem está mesmo em Home: a posição dela pode estar errada, então só o Home não a torna confiável.';
+
+  @override
+  String get mountPositionStopUnconfirmedPressHome =>
       'Toque em Home: a posição volta a ser confiável quando a montagem for vista se movendo e depois indicar Home.';
 
   @override

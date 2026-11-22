@@ -511,22 +511,26 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
     private async Task<OperationAcceptedDto> FindHomeAfterGuidingStoppedAsync(ITelescopeDevice client, string? idempotencyKey, long abortEpoch, long motion, CancellationToken ct) {
         // #2173 — NINA allows Find Home at any time, so the user's Home is not refused while the position is unverified on
         // any mount whose Alpaca CanFindHome is true (ADR 0003 rule 2: no brand or driver check): it is the way out, and a
-        // search seen to run that ends at Home trusts the position again (TrustPoseAfterHomeSearchAsync). A mount that
-        // cannot find Home keeps the #2070 refusal, with the hand controller's search as the way out. GoTo, Park and polar
-        // alignment stay refused either way, and so does the sequencer's Find Home instruction (RunMountOpAsync).
-        bool canFindHome;
+        // search seen to run that ends at Home trusts the position again by itself only for a reason that leaves the
+        // mount's own model intact; otherwise the user confirms Home by eye after it (TrustPoseAfterHomeSearchAsync). A
+        // mount that cannot find Home keeps the #2070 refusal, with the hand controller's search as the way out. GoTo, Park
+        // and polar alignment stay refused either way, and so does the sequencer's Find Home instruction (RunMountOpAsync).
+        bool? freshCanFindHome;
         try {
-            canFindHome = await Task.Run(() => ReadCanFindHomeBestEffort(client), CancellationToken.None)
+            freshCanFindHome = await Task.Run(() => ReadCanFindHomeBestEffort(client), CancellationToken.None)
                 .WaitAsync(PoseReadTimeout, ct).ConfigureAwait(false);
         } catch (TimeoutException) {
-            canFindHome = false;
+            freshCanFindHome = null;
         } catch {
             NoteMotionFailed(motion, client);
             throw;
         }
+        // #2173 review — a read that failed or timed out (a slow link) falls back to the connect's capability read, so a
+        // capable mount is not refused for it, and the refusal below words the same answer the decision used.
+        var canFindHome = freshCanFindHome ?? CanFindHomeKnown;
         if (!canFindHome) {
             try {
-                await ThrowIfPoseUnverifiedAsync(client, "findhome", ct).ConfigureAwait(false);
+                await ThrowIfPoseUnverifiedAsync(client, "findhome", ct, canFindHome: false).ConfigureAwait(false);
             } catch {
                 NoteMotionFailed(motion, client);
                 throw;

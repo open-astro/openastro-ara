@@ -335,12 +335,15 @@ framing/focus loop when you need to point or focus by eye.
   mount where it is: Ara stops both motors and checks on fresh readings
   that the mount stands still. If it cannot confirm that, the card says so: cut the mount's power and
   check the mount before you start again. Ara then stops trusting where the mount says it points,
-  as after a power loss: GoTo, Park and Polar Align stay blocked until a Home ends at Home. Press Home
-  in the app (it works while the position is unverified, as in NINA): once Ara sees the mount move and
-  then report Home, the position is trusted again. A Home that never moves (a mount that already thinks
-  it is at Home) clears nothing; you can also confirm Home in the mount window once you have checked by
-  eye that it is there. A mount with no Home in Ara: run its zero search from its hand controller or
-  app, then confirm Home. The same happens when
+  as after a power loss: GoTo, Park and Polar Align stay blocked. Press Home in the app (it works while
+  the position is unverified, as in NINA). If only the stop was unconfirmed and the mount kept its power,
+  the position is trusted again once Ara sees the mount move and then report Home; a Home that never
+  moves clears nothing. If the mount lost power, was reset or its position jumped (this includes the
+  power cut above), its own idea of where Home is may be wrong, and a Home may drive it to that wrong
+  place: after Home, confirm by eye that the mount is really at Home, then confirm Home in the mount
+  window. Ara cannot tell a real home-sensor search from a Home that drives by the mount's memory, so it
+  asks you. A mount with no Home in Ara: run its zero search from its hand controller or app, then
+  confirm Home. The same happens when
   the mount disconnects and connects again while Polar Align is open. Then tracking goes off, as NINA does by default, so the mount
   cannot track into the pier while nobody watches. With *Stop tracking when polar align ends* off
   (Settings › Imaging › Polar align), Done and the end of a Check give back the tracking the run found;

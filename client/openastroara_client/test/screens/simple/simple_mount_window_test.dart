@@ -147,6 +147,24 @@ void main() {
     expect(find.text(en.mountPositionUnverifiedBody), findsNothing);
   });
 
+  // #2173 review — on a mount that can find Home, Home is the way out. After a
+  // power loss the user confirms Home by eye after it; after an unconfirmed
+  // stop a Home that ends at Home trusts the position by itself.
+  testWidgets('Simple: Home is followed by an eye check after a power loss, not after an unconfirmed stop (#2173)', (tester) async {
+    final en = lookupAppLocalizations(const Locale('en'));
+    Map<String, dynamic> canHome(Map<String, dynamic> w) {
+      w['capabilities'] = {...w['capabilities'] as Map<String, dynamic>, 'can_find_home': true};
+      return w;
+    }
+
+    await _pump(tester, canHome(_unverified(atHome: false)));
+    expect(find.text(en.mountPositionUnverifiedPressHome), findsOneWidget);
+    expect(find.textContaining('confirm by eye'), findsOneWidget);
+    await _pump(tester, canHome(_unverified(atHome: false, reason: 'stop_unconfirmed')));
+    expect(find.text(en.mountPositionStopUnconfirmedPressHome), findsOneWidget);
+    expect(find.textContaining('confirm by eye'), findsNothing);
+  });
+
   testWidgets('an unverified mount off Home is told to run its zero search, with no confirm (#2070)', (tester) async {
     await _pump(tester, _unverified(atHome: false));
     expect(find.byKey(const Key('simple-mount-run-zero-search')), findsOneWidget);

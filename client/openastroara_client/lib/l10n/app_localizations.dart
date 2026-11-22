@@ -11217,7 +11217,7 @@ abstract class AppLocalizations {
   /// Refusal (mount-position-unverified): GoTo, Park and Polar Align are blocked (and Home on a mount that cannot find Home) because the mount's reported position is not trusted after a power loss
   ///
   /// In en, this message translates to:
-  /// **'The mount\'s position is unverified: it may have lost power, and it reports Home wherever it points. Press Home: the position is trusted again once the mount is seen to move and then reports Home. If the mount has no Home in Ara, run its zero search from its hand controller or app, then confirm Home.'**
+  /// **'The mount\'s position is unverified: it may have lost power, and it reports Home wherever it points. Press Home, then, after Home, confirm by eye that the mount is really at Home: its own position may be wrong, so a Home alone does not trust it. If the mount has no Home in Ara, run its zero search from its hand controller or app, then confirm Home.'**
   String get refusalMountPositionUnverified;
 
   /// Refusal (mount-position-unverified, not yet read): a move right after the mount connected, before its first position read, or while one reading waits for the next to agree (#2173)
@@ -11250,11 +11250,17 @@ abstract class AppLocalizations {
   /// **'This mount cannot find Home from Ara: run its zero search from its hand controller or app. When it reports Home, confirm it here.'**
   String get mountPositionUnverifiedRunZeroSearch;
 
-  /// Mount window: the unverified-position fix on a mount that can find Home, while it does not report Home (#2173)
+  /// Mount window: the unverified-position fix on a mount that can find Home, while it does not report Home, after a power loss or a position jump (#2173): Home is allowed, then the user confirms Home by eye
+  ///
+  /// In en, this message translates to:
+  /// **'Press Home. After Home, confirm by eye that the mount is really at Home: its own position may be wrong, so a Home alone does not trust it.'**
+  String get mountPositionUnverifiedPressHome;
+
+  /// Mount window: the unverified-position fix on a mount that can find Home, while it does not report Home, after polar alignment's stop was not confirmed (reason stop_unconfirmed, #2173): a completed Home trusts the position by itself
   ///
   /// In en, this message translates to:
   /// **'Press Home: the position is trusted again once the mount is seen to move and then reports Home.'**
-  String get mountPositionUnverifiedPressHome;
+  String get mountPositionStopUnconfirmedPressHome;
 
   /// Mount window: what the unverified-position warning means when polar alignment's stop was not confirmed (reason stop_unconfirmed, #2066), and what still works
   ///

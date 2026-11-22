@@ -371,6 +371,18 @@ void main() {
     expect(find.text(en.mountPositionUnverifiedBody), findsNothing);
   });
 
+  // #2173 review — after a power loss the user confirms Home by eye after the
+  // Home; after an unconfirmed stop a Home that ends at Home is enough.
+  testWidgets('Advanced: Home is followed by an eye check after a power loss, not after an unconfirmed stop (#2173)', (tester) async {
+    final en = lookupAppLocalizations(const Locale('en'));
+    await _pump(tester, _status(canFindHome: true, positionUnverified: true));
+    expect(find.text(en.mountPositionUnverifiedPressHome), findsOneWidget);
+    expect(find.textContaining('confirm by eye'), findsOneWidget);
+    await _pump(tester, _status(canFindHome: true, positionUnverified: true, unverifiedReason: 'stop_unconfirmed'));
+    expect(find.text(en.mountPositionStopUnconfirmedPressHome), findsOneWidget);
+    expect(find.textContaining('confirm by eye'), findsNothing);
+  });
+
   testWidgets('a trusted position keeps Park and Home on and shows no warning (#2070)', (
     tester,
   ) async {

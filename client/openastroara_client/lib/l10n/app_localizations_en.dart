@@ -6708,7 +6708,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get refusalMountPositionUnverified =>
-      'The mount\'s position is unverified: it may have lost power, and it reports Home wherever it points. Press Home: the position is trusted again once the mount is seen to move and then reports Home. If the mount has no Home in Ara, run its zero search from its hand controller or app, then confirm Home.';
+      'The mount\'s position is unverified: it may have lost power, and it reports Home wherever it points. Press Home, then, after Home, confirm by eye that the mount is really at Home: its own position may be wrong, so a Home alone does not trust it. If the mount has no Home in Ara, run its zero search from its hand controller or app, then confirm Home.';
 
   @override
   String get refusalMountPositionNotReadYet =>
@@ -6731,6 +6731,10 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get mountPositionUnverifiedPressHome =>
+      'Press Home. After Home, confirm by eye that the mount is really at Home: its own position may be wrong, so a Home alone does not trust it.';
+
+  @override
+  String get mountPositionStopUnconfirmedPressHome =>
       'Press Home: the position is trusted again once the mount is seen to move and then reports Home.';
 
   @override
