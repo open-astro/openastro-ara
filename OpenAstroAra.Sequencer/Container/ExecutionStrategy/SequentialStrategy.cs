@@ -88,12 +88,15 @@ namespace OpenAstroAra.Sequencer.Container.ExecutionStrategy {
                         }
                         // A user's pause stops the instruction in progress, and it runs again on
                         // Resume (user, 2026-11-11); a frame (and a container, whose frames are
-                        // its own items) still finishes first (unless the pause is the star-lost one, which
-                        // stops the frame and has it taken again on Resume), and so does a flat set, which takes its
+                        // its own items) still finishes first (unless the pause is a guiding-lost one, which
+                        // stops a LIGHT and has it taken again on Resume; a dark or bias needs no guiding and
+                        // always finishes, #2169), and so does a flat set, which takes its
                         // frames inside one instruction and would shoot the whole set again.
                         if (pauseGate != null && next is not ISequenceContainer
                                 && next is not SequenceItem.FlatDevice.FlatPanelFlats && next is not SequenceItem.FlatDevice.SkyFlats) {
-                            var interrupt = next is IExposureItem ? pauseGate.FrameInterruptToken : pauseGate.InterruptToken;
+                            var interrupt = next is IExposureItem exposure
+                                ? (UnguidedExposureWriter.IsLight(exposure) ? pauseGate.FrameInterruptToken : CancellationToken.None)
+                                : pauseGate.InterruptToken;
                             using var interruptible = CancellationTokenSource.CreateLinkedTokenSource(token, interrupt);
                             try {
                                 await next.Run(progress, interruptible.Token);

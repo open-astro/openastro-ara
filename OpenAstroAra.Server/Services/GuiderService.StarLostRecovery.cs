@@ -70,9 +70,9 @@ public sealed partial class GuiderService {
     /// re-center, and the recovery says so once and leaves the run paused.</summary>
     public TargetRecenter? Recenter { get; set; }
 
-    /// <summary>The restart after a successful re-center: the mediator's StartGuiding (stored
-    /// calibration, the guider's own star pick, settle wait). Internal so tests can stand in for the
-    /// guider's multi-RPC start flow.</summary>
+    /// <summary>The restart after a successful re-center, and after a reconnect that ended a guided link
+    /// loss (#2169): the mediator's StartGuiding (stored calibration, the guider's own star pick, settle
+    /// wait). Internal so tests can stand in for the guider's multi-RPC start flow.</summary>
     internal Func<CancellationToken, Task<bool>>? RestartGuidingOverride { get; set; }
 
     private Timer? _starLostProbeTimer;          // the next probe / attempt (under _gate)

@@ -693,15 +693,23 @@ public static class PolarAlignEastDirection {
 /// <summary>#2081 — the RA motor direction Polar Align learned on this profile's mount with a 0.5° test move, and
 /// saved (profile section <c>polar_align_motor_direction</c>, daemon-owned, null until a test ran). <c>Sign</c> +1: a
 /// positive primary-axis MoveAxis rate raises the mount's RA reading (east, NINA's assumption); −1: it lowers it.
-/// <c>DriverInfo</c> and <c>DriverVersion</c> are the mount driver's when it was tested: a mount whose driver reports
-/// another name or version is tested again (an AlpacaBridge upgrade that changed the sign). <c>TestedUtc</c> is when.</summary>
-public sealed record PolarAlignMotorDirectionDto(int Sign, string DriverInfo, string DriverVersion, DateTimeOffset TestedUtc) {
-    /// <summary>The saved test stands for a mount whose driver reports <paramref name="driverInfo"/> and
-    /// <paramref name="driverVersion"/> now (compared exactly; null reads as empty). An identity key against the value saved
-    /// from the same driver, not a branch on a brand or model (ADR 0003 rule 2): every driver is treated alike, and a
-    /// different string only means "not tested on this driver yet".</summary>
-    public bool IsFor(string? driverInfo, string? driverVersion) =>
+/// #2167 — <c>MountKey</c> is the tested mount's identity, the one its <c>mount_clearance</c> entry uses
+/// (<c>PolarAlignPreflightEvaluator.MountKey</c>: its Alpaca UniqueID, else its name, else <c>unidentified-mount</c>);
+/// <c>DriverInfo</c> and <c>DriverVersion</c> are its driver's name and version then, each empty when the driver reported
+/// none. A mount with another key, or whose driver reports another name or version, is tested again (an AlpacaBridge
+/// upgrade that changed the sign, or another driver set up behind the same Alpaca device, which keeps its UniqueID).
+/// <c>TestedUtc</c> is when.</summary>
+public sealed record PolarAlignMotorDirectionDto(int Sign, string MountKey, string DriverInfo, string DriverVersion, DateTimeOffset TestedUtc) {
+    /// <summary>The saved test stands for a mount whose key is <paramref name="mountKey"/> and whose driver reports
+    /// <paramref name="driverInfo"/> and <paramref name="driverVersion"/> now (compared exactly; a null name or version
+    /// reads as empty). A saved test with a blank key (a test saved before #2167, keyed on the blank DriverInfo and
+    /// DriverVersion the daemon never read) stands for no mount, so the next start tests again. An identity key against
+    /// the value saved from the same mount, not a branch on a brand or model (ADR 0003 rule 2): every mount is treated
+    /// alike, and a different string only means "not tested on this mount and driver yet".</summary>
+    public bool IsFor(string? mountKey, string? driverInfo, string? driverVersion) =>
         Sign is 1 or -1
+        && !string.IsNullOrWhiteSpace(MountKey)
+        && string.Equals(MountKey, mountKey, StringComparison.Ordinal)
         && string.Equals(DriverInfo ?? string.Empty, driverInfo ?? string.Empty, StringComparison.Ordinal)
         && string.Equals(DriverVersion ?? string.Empty, driverVersion ?? string.Empty, StringComparison.Ordinal);
 }

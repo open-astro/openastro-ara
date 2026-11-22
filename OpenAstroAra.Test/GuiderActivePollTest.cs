@@ -229,8 +229,10 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
-        public async Task The_auto_reconnect_reports_an_open_camera_fault_and_the_link_down_fault_recovered() {
+        public async Task The_auto_reconnect_recovers_the_link_down_fault_and_only_guide_frames_recover_the_open_camera_fault() {
             // A guide camera drop, then a link drop: both faults are still open when the reconnect connects.
+            // #2169 — the reconnect ends the link drop only: the camera may still be unplugged, so its fault
+            // waits for real guide frames.
             await using var fake = FakeGuider.Start();
             var sink = new RecordingSink();
             using var svc = await AutoReconnectingAsync(fake, sink).ConfigureAwait(false);
@@ -242,11 +244,14 @@ namespace OpenAstroAra.Test {
             Assert.That(await WaitForStateAsync(svc, EquipmentConnectionState.Connected, timeoutMs: 20000),
                 Is.EqualTo(EquipmentConnectionState.Connected), "the auto-reconnect never re-established the session");
 
-            Assert.That(await WaitUntilAsync(() => sink.Recovered().Length == 2), Is.True,
-                "the guider is Connected again but the open camera and link-down faults were not both reported Recovered");
+            Assert.That(await WaitUntilAsync(() => sink.Recovered().Length >= 1), Is.True, "the link-down fault was not reported Recovered");
             var published = sink.Published();
             Assert.That(published.Select(f => f.Details), Is.EqualTo(CameraThenLink));
-            Assert.That(sink.Recovered(), Is.EquivalentTo(published), "Recovered names each fault the drops published");
+            Assert.That(sink.Recovered(), Is.EqualTo(new[] { published[1] }), "the reconnect recovers the link drop, not the camera drop");
+
+            await fake.BroadcastAsync(PhdEvents.GuideStep(0.1, 0.1)).ConfigureAwait(false);
+            Assert.That(await WaitUntilAsync(() => sink.Recovered().Length == 2), Is.True, "the guide frames never recovered the camera drop");
+            Assert.That(sink.Recovered()[1], Is.SameAs(published[0]));
         }
     }
 }

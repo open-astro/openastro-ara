@@ -146,6 +146,14 @@ public interface ISequencerService {
     /// </summary>
     Task<IReadOnlyList<Guid>> PauseActiveRunsAsync(bool adoptable, CancellationToken ct);
 
+    /// <summary>
+    /// #2169 — like <see cref="PauseActiveRunsAsync(bool, CancellationToken)"/>, and
+    /// <paramref name="interruptFrames"/> also stops the LIGHT frame in progress: it is not saved or
+    /// counted and is taken again on Resume. The guider asks for it when guiding was on at a link loss,
+    /// without making the pause adoptable. An adoptable pause always stops the frame.
+    /// </summary>
+    Task<IReadOnlyList<Guid>> PauseActiveRunsAsync(bool adoptable, bool interruptFrames, CancellationToken ct);
+
     /// <summary>The sequences whose run is in progress (starting, running, paused, or parked awaiting the
     /// user; not terminal and not already aborting): a read-only look for callers that would disturb a
     /// run, such as a manual slew. A parked run counts on purpose: moving the mount under it changes what

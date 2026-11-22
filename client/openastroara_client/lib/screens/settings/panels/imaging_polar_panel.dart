@@ -267,15 +267,20 @@ class _PolarMotorDirectionRowState
         final saved = d?.saved;
         if (d == null) return l10n.polarMotorDirectionUnknown;
         if (saved == null) return l10n.polarMotorDirectionUntested;
+        // #2167 — the identity the rig keyed it to: the mount, and its
+        // driver's name and version only when the driver reported them.
+        final driver = [
+          saved.driverInfo.trim(),
+          saved.driverVersion.trim(),
+        ].where((p) => p.isNotEmpty).join(' ');
+        final mount = driver.isEmpty
+            ? saved.mountKey
+            : l10n.polarMotorDirectionMountDriver(saved.mountKey, driver);
         if (d.matchesConnectedMount == false) {
-          return l10n.polarMotorDirectionOtherDriver(
-            saved.driverInfo,
-            saved.driverVersion,
-          );
+          return l10n.polarMotorDirectionOtherDriver(mount);
         }
         return l10n.polarMotorDirectionSaved(
-          saved.driverInfo,
-          saved.driverVersion,
+          mount,
           saved.sign > 0 ? l10n.polarDirectionEast : l10n.polarDirectionWest,
         );
       },

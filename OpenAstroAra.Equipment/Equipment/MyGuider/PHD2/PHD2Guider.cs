@@ -1579,8 +1579,8 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
                         break;
                     }
                 case "EquipmentReconnected": {
-                        // #1191: the recovery signal for an earlier EquipmentDisconnected — the service
-                        // closes that fault's row and tells the user. The fault reaction stays one-shot
+                        // #1191: the guider says a device from an earlier EquipmentDisconnected is back. #2169: only
+                        // a hint — the service closes that fault's row once real guide frames come. The fault reaction stays one-shot
                         // per connect episode and is not re-armed here (a flapping device must not
                         // re-trigger skip/abort per cycle).
                         if (message.ToObject<PhdEventEquipmentReconnected>() is { } reconnect) {

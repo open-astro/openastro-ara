@@ -104,6 +104,9 @@ public sealed partial class TelescopeService : ITelescopeMediator {
                 Connected = connected,
                 Name = _lifecycle.Device?.Name ?? string.Empty,
                 DeviceId = _lifecycle.Device?.UniqueId ?? string.Empty,
+                // #2167 — read once per connect (empty until then, or when the driver reports none).
+                DriverVersion = connected ? _driverVersion ?? string.Empty : string.Empty,
+                DriverInfo = connected ? _driverInfo ?? string.Empty : string.Empty,
                 RightAscension = connected ? runtime.RightAscensionHours ?? 0 : 0,
                 Declination = connected ? runtime.DeclinationDegrees ?? 0 : 0,
                 TrackingEnabled = connected && runtime.Tracking,
