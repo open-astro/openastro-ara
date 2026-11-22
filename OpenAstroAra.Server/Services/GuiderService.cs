@@ -108,7 +108,7 @@ public sealed partial class GuiderService : IGuiderService, IGuideCameraPort, IG
     // keeps the detection and its two recoveries, and reports Recovered when one succeeds.
     private readonly IEquipmentFaultSink? _faultSink;
     // Guarded by _gate. The open link-down / camera-drop faults, held until the guider recovers so the
-    // hub can resolve exactly those rows (SetStateLocked on a connect, EquipmentReconnected for the camera).
+    // hub can resolve exactly those rows (SetStateLocked on a connect, real guide frames for the camera: #2169).
     // They outlive the guider dispose a reconnect does; a user disconnect or the service's dispose drops them (DropOpenFaultsLocked).
     private EquipmentFaultEvent? _linkFault;
     private EquipmentFaultEvent? _cameraFault;
@@ -667,13 +667,15 @@ public sealed partial class GuiderService : IGuiderService, IGuideCameraPort, IG
                 // guiding restarts (after the camera is back) before the runs resume, as for a link loss.
                 var guided = GuidingOnLocked();
                 if (_cameraFault is null) {
-                    _retryHint = NewRetryHint(); // a "camera back" from before this drop does not count
-                }
-                _cameraFault ??= PublishFaultLocked(EquipmentFaultKind.Disconnected, "equipment_disconnected", f => {
-                    if (guided) {
-                        _guidedLossFault = f;
+                    _cameraFault = PublishFaultLocked(EquipmentFaultKind.Disconnected, "equipment_disconnected", f => {
+                        if (guided) {
+                            _guidedLossFault = f;
+                        }
+                    });
+                    if (_cameraFault is not null) {
+                        StartCameraWatchLocked(_cameraFault); // #2169 — frames close it, sequence or not
                     }
-                });
+                }
             }
         }
     }
@@ -721,10 +723,10 @@ public sealed partial class GuiderService : IGuiderService, IGuideCameraPort, IG
                 return; // no open camera-drop fault (an unsolicited or repeated reconnect)
             }
             // #2169 rig check — the guider said "camera back" while the camera was still unplugged. The event
-            // is only a hint: the fault stays open until real frames come (a guide step, or the camera check
-            // the shared reaction runs). The hint makes that reaction try now instead of after its wait.
+            // is only a hint: the fault stays open until real frames come (a guide step, or the check frame
+            // the camera watch takes). The hint makes the watch check now instead of after its wait.
             LogCameraReconnected(e.DeviceType);
-            _retryHint.TrySetResult();
+            _cameraBackHint.TrySetResult();
         }
     }
 

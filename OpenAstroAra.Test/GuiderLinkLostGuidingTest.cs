@@ -104,6 +104,7 @@ namespace OpenAstroAra.Test {
                     // Generous: a test that wants the timeout sets its own, so suite load never fails a good restore.
                     GuidingRestoreSettleTimeout = TimeSpan.FromSeconds(30),
                     GuidingRestoreReconcileWait = TimeSpan.FromSeconds(30),
+                    GuideCameraRetryBackoff = [TimeSpan.FromMilliseconds(50)],
                 };
                 Service.RestartGuidingOverride = async _ => {
                     int n;
@@ -153,6 +154,11 @@ namespace OpenAstroAra.Test {
             fake.SetOnConnectEvents(PhdEvents.Version(subver: "openastroara-fake"), PhdEvents.AppState(state));
             fake.OnRpc("get_app_state", JsonValue.Create(state));
             fake.OnRpc("get_connected", JsonValue.Create(true));
+            // A guide frame Ara takes to check a dropped camera comes back (a test that keeps the camera out overrides it).
+            fake.OnRpc("capture_single_frame", request => {
+                _ = Task.Run(() => fake.BroadcastAsync(SingleFrameComplete(success: true)));
+                return JsonValue.Create(0);
+            });
             rig.OnRestart = async distance => {
                 var guider = rig.Service.RequireConnectedGuider();
                 fake.OnRpc("get_app_state", JsonValue.Create("Guiding"));
@@ -461,59 +467,122 @@ namespace OpenAstroAra.Test {
             ["Success"] = success, ["Error"] = success ? null : "camera not connected",
         };
 
+        // Every guide frame Ara takes fails while [cameraOut] says the camera is still unplugged; counts them.
+        private static Func<int> CheckFrames(FakeGuider fake, Func<bool> cameraOut) {
+            var captures = 0;
+            fake.OnRpc("capture_single_frame", request => {
+                Interlocked.Increment(ref captures);
+                var ok = !cameraOut();
+                _ = Task.Run(() => fake.BroadcastAsync(SingleFrameComplete(success: ok)));
+                return JsonValue.Create(0);
+            });
+            return () => Volatile.Read(ref captures);
+        }
+
         [Test]
         public async Task A_camera_back_event_with_no_guide_frames_keeps_the_camera_fault_open_and_the_run_paused() {
             // #2169 rig check — the guider said "camera back" while the camera was still unplugged. The event is
-            // only a hint: with no real frames the fault stays open and the run stays paused.
-            using var rig = new Rig { RestartSucceeds = _ => false, Settles = _ => false };
+            // only a hint: Ara takes guide frames, and with none coming back the fault stays open, the run stays
+            // paused and guiding is not started on a camera that is not there.
+            using var rig = new Rig();
             await using var fake = await ConnectedFakeAsync(rig, guiding: true).ConfigureAwait(false);
+            var captures = CheckFrames(fake, cameraOut: () => true);
             await DropGuideCameraWhileGuidingAsync(rig, fake).ConfigureAwait(false);
 
             await fake.BroadcastAsync(PhdEvents.EquipmentReconnected()).ConfigureAwait(false);
 
-            Assert.That(await WaitUntilAsync(() => rig.Restarts() >= 2).ConfigureAwait(false), Is.True, "Ara never kept trying to start guiding");
+            Assert.That(await WaitUntilAsync(() => captures() >= 2 && rig.Titled(StillTryingTitle) == 1).ConfigureAwait(false), Is.True,
+                "Ara never kept checking the camera, or never told the user");
             Assert.That(rig.WasRecovered("equipment_disconnected"), Is.False, "no guide frame came: the camera drop is not over");
-            Assert.That(rig.Resumed(), Is.Zero, "the run stays paused");
-            Assert.That(rig.Titled(StillTryingTitle), Is.EqualTo(1));
+            Assert.That((rig.Resumed(), rig.Restarts()), Is.EqualTo((0, 0)), "the run stays paused, and guiding is not started without a camera");
+            Assert.That(rig.Titled(StillTryingTitle), Is.EqualTo(1), "told once");
         }
 
         [Test]
-        public async Task Guide_frames_after_a_camera_drop_recover_the_fault_and_the_run_resumes_guided() {
-            // #2169 rig check — the guider never says the camera is back (guider#66), but a later try starts
-            // guiding and its guide steps prove the camera works: the fault is recovered and the run resumes.
-            using var rig = new Rig { RestartSucceeds = n => n >= 2, Settles = n => n >= 2 };
+        public async Task Guide_frames_after_a_camera_drop_recover_the_fault_and_the_run_resumes_guided_without_waiting_out_a_retry() {
+            // #2169 rig check — the guider never says the camera is back (guider#66) but guides again on its own:
+            // its guide steps prove the camera works. The fault is recovered and the run resumes at once, not
+            // after the retry wait.
+            using var rig = new Rig();
+            rig.Reaction.GuiderRetryBackoff = [TimeSpan.FromMinutes(10)];
+            rig.Service.GuideCameraRetryBackoff = [TimeSpan.FromMinutes(10)];
             await using var fake = await ConnectedFakeAsync(rig, guiding: true).ConfigureAwait(false);
             await DropGuideCameraWhileGuidingAsync(rig, fake).ConfigureAwait(false);
+
+            await rig.OnRestart!(0.02).ConfigureAwait(false); // the guider guides again by itself
 
             Assert.That(await WaitUntilAsync(() => rig.Resumed() == 1).ConfigureAwait(false), Is.True, "the run never resumed");
             Assert.That(rig.WasRecovered("equipment_disconnected"), Is.True, "the guide frames end the camera drop");
             lock (rig.Steps) {
-                Assert.That(rig.Steps, Is.EqualTo(RestartRestartResume), "a failed start, one that guides, then the resume");
+                Assert.That(rig.Steps, Is.EqualTo(RestartThenResume), "guiding is made sure of (PHD2 skips a start while guiding), then the run resumes");
             }
         }
 
         [Test]
         public async Task An_unguided_camera_drop_lets_the_frame_finish_and_resolves_only_once_a_guide_frame_comes_back() {
             // #2169 rig check — unguided, the frame in progress finishes; the "camera back" event alone does not
-            // end the drop. Ara takes a guide frame; the first fails (camera still gone), the second comes back.
+            // end the drop. Ara takes guide frames: they fail while the camera is gone (the user is told once),
+            // and the run resumes once one comes back.
             using var rig = new Rig();
             await using var fake = await ConnectedFakeAsync(rig, guiding: false).ConfigureAwait(false);
-            var captures = 0;
-            fake.OnRpc("capture_single_frame", request => {
-                var n = Interlocked.Increment(ref captures);
-                _ = Task.Run(() => fake.BroadcastAsync(SingleFrameComplete(success: n >= 2)));
-                return JsonValue.Create(0);
-            });
+            var captures = CheckFrames(fake, cameraOut: () => rig.Titled(CameraStillTryingTitle) == 0);
 
             await fake.BroadcastAsync(PhdEvents.EquipmentDisconnected()).ConfigureAwait(false);
             Assert.That(await WaitUntilAsync(() => rig.Paused() == 1).ConfigureAwait(false), Is.True, "the run was not paused");
             await fake.BroadcastAsync(PhdEvents.EquipmentReconnected()).ConfigureAwait(false);
 
             Assert.That(await WaitUntilAsync(() => rig.Resumed() == 1).ConfigureAwait(false), Is.True, "the run never resumed");
-            Assert.That(Volatile.Read(ref captures), Is.EqualTo(2), "one failed check frame, then one that came back");
+            Assert.That(captures(), Is.GreaterThanOrEqualTo(2), "a failed check frame, then one that came back");
             Assert.That(rig.WasRecovered("equipment_disconnected"), Is.True);
             Assert.That(rig.FramePauses(), Is.Zero, "an unguided run's frame is not stopped");
             Assert.That((rig.Restarts(), rig.Titled(CameraStillTryingTitle)), Is.EqualTo((0, 1)), "no guiding start; told once");
+        }
+
+        [Test]
+        public async Task A_camera_drop_with_no_sequence_running_still_closes_once_a_guide_frame_comes_back() {
+            // #2169 review — no run to pause, so no episode waits on the camera: its fault row still closes on
+            // a real frame, and a later drop is a new fault again.
+            using var rig = new Rig();
+            rig.Sequencer.Setup(s => s.PauseActiveRunsAsync(It.IsAny<CancellationToken>())).ReturnsAsync(Array.Empty<Guid>());
+            rig.Sequencer.Setup(s => s.PauseActiveRunsAsync(true, It.IsAny<CancellationToken>())).ReturnsAsync(Array.Empty<Guid>());
+            rig.Sequencer.Setup(s => s.PauseActiveRunsAsync(false, true, It.IsAny<CancellationToken>())).ReturnsAsync(Array.Empty<Guid>());
+            await using var fake = await ConnectedFakeAsync(rig, guiding: false).ConfigureAwait(false);
+
+            await fake.BroadcastAsync(PhdEvents.EquipmentDisconnected()).ConfigureAwait(false);
+            await rig.Reaction.WhenIdleAsync().WaitAsync(TimeSpan.FromSeconds(30)).ConfigureAwait(false);
+            await fake.BroadcastAsync(PhdEvents.EquipmentReconnected()).ConfigureAwait(false);
+
+            Assert.That(await WaitUntilAsync(() => rig.WasRecovered("equipment_disconnected")).ConfigureAwait(false), Is.True,
+                "the camera came back but its fault row never closed");
+            await fake.BroadcastAsync(PhdEvents.EquipmentDisconnected()).ConfigureAwait(false);
+            Assert.That(await WaitUntilAsync(() => { lock (rig.Faults) { return rig.Faults.Count(f => f.Details == "equipment_disconnected") == 2; } })
+                .ConfigureAwait(false), Is.True, "a later drop publishes a new fault");
+        }
+
+        [Test]
+        public async Task A_camera_drop_the_user_took_over_still_closes_once_a_guide_frame_comes_back() {
+            // #2169 review — the user resumed the run while the camera was out: Ara stops waiting for it, but the
+            // fault row still closes once a real frame comes.
+            using var rig = new Rig();
+            var userOwns = false;
+            rig.Sequencer.Setup(s => s.DaemonPausedRunsAsync(It.IsAny<IReadOnlyCollection<Guid>>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync((IReadOnlyCollection<Guid> ids, CancellationToken _) =>
+                    Volatile.Read(ref userOwns) ? Array.Empty<Guid>() : (IReadOnlyList<Guid>)ids.ToList());
+            await using var fake = await ConnectedFakeAsync(rig, guiding: false).ConfigureAwait(false);
+            var cameraOut = true;
+            var captures = CheckFrames(fake, cameraOut: () => Volatile.Read(ref cameraOut));
+
+            await fake.BroadcastAsync(PhdEvents.EquipmentDisconnected()).ConfigureAwait(false);
+            Assert.That(await WaitUntilAsync(() => rig.Paused() == 1).ConfigureAwait(false), Is.True, "the run was not paused");
+            await fake.BroadcastAsync(PhdEvents.EquipmentReconnected()).ConfigureAwait(false);
+            Assert.That(await WaitUntilAsync(() => captures() >= 1).ConfigureAwait(false), Is.True, "the camera was never checked");
+            Volatile.Write(ref userOwns, true);
+            await rig.Reaction.WhenIdleAsync().WaitAsync(TimeSpan.FromSeconds(30)).ConfigureAwait(false);
+            Volatile.Write(ref cameraOut, false);
+
+            Assert.That(await WaitUntilAsync(() => rig.WasRecovered("equipment_disconnected")).ConfigureAwait(false), Is.True,
+                "the camera came back but its fault row never closed");
+            Assert.That(rig.Resumed(), Is.Zero, "the run is the user's");
         }
     }
 }
