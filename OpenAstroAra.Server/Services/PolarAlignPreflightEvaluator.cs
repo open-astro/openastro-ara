@@ -237,7 +237,9 @@ internal static class PolarAlignPreflightEvaluator {
         } else {
             try {
                 if (await inputs.PoseUnverifiedReason(ct).ConfigureAwait(false) is { } reason) {
-                    poseRow.Fail(TelescopeService.PositionUnverifiedRefusal(reason), TelescopeService.PositionUnverifiedDetail(reason));
+                    // #2173 — the way out named from the mount's Alpaca CanFindHome: Home, else the hand controller.
+                    var canFindHome = info?.CanFindHome == true;
+                    poseRow.Fail(TelescopeService.PositionUnverifiedRefusal(reason, canFindHome), TelescopeService.PositionUnverifiedDetail(reason, canFindHome));
                 } else {
                     poseRow.Ok("The mount's position is trusted.");
                 }

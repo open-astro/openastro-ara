@@ -6708,30 +6708,38 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get refusalMountPositionUnverified =>
-      'The mount\'s position is unverified: it may have lost power, and it reports Home wherever it points. Run the mount\'s zero search from its hand controller or app, or confirm it is physically at Home.';
+      'The mount\'s position is unverified: it may have lost power, and it reports Home wherever it points. Press Home, then, after Home, confirm by eye that the mount is really at Home: its own position may be wrong, so a Home alone does not trust it. If the mount has no Home in Ara, run its zero search from its hand controller or app, then confirm Home.';
 
   @override
   String get refusalMountPositionNotReadYet =>
-      'The mount\'s position has not been read since it connected. Try again in a few seconds.';
+      'The mount\'s position is not confirmed yet: it was just connected, or a reading is being checked against the next one. Try again in a few seconds.';
 
   @override
   String get refusalMountPositionStopUnconfirmed =>
-      'The mount\'s position is unverified: Ara could not confirm that the mount stopped after polar alignment moved it, or the mount reconnected while polar alignment ran. Run the mount\'s zero search from its hand controller or app, or confirm it is physically at Home.';
+      'The mount\'s position is unverified: Ara could not confirm that the mount stopped after polar alignment moved it, or the mount reconnected while polar alignment ran. Press Home: the position is trusted again once the mount is seen to move and then reports Home. If the mount has no Home in Ara, run its zero search from its hand controller or app, then confirm Home.';
 
   @override
   String get mountPositionUnverifiedTitle => 'Mount position unverified';
 
   @override
   String get mountPositionUnverifiedBody =>
-      'The mount may have lost power: it reports Home wherever it points. GoTo, Park, Home and Polar Align are blocked. Stop, the direction pad and tracking still work.';
+      'The mount may have lost power: it reports Home wherever it points. GoTo, Park and Polar Align are blocked. Home, Stop, the direction pad and tracking still work.';
 
   @override
   String get mountPositionUnverifiedRunZeroSearch =>
-      'Run the mount\'s zero search from its hand controller or app. When it reports Home, confirm it here.';
+      'This mount cannot find Home from Ara: run its zero search from its hand controller or app. When it reports Home, confirm it here.';
+
+  @override
+  String get mountPositionUnverifiedPressHome =>
+      'Press Home. After Home, confirm by eye that the mount is really at Home: its own position may be wrong, so a Home alone does not trust it.';
+
+  @override
+  String get mountPositionStopUnconfirmedPressHome =>
+      'Press Home: the position is trusted again once the mount is seen to move and then reports Home.';
 
   @override
   String get mountPositionStopUnconfirmedBody =>
-      'Ara could not confirm that the mount stopped after polar alignment moved it, or the mount reconnected while polar alignment ran, so it may have moved on. GoTo, Park, Home and Polar Align are blocked. Stop, the direction pad and tracking still work.';
+      'Ara could not confirm that the mount stopped after polar alignment moved it, or the mount reconnected while polar alignment ran, so it may have moved on. GoTo, Park and Polar Align are blocked. Home, Stop, the direction pad and tracking still work.';
 
   @override
   String get mountConfirmAtHome => 'The mount IS at Home';
@@ -14242,15 +14250,15 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get refusalMountPositionUnverified =>
-      'A posição da montagem não está verificada: ela pode ter perdido energia e diz estar em Home para onde quer que aponte. Rode a busca de zero da montagem pelo controle de mão ou app dela, ou confirme que ela está fisicamente em Home.';
+      'A posição da montagem não está verificada: ela pode ter perdido energia e diz estar em Home para onde quer que aponte. Toque em Home e, depois do Home, confirme com os próprios olhos que a montagem está mesmo em Home: a posição dela pode estar errada, então só o Home não a torna confiável. Se a montagem não tiver Home no Ara, rode a busca de zero pelo controle de mão ou app dela e depois confirme Home.';
 
   @override
   String get refusalMountPositionNotReadYet =>
-      'A posição da montagem ainda não foi lida desde que ela conectou. Tente de novo em alguns segundos.';
+      'A posição da montagem ainda não foi confirmada: ela acabou de conectar, ou uma leitura está sendo conferida com a próxima. Tente de novo em alguns segundos.';
 
   @override
   String get refusalMountPositionStopUnconfirmed =>
-      'A posição da montagem não está verificada: o Ara não conseguiu confirmar que a montagem parou depois que o alinhamento polar a moveu, ou a montagem reconectou durante o alinhamento polar. Rode a busca de zero da montagem pelo controle de mão ou app dela, ou confirme que ela está fisicamente em Home.';
+      'A posição da montagem não está verificada: o Ara não conseguiu confirmar que a montagem parou depois que o alinhamento polar a moveu, ou a montagem reconectou durante o alinhamento polar. Toque em Home: a posição volta a ser confiável quando a montagem for vista se movendo e depois indicar Home. Se a montagem não tiver Home no Ara, rode a busca de zero pelo controle de mão ou app dela e depois confirme Home.';
 
   @override
   String get mountPositionUnverifiedTitle =>
@@ -14258,15 +14266,23 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get mountPositionUnverifiedBody =>
-      'A montagem pode ter perdido energia: ela diz estar em Home para onde quer que aponte. GoTo, Estacionar, Home e Alinhamento polar estão bloqueados. Parar, o direcional e o rastreamento continuam funcionando.';
+      'A montagem pode ter perdido energia: ela diz estar em Home para onde quer que aponte. GoTo, Estacionar e Alinhamento polar estão bloqueados. Home, Parar, o direcional e o rastreamento continuam funcionando.';
 
   @override
   String get mountPositionUnverifiedRunZeroSearch =>
-      'Rode a busca de zero da montagem pelo controle de mão ou app dela. Quando ela indicar Home, confirme aqui.';
+      'Esta montagem não consegue buscar Home pelo Ara: rode a busca de zero pelo controle de mão ou app dela. Quando ela indicar Home, confirme aqui.';
+
+  @override
+  String get mountPositionUnverifiedPressHome =>
+      'Toque em Home. Depois do Home, confirme com os próprios olhos que a montagem está mesmo em Home: a posição dela pode estar errada, então só o Home não a torna confiável.';
+
+  @override
+  String get mountPositionStopUnconfirmedPressHome =>
+      'Toque em Home: a posição volta a ser confiável quando a montagem for vista se movendo e depois indicar Home.';
 
   @override
   String get mountPositionStopUnconfirmedBody =>
-      'O Ara não conseguiu confirmar que a montagem parou depois que o alinhamento polar a moveu, ou a montagem reconectou durante o alinhamento polar, então ela pode ter continuado a se mover. GoTo, Estacionar, Home e Alinhamento polar estão bloqueados. Parar, o direcional e o rastreamento continuam funcionando.';
+      'O Ara não conseguiu confirmar que a montagem parou depois que o alinhamento polar a moveu, ou a montagem reconectou durante o alinhamento polar, então ela pode ter continuado a se mover. GoTo, Estacionar e Alinhamento polar estão bloqueados. Home, Parar, o direcional e o rastreamento continuam funcionando.';
 
   @override
   String get mountConfirmAtHome => 'A montagem ESTÁ em Home';

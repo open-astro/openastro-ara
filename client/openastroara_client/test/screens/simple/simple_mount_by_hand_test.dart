@@ -605,13 +605,20 @@ void main() {
       expect(c.read(simpleMountHomeProvider), isFalse);
     });
 
-    testWidgets('an unverified Home is no Home: the row says Position and the pad centre sends nothing (#2070)', (tester) async {
+    // #2173 — Home is the way out of an unverified position: the pad centre runs the mount's home search, and the
+    // row says At home once the rig trusts the position again.
+    testWidgets('an unverified Home is no Home on the row, and the pad centre runs the Home search that clears it (#2173)', (tester) async {
       final (_, mount, _, _) = await _pump(tester, _wire(atHome: true, runtime: 'idle', unverified: true));
       expect(find.text('Position · At home'), findsNothing, reason: 'the mount reports Home wherever it points');
       expect(find.text('Position'), findsOneWidget);
       await tester.tap(find.byKey(const Key('simple-mount-pad-home')));
       await tester.pump();
-      expect(mount.calls, isEmpty, reason: 'Home by the mount model is refused while unverified');
+      expect(mount.calls, ['home'], reason: 'Home stays on while the position is unverified');
+      mount.set(_wire(runtime: 'slewing', unverified: true));
+      await tester.pump();
+      mount.set(_wire(atHome: true, runtime: 'idle'));
+      await tester.pump();
+      expect(find.text('Position · At home'), findsOneWidget, reason: 'the search ended at Home: trusted again');
       await tester.pump(const Duration(seconds: 4));
     });
 

@@ -793,6 +793,8 @@ namespace OpenAstroAra.Test {
                     var now = svc.PoseClock.GetUtcNow() + MountPoseTrust.QuietWindow;
                     svc.PoseTrust.Observe(atHome: false, slewing: false, decDeg: 6.0, now);
                     svc.PoseTrust.Observe(atHome: false, slewing: false, decDeg: 20.0, now + MountPoseTrust.QuietWindow + TimeSpan.FromSeconds(1));
+                    // #2173 — seen again on a later reading: one reading alone never flags.
+                    svc.PoseTrust.Observe(atHome: false, slewing: false, decDeg: 20.0, now + MountPoseTrust.QuietWindow + TimeSpan.FromSeconds(1) + MountPoseTrust.ConfirmGap);
                     // The refused park stops tracking first; that PUT queues behind A's, so the refusal settles the park
                     // after A's PUT returned and kept its second abort back for it.
                     parkB = svc.ParkTelescope(new Progress<ApplicationStatus>(), CancellationToken.None);

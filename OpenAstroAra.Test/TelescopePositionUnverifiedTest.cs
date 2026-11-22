@@ -32,8 +32,8 @@ using System.Threading.Tasks;
 namespace OpenAstroAra.Test {
 
     /// <summary>#2070 — after a power loss an iOptron HAE29C reports Home (Dec 90) wherever it points. Ara marks
-    /// that position unverified and refuses every move that trusts it (GoTo, Park, model Home, the flip, polar
-    /// alignment's motor moves) until the user confirms Home; Sync, the pad and Stop still work. Against a fake
+    /// that position unverified and refuses every move that trusts it (GoTo, Park, the flip, polar alignment's
+    /// motor moves) until Home is confirmed; Sync, the pad, Stop and (#2173) the user's Home still work. Against a fake
     /// mount: no test here dials a port.</summary>
     [TestFixture]
     public class TelescopePositionUnverifiedTest {
@@ -77,11 +77,14 @@ namespace OpenAstroAra.Test {
             public override DateTimeOffset GetUtcNow() => new(Interlocked.Read(ref _ticks), TimeSpan.Zero);
         }
 
-        private TelescopeService Build(IMountPoseStore? store = null, IProfileService? profile = null, TimeSpan? refresh = null, TimeProvider? clock = null) =>
+        private TelescopeService Build(IMountPoseStore? store = null, IProfileService? profile = null, TimeSpan? refresh = null, TimeProvider? clock = null,
+                TimeSpan? poseRead = null) =>
             new(faults: _faults, profileService: profile, poseStore: store) {
                 PoseClock = clock ?? TimeProvider.System,
+                PoseReadTimeout = poseRead ?? TimeSpan.FromSeconds(10),
                 RefreshPeriod = refresh ?? TimeSpan.FromMilliseconds(20),
                 StopGuidingBeforeMoveTimeout = TimeSpan.FromMilliseconds(50),
+                HomeSearchPollInterval = TimeSpan.FromMilliseconds(20),
                 DeviceFactory = _ => {
                     var fake = new FakeTelescopeDevice();
                     _configure?.Invoke(fake);
@@ -108,9 +111,10 @@ namespace OpenAstroAra.Test {
         }
 
         // The RC51 case: the mount wakes at its false zero and Ara connects to it.
-        private async Task<TelescopeService> ConnectedAtFalseZeroAsync(IMountPoseStore? store = null, IProfileService? profile = null) {
-            _configure = f => { f.ReportsAtHome = true; f.Dec = 90; };
-            var svc = Build(store, profile);
+        private async Task<TelescopeService> ConnectedAtFalseZeroAsync(IMountPoseStore? store = null, IProfileService? profile = null,
+                TimeProvider? clock = null, Action<FakeTelescopeDevice>? also = null) {
+            _configure = f => { f.ReportsAtHome = true; f.Dec = 90; also?.Invoke(f); };
+            var svc = Build(store, profile, clock: clock);
             await ConnectAsync(svc);
             await WaitForAsync(() => Runtime(svc)?.PositionUnverified == true, "the unverified position");
             return svc;
@@ -171,17 +175,512 @@ namespace OpenAstroAra.Test {
             await WaitForAsync(() => Current.Syncs == 1, "the sync");
         }
 
+        // #2173 — Home is the way out of an unverified position on any mount that can find Home (NINA allows Find Home at
+        // any time), so it runs; GoTo and Park, which drive by the untrusted model, stay refused, and the Park refusal
+        // names Home.
         [Test]
-        public async Task Park_and_find_home_are_refused() {
+        public async Task Home_runs_while_unverified_but_GoTo_and_Park_stay_refused() {
             using var svc = await ConnectedAtFalseZeroAsync();
 
-            Assert.That((await RefusedAsync(() => svc.ParkAsync(new ParkRequestDto(), null, CancellationToken.None))).Cause,
-                Is.EqualTo(RefusalCatalog.MountPositionUnverified));
-            Assert.That((await RefusedAsync(() => svc.FindHomeAsync(null, CancellationToken.None))).Cause,
-                Is.EqualTo(RefusalCatalog.MountPositionUnverified));
+            await svc.FindHomeAsync(null, CancellationToken.None);
+            await WaitForAsync(() => Current.Homes == 1, "the Home search");
+
+            var park = await RefusedAsync(() => svc.ParkAsync(new ParkRequestDto(), null, CancellationToken.None));
+            Assert.That(park.Cause, Is.EqualTo(RefusalCatalog.MountPositionUnverified));
+            Assert.That(park.Message, Does.Contain("The way out is Home").And.Not.Contain("hand controller"));
+            var goTo = await RefusedAsync(() => svc.SlewAsync(new SlewRequestDto(5.0, 30.0), null, CancellationToken.None));
+            Assert.That(goTo.Cause, Is.EqualTo(RefusalCatalog.MountPositionUnverified));
             await Task.Delay(100);
             Assert.That(Current.Parks, Is.Zero);
+            Assert.That(Current.Slews, Is.Zero);
+        }
+
+        // #2173 — ADR 0003 rule 2: whether Home may run follows CanFindHome, never the brand or driver. A mount that is
+        // no iOptron, on a driver that is no AlpacaBridge, runs its Home while unverified all the same.
+        [Test]
+        public async Task Home_is_allowed_while_unverified_on_a_mount_with_a_non_iOptron_name() {
+            using var svc = await ConnectedAtFalseZeroAsync(also: f => {
+                f.DriverInfo = "Generic Alpaca Telescope Driver";
+                f.DriverVersion = "2.3.1";
+            });
+
+            await svc.FindHomeAsync(null, CancellationToken.None);
+
+            await WaitForAsync(() => Current.Homes == 1, "the Home");
+        }
+
+        // #2173 — a mount whose Alpaca CanFindHome is false keeps the #2070 refusal while unverified, and the refusal sends
+        // the user to the hand controller's search. Nothing reaches the mount.
+        [Test]
+        public async Task Home_is_refused_while_unverified_on_a_mount_that_cannot_find_home() {
+            using var svc = await ConnectedAtFalseZeroAsync(also: f => f.FindHomeCapable = false);
+
+            var home = await RefusedAsync(() => svc.FindHomeAsync(null, CancellationToken.None));
+
+            Assert.That(home.Cause, Is.EqualTo(RefusalCatalog.MountPositionUnverified));
+            Assert.That(home.Message, Does.Contain("hand controller").And.Not.Contain("The way out is Home"));
+            await Task.Delay(100);
             Assert.That(Current.Homes, Is.Zero);
+        }
+
+        // #2173 review — a mount at Home whose position is unverified only because a routine's stop was unconfirmed (the
+        // one reason a completed Home may clear by itself): the guards of the Home watch still apply to it.
+        private async Task<TelescopeService> AtHomeAfterAnUnconfirmedStopAsync() {
+            var svc = await ConnectedAtFalseZeroAsync();
+            await svc.ConfirmHomeAsync(CancellationToken.None); // really at Home
+            svc.MarkPositionUnverified(MountPoseTrust.StopUnconfirmed);
+            return svc;
+        }
+
+        // #2173 — a Home that goes nowhere (the mount reports Home throughout): no search was seen to run, so the position
+        // stays unverified even for a reason a completed Home may clear. No brand knowledge is needed for that.
+        [Test]
+        public async Task Home_that_never_moves_clears_nothing() {
+            using var svc = await AtHomeAfterAnUnconfirmedStopAsync();
+
+            await svc.FindHomeAsync(null, CancellationToken.None);
+            await WaitForAsync(() => Current.Homes == 1, "the Home");
+            await Task.Delay(300); // many watch polls at Home and still
+
+            Assert.That(Runtime(svc)!.PositionUnverifiedReason, Is.EqualTo(MountPoseTrust.StopUnconfirmed));
+        }
+
+        // #2173 review — the same Home that never moves over the slow link: one AtHome read fails during the watch. A
+        // failed read is no "left Home", so nothing was seen moving and the position stays unverified.
+        [Test]
+        public async Task A_failed_at_home_read_during_a_home_that_never_moves_stays_unverified() {
+            using var svc = await AtHomeAfterAnUnconfirmedStopAsync();
+
+            await svc.FindHomeAsync(null, CancellationToken.None);
+            await WaitForAsync(() => Current.Homes == 1, "the Home");
+            Current.AtHomeReadFails = true; // a few watch polls lose their AtHome read
+            await Task.Delay(100);
+            Current.AtHomeReadFails = false;
+            await Task.Delay(300); // many watch polls at Home and still again
+
+            Assert.That(Runtime(svc)!.PositionUnverifiedReason, Is.EqualTo(MountPoseTrust.StopUnconfirmed));
+        }
+
+        // #2173 review — after an unconfirmed stop (a reason a completed Home may clear by itself) the search runs (seen
+        // slewing, away from Home), then the mount loses power while AlpacaBridge stays connected: its reads fail, and it
+        // wakes reporting Home wherever it points. What was seen before the gap no longer counts, so the Home it reports
+        // after it is not trusted.
+        [Test]
+        public async Task A_mount_that_resets_in_the_middle_of_the_search_is_not_trusted() {
+            _configure = f => { f.ReportsAtHome = false; f.Dec = 60; };
+            using var svc = Build();
+            await ConnectAsync(svc);
+            await WaitForAsync(() => Runtime(svc)?.DeclinationDegrees is 60.0, "a position");
+            svc.MarkPositionUnverified(MountPoseTrust.StopUnconfirmed);
+            Current.IsSlewing = true; // the search: away from Home and slewing
+
+            await svc.FindHomeAsync(null, CancellationToken.None);
+            await WaitForAsync(() => Current.Homes == 1, "the Home search");
+            await Task.Delay(150); // watch polls see the search run
+            Current.AtHomeReadFails = true; // the power loss: reads fail
+            await Task.Delay(100);
+            Current.IsSlewing = false; // it wakes at a false zero
+            Current.ReportsAtHome = true;
+            Current.Dec = 90;
+            Current.AtHomeReadFails = false;
+            await Task.Delay(300);
+
+            Assert.That(Runtime(svc)!.PositionUnverifiedReason, Is.EqualTo(MountPoseTrust.StopUnconfirmed));
+        }
+
+        // #2173 review (the RC51 hazard) — the mount woke at its false zero; the pad nudges it off (allowed while
+        // unverified), then Home on a mount whose Home drives by its model slews back to the model's zero: seen to run,
+        // and it lands reporting Home. Ara cannot tell that from a sensor search, so after a power loss the position stays
+        // unverified until the user confirms Home by eye.
+        [Test]
+        public async Task Pad_then_Home_from_a_false_zero_stays_unverified_until_Home_is_confirmed_by_eye() {
+            using var svc = await ConnectedAtFalseZeroAsync();
+            await svc.MoveAxisAsync(0, 1.0, null, CancellationToken.None); // the pad nudge
+            Current.ReportsAtHome = false;
+            Current.Dec = 60;
+            await svc.MoveAxisAsync(0, 0, null, CancellationToken.None);
+            await Task.Delay(100);
+
+            Current.IsSlewing = true; // the model Home slews back
+            await svc.FindHomeAsync(null, CancellationToken.None);
+            await WaitForAsync(() => Current.Homes == 1, "the Home");
+            await Task.Delay(100);
+            Current.Dec = 90; // the model's false zero
+            Current.ReportsAtHome = true;
+            Current.IsSlewing = false;
+            await Task.Delay(400); // many watch polls at Home and still
+
+            Assert.That(Runtime(svc)!.PositionUnverifiedReason, Is.EqualTo(MountPoseTrust.AtHomeOnConnect));
+            var goTo = await RefusedAsync(() => svc.SlewAsync(new SlewRequestDto(5.0, 30.0), null, CancellationToken.None));
+            Assert.That(goTo.Message, Does.Contain("confirm by eye that the mount is really at Home"));
+            await svc.ConfirmHomeAsync(CancellationToken.None); // the user's eye check
+            Assert.That(Runtime(svc)!.PositionUnverified, Is.False);
+        }
+
+        // #2173 review — the same pad-then-Home after an in-session jump (a blip, a reset, a slipped clutch): the mount's
+        // own model may be wrong, so a Home seen to run that ends at Home does not trust it by itself.
+        [Test]
+        public async Task Pad_then_Home_after_an_in_session_jump_stays_unverified() {
+            _configure = f => { f.ReportsAtHome = false; f.Dec = 23.52; };
+            using var svc = Build();
+            await ConnectAsync(svc);
+            await WaitForAsync(() => Runtime(svc)?.DeclinationDegrees is 23.52, "a position");
+            svc.MarkPositionUnverified(MountPoseTrust.PoseJumpInSession);
+            await svc.MoveAxisAsync(1, 1.0, null, CancellationToken.None);
+            Current.Dec = 40;
+            await svc.MoveAxisAsync(1, 0, null, CancellationToken.None);
+
+            Current.IsSlewing = true;
+            await svc.FindHomeAsync(null, CancellationToken.None);
+            await WaitForAsync(() => Current.Homes == 1, "the Home");
+            await Task.Delay(100);
+            Current.Dec = 90.71;
+            Current.ReportsAtHome = true;
+            Current.IsSlewing = false;
+            await Task.Delay(400);
+
+            Assert.That(Runtime(svc)!.PositionUnverifiedReason, Is.EqualTo(MountPoseTrust.PoseJumpInSession));
+        }
+
+        // #2173 (Joey, 2026-11-21) — "If we drove it home, shouldn't it say: yes, I am home?" Polar alignment could not
+        // confirm its stop (only Ara's knowledge is in doubt, the mount's model is intact); Home runs the search, the mount
+        // lands at Home reading Dec +90.71°, and the position is trusted again with no eye check, persisted, and shown on
+        // the runtime the client reads.
+        [Test]
+        public async Task A_home_search_that_ends_at_home_at_dec_90_71_trusts_the_position_again() {
+            var store = new MemoryPoseStore();
+            _configure = f => { f.ReportsAtHome = false; f.Dec = 23.52; };
+            using var svc = Build(store);
+            await ConnectAsync(svc);
+            await WaitForAsync(() => Runtime(svc)?.DeclinationDegrees is 23.52, "a position");
+            svc.MarkPositionUnverified(MountPoseTrust.StopUnconfirmed);
+            Assert.That(store.UnverifiedReason(Mount.UniqueId), Is.EqualTo(MountPoseTrust.StopUnconfirmed));
+
+            Current.IsSlewing = true; // the search runs: slewing, away from Home
+            await svc.FindHomeAsync(null, CancellationToken.None);
+            await WaitForAsync(() => Current.Homes == 1, "the Home search");
+            await Task.Delay(100);
+            Current.Dec = 90.71; // where the search lands: the Dec axis just past the pole
+            Current.ReportsAtHome = true;
+            Current.IsSlewing = false;
+
+            await WaitForAsync(() => Runtime(svc)?.PositionUnverified == false, "the position trusted again after the search");
+            Assert.That(Current.Homes, Is.EqualTo(1));
+            // The store write follows the trust under load (the tick can show the trust first), so wait for it.
+            await WaitForAsync(() => store.UnverifiedReason(Mount.UniqueId) is null, "the trust persisted");
+            await Task.Delay(200);
+            Assert.That(Runtime(svc)!.PositionUnverified, Is.False, "Dec 90.71° at Home is no jump afterwards");
+            await svc.SlewAsync(new SlewRequestDto(5.0, 30.0), null, CancellationToken.None);
+            await WaitForAsync(() => Current.Slews == 1, "a GoTo goes again");
+        }
+
+        // #2173 (rig 2026-11-21, 05:07–05:13Z): an AlpacaBridge restart (a reconnect), then one bad read, then good
+        // reads. The mount never moved, so it stays verified, both on the reconnect's first read and in session.
+        [Test]
+        public async Task An_alpacabridge_restart_then_one_bad_read_then_good_reads_stays_verified() {
+            _configure = f => { f.ReportsAtHome = false; f.Dec = 23.52; };
+            using var svc = Build();
+            await ConnectAsync(svc);
+            await WaitForAsync(() => Runtime(svc)?.DeclinationDegrees is 23.52, "a position");
+
+            await svc.DisconnectAsync(null, CancellationToken.None);
+            _configure = f => { f.ReportsAtHome = false; f.Dec = 23.52; f.DecReads.Enqueue(0.0); };
+            await ConnectAsync(svc);
+            await WaitForAsync(() => Current.DecReads.IsEmpty && Runtime(svc)?.DeclinationDegrees is 23.52, "good reads after the bad one");
+
+            Current.DecReads.Enqueue(0.0); // and one more bad read in session, minutes of nothing commanded
+            await WaitForAsync(() => Current.DecReads.IsEmpty, "the bad read");
+            await Task.Delay(MountPoseTrust.ConfirmGap + TimeSpan.FromMilliseconds(500)); // good reads well past the confirm gap
+
+            Assert.That(Runtime(svc)!.PositionUnverified, Is.False);
+        }
+
+        // #2173 (rig 2026-11-21, 06:20Z): the run resumed from Home (Dec +90.71°) and its re-center slewed to Merope
+        // (Dec 24°). Over a slow link no tick read Slewing during the slew, which outlasted the quiet window. The
+        // re-center's own GoTo must not read as a jump.
+        [Test]
+        public async Task A_resume_recenter_slew_from_the_pole_to_dec_24_stays_verified() {
+            var clock = new ManualClock();
+            _configure = f => { f.ReportsAtHome = false; f.Dec = 30.0; };
+            using var svc = Build(clock: clock);
+            await ConnectAsync(svc);
+            await WaitForAsync(() => Runtime(svc)?.DeclinationDegrees is 30.0, "a still position");
+            Current.ReportsAtHome = true; // at Home after the night's home search
+            Current.Dec = 90.71;
+            await svc.ConfirmHomeAsync(CancellationToken.None);
+            clock.Advance(MountPoseTrust.QuietWindow + TimeSpan.FromSeconds(30));
+
+            var mount = Current;
+            mount.OnSlew = (ra, dec) => _ = Task.Run(async () => {
+                mount.SlewingReadFails = true; // the slow link: every Slewing read times out while it slews
+                mount.ReportsAtHome = false;
+                await Task.Delay(200);
+                clock.Advance(MountPoseTrust.QuietWindow + TimeSpan.FromSeconds(10)); // a slew longer than the window
+                mount.Ra = ra;
+                mount.Dec = dec;
+                await Task.Delay(200);
+                mount.SlewingReadFails = false;
+            });
+            var merope = new Coordinates(Angle.ByHours(3.77), Angle.ByDegree(24.0), Epoch.JNOW);
+            Assert.That(await ((ITelescopeMediator)svc).SlewToCoordinatesAsync(merope, CancellationToken.None), Is.True);
+
+            await Task.Delay(200);
+            clock.Advance(MountPoseTrust.ConfirmGap + TimeSpan.FromSeconds(1));
+            await Task.Delay(200);
+            clock.Advance(MountPoseTrust.ConfirmGap + TimeSpan.FromSeconds(1));
+            await Task.Delay(200);
+            Assert.That(Runtime(svc)!.PositionUnverified, Is.False, "the re-center's GoTo is Ara's own move");
+        }
+
+        // #2173 review — a real jump (a power blip the session survived) waits about 2 s for its second reading. A GoTo in
+        // that window must not slip through and drive by the reset model, nor make the jump read as its own move.
+        [Test]
+        public async Task A_goto_in_the_confirm_window_of_a_jump_is_refused_and_the_jump_still_flags() {
+            var clock = new ManualClock();
+            _configure = f => { f.ReportsAtHome = false; f.Dec = 30.0; };
+            using var svc = Build(clock: clock);
+            await ConnectAsync(svc);
+            await WaitForAsync(() => Runtime(svc)?.DeclinationDegrees is 30.0, "a still position");
+            clock.Advance(MountPoseTrust.QuietWindow + TimeSpan.FromSeconds(30));
+            await Task.Delay(100);
+
+            Current.Dec = 60.0; // the jump: the model reset with nothing commanded
+            await WaitForAsync(() => svc.PoseTrust.PendingVerdict == MountPoseTrust.PoseJumpInSession, "the jump's first reading");
+            var later = Task.Run(async () => {
+                await Task.Delay(200);
+                clock.Advance(MountPoseTrust.ConfirmGap + TimeSpan.FromSeconds(1)); // the next readings come
+            });
+            var goTo = await RefusedAsync(() => svc.SlewAsync(new SlewRequestDto(5.0, 30.0), null, CancellationToken.None));
+            await later;
+
+            Assert.That(goTo.Cause, Is.EqualTo(RefusalCatalog.MountPositionUnverified));
+            Assert.That(goTo.Parameters["position_unverified_reason"], Is.EqualTo(MountPoseTrust.PoseJumpInSession));
+            await WaitForAsync(() => Runtime(svc)?.PositionUnverifiedReason == MountPoseTrust.PoseJumpInSession, "the jump flagged");
+            Assert.That(Current.Slews, Is.Zero);
+        }
+
+        // #2173 review — a REST park whose call returns at once (many drivers), over a slow link where every Slewing read
+        // fails, lands at the park position long after the quiet window. It is Ara's own move until the mount answers
+        // that it stopped, so the landing is no jump.
+        [Test]
+        public async Task A_rest_park_that_outlasts_the_quiet_window_over_a_slow_link_stays_verified() {
+            var clock = new ManualClock();
+            _configure = f => { f.ReportsAtHome = false; f.Dec = 30.0; };
+            using var svc = Build(clock: clock);
+            await ConnectAsync(svc);
+            await WaitForAsync(() => Runtime(svc)?.DeclinationDegrees is 30.0, "a still position");
+            var mount = Current;
+
+            mount.SlewingReadFails = true; // the slow link, from the park on
+            await svc.ParkAsync(new ParkRequestDto(), null, CancellationToken.None);
+            await WaitForAsync(() => mount.Parks == 1, "the park call");
+            await Task.Delay(100);
+            clock.Advance(MountPoseTrust.QuietWindow + TimeSpan.FromSeconds(30)); // the park runs on, unseen
+            mount.Dec = 70.0; // where it parks
+            await Task.Delay(100);
+            mount.SlewingReadFails = false; // the link recovers: the mount is still at its park
+            for (var i = 0; i < 3; i++) {
+                await Task.Delay(150);
+                clock.Advance(MountPoseTrust.ConfirmGap + TimeSpan.FromSeconds(1));
+            }
+            await Task.Delay(150);
+
+            Assert.That(Runtime(svc)!.PositionUnverified, Is.False, "the park's own landing");
+        }
+
+        // #2173 review — after a GoTo's noted target no longer explains anything, a power blip that moves the Dec to about
+        // that target must still flag. Shared by the GoTo-target tests below.
+        private static async Task ABlipToDec24FlagsAsync(TelescopeService svc, ManualClock clock, FakeTelescopeDevice mount) {
+            await Task.Delay(150);
+            clock.Advance(MountPoseTrust.QuietWindow + TimeSpan.FromSeconds(30)); // nothing commanded for a while
+            await Task.Delay(150);
+            mount.Dec = 24.2; // the blip lands near the dropped GoTo's target
+            for (var i = 0; i < 3; i++) {
+                await Task.Delay(150);
+                clock.Advance(MountPoseTrust.ConfirmGap + TimeSpan.FromSeconds(1));
+            }
+            await WaitForAsync(() => Runtime(svc)?.PositionUnverifiedReason == MountPoseTrust.PoseJumpInSession, "the blip flagged as a jump");
+        }
+
+        private async Task<(TelescopeService Svc, ManualClock Clock, FakeTelescopeDevice Mount)> TrustedAtDec30Async() {
+            var clock = new ManualClock();
+            _configure = f => { f.ReportsAtHome = false; f.Dec = 30.0; };
+            var svc = Build(clock: clock);
+            await ConnectAsync(svc);
+            await WaitForAsync(() => Runtime(svc)?.DeclinationDegrees is 30.0, "a still position");
+            return (svc, clock, Current);
+        }
+
+        // #2173 review — a REST GoTo to Dec 24 whose PUT throws never got there: its target must not excuse a later jump.
+        [Test]
+        public async Task A_rest_goto_whose_put_fails_excuses_no_later_jump_to_its_target() {
+            var (svc, clock, mount) = await TrustedAtDec30Async();
+            using var _ = svc;
+            mount.OnSlew = (_, _) => throw new InvalidOperationException("the PUT failed");
+
+            await svc.SlewAsync(new SlewRequestDto(3.77, 24.0), null, CancellationToken.None);
+            await WaitForAsync(() => mount.Slews == 1, "the failed PUT");
+
+            await ABlipToDec24FlagsAsync(svc, clock, mount);
+        }
+
+        // #2173 review — the same GoTo dropped because a routine took the mount before it went out.
+        [Test]
+        public async Task A_rest_goto_dropped_for_the_motion_owner_excuses_no_later_jump_to_its_target() {
+            var (svc, clock, mount) = await TrustedAtDec30Async();
+            using var _ = svc;
+            using (svc.AcquireMotion(MotionOwners.PolarAlign)) {
+                await svc.SlewAsync(new SlewRequestDto(3.77, 24.0), null, CancellationToken.None);
+                await Task.Delay(200); // the background send sees the owner and drops it
+            }
+            Assert.That(mount.Slews, Is.Zero);
+
+            await ABlipToDec24FlagsAsync(svc, clock, mount);
+        }
+
+        // #2173 review — the same GoTo dropped because a stop landed during its tracking enable.
+        [Test]
+        public async Task A_rest_goto_dropped_after_a_stop_excuses_no_later_jump_to_its_target() {
+            var (svc, clock, mount) = await TrustedAtDec30Async();
+            using var _ = svc;
+            mount.TrackingOn = false;
+            var fenced = 0;
+            mount.OnTrackingWrite = on => {
+                if (on && Interlocked.Exchange(ref fenced, 1) == 0) {
+                    svc.FenceMotion("test_stop"); // a stop that races the GoTo's tracking enable
+                }
+            };
+
+            await svc.SlewAsync(new SlewRequestDto(3.77, 24.0), null, CancellationToken.None);
+            await WaitForAsync(() => Volatile.Read(ref fenced) == 1, "the stop during the enable");
+            await Task.Delay(100);
+            Assert.That(mount.Slews, Is.Zero, "dropped after the stop");
+
+            await ABlipToDec24FlagsAsync(svc, clock, mount);
+        }
+
+        // #2173 review — a sequencer GoTo whose PUT throws: the mediator's end of the move drops its target too.
+        [Test]
+        public async Task A_sequence_goto_that_fails_excuses_no_later_jump_to_its_target() {
+            var (svc, clock, mount) = await TrustedAtDec30Async();
+            using var _ = svc;
+            mount.OnSlew = (_, _) => throw new InvalidOperationException("the PUT failed");
+
+            await Assert.ThrowsAsync<SequenceEntityFailedException>(() =>
+                ((ITelescopeMediator)svc).SlewToCoordinatesAsync(new Coordinates(Angle.ByHours(3.77), Angle.ByDegree(24.0), Epoch.JNOW), CancellationToken.None));
+            Assert.That(mount.Slews, Is.EqualTo(1));
+
+            await ABlipToDec24FlagsAsync(svc, clock, mount);
+        }
+
+        // #2173 review — the user's Home on a mount whose CanFindHome is false, sent from a trusted pose: the FindHome call
+        // returns at once and the mount moves on for longer than the quiet window over a link that drops the Slewing
+        // reads. The move stays Ara's own until the mount reports Home, so the landing is no jump.
+        [Test]
+        public async Task A_home_that_returns_at_once_on_a_mount_that_cannot_find_home_lands_with_no_jump() {
+            var clock = new ManualClock();
+            _configure = f => { f.ReportsAtHome = false; f.Dec = 30.0; f.FindHomeCapable = false; };
+            using var svc = Build(clock: clock);
+            await ConnectAsync(svc);
+            await WaitForAsync(() => Runtime(svc)?.DeclinationDegrees is 30.0, "a still position");
+            var mount = Current;
+
+            mount.SlewingReadFails = true; // the slow link, from the Home on
+            await svc.FindHomeAsync(null, CancellationToken.None);
+            await WaitForAsync(() => mount.Homes == 1, "the Home call");
+            await Task.Delay(100);
+            clock.Advance(MountPoseTrust.QuietWindow + TimeSpan.FromSeconds(30)); // it moves on, unseen
+            mount.Dec = 90.0; // where it homes
+            mount.ReportsAtHome = true;
+            await Task.Delay(100);
+            mount.SlewingReadFails = false;
+            for (var i = 0; i < 3; i++) {
+                await Task.Delay(150);
+                clock.Advance(MountPoseTrust.ConfirmGap + TimeSpan.FromSeconds(1));
+            }
+            await Task.Delay(150);
+
+            Assert.That(Runtime(svc)!.PositionUnverified, Is.False, "the Home's own landing");
+        }
+
+        // #2173 review — an unverified mount over a slow link: the fresh CanFindHome read times out, and Home still runs on
+        // the connect's capability read (the mount said it can find Home).
+        [Test]
+        public async Task Home_runs_while_unverified_when_the_fresh_can_find_home_read_times_out() {
+            _configure = f => { f.ReportsAtHome = true; f.Dec = 90; };
+            using var svc = Build(poseRead: TimeSpan.FromMilliseconds(200));
+            await ConnectAsync(svc);
+            await WaitForAsync(() => Runtime(svc)?.PositionUnverified == true, "the unverified position");
+            using var hold = new ManualResetEventSlim(false);
+            Current.CanFindHomeHold = hold; // the slow link: the read hangs past the timeout
+            try {
+                await svc.FindHomeAsync(null, CancellationToken.None);
+                await WaitForAsync(() => Current.Homes == 1, "the Home");
+            } finally {
+                hold.Set();
+            }
+        }
+
+        // #2173 review — the reverse: the connect read said the mount cannot find Home, and the fresh read fails. Home is
+        // still refused, with the hand controller named.
+        [Test]
+        public async Task Home_stays_refused_while_unverified_when_the_connect_read_said_no_and_the_fresh_read_fails() {
+            using var svc = await ConnectedAtFalseZeroAsync(also: f => f.FindHomeCapable = false);
+            Current.CanFindHomeReadFails = true;
+
+            var home = await RefusedAsync(() => svc.FindHomeAsync(null, CancellationToken.None));
+
+            Assert.That(home.Cause, Is.EqualTo(RefusalCatalog.MountPositionUnverified));
+            Assert.That(home.Message, Does.Contain("hand controller"));
+            await Task.Delay(100);
+            Assert.That(Current.Homes, Is.Zero);
+        }
+
+        // #2173 review — a driver that still reads Slewing false right after Park returns, before its slew starts: that
+        // read must not end the park's hold, or the long park over the slow link that follows lands as a jump.
+        [Test]
+        public async Task A_park_whose_driver_reads_not_slewing_before_its_slew_starts_stays_verified() {
+            var clock = new ManualClock();
+            _configure = f => { f.ReportsAtHome = false; f.Dec = 30.0; };
+            using var svc = Build(clock: clock);
+            await ConnectAsync(svc);
+            await WaitForAsync(() => Runtime(svc)?.DeclinationDegrees is 30.0, "a still position");
+            var mount = Current;
+
+            await svc.ParkAsync(new ParkRequestDto(), null, CancellationToken.None); // Slewing still reads false
+            await WaitForAsync(() => mount.Parks == 1, "the park call");
+            await Task.Delay(150);
+            mount.SlewingReadFails = true; // the slew starts, over the slow link
+            clock.Advance(MountPoseTrust.QuietWindow + TimeSpan.FromSeconds(30));
+            mount.Dec = 70.0;
+            await Task.Delay(100);
+            mount.SlewingReadFails = false;
+            for (var i = 0; i < 3; i++) {
+                await Task.Delay(150);
+                clock.Advance(MountPoseTrust.ConfirmGap + TimeSpan.FromSeconds(1));
+            }
+            await Task.Delay(150);
+
+            Assert.That(Runtime(svc)!.PositionUnverified, Is.False, "the park's own landing");
+        }
+
+        // #2173 review — right after a fresh daemon connects, AlpacaBridge may answer only its (0, 0) placeholder. The
+        // guard's own read must not take that as a pose: the GoTo is refused as not read yet, and the first real reading
+        // later is no jump from Dec 0.
+        [Test]
+        public async Task A_goto_while_the_mount_reads_only_the_placeholder_is_refused_and_no_jump_follows() {
+            _configure = f => { f.ReportsAtHome = false; f.Ra = 0.0; f.Dec = 0.0; };
+            using var svc = Build();
+            await ConnectAsync(svc);
+
+            var goTo = await RefusedAsync(() => svc.SlewAsync(new SlewRequestDto(5.0, 30.0), null, CancellationToken.None));
+            Assert.That(goTo.Parameters["position_unverified_reason"], Is.EqualTo(MountPoseTrust.NotReadYet));
+            Current.Ra = 5.0; // real readings now
+            Current.Dec = 30.0;
+            await Task.Delay(MountPoseTrust.ConfirmGap + TimeSpan.FromMilliseconds(500));
+
+            Assert.That(Runtime(svc)!.PositionUnverified, Is.False);
+            Assert.That(Current.Slews, Is.Zero);
         }
 
         [Test]
@@ -255,7 +754,8 @@ namespace OpenAstroAra.Test {
 
             try {
                 var refusal = await RefusedAsync(() => svc.SlewAsync(new SlewRequestDto(5.0, 30.0), null, CancellationToken.None));
-                Assert.That(refusal.Parameters["position_unverified_reason"], Is.EqualTo(MountPoseTrust.AtHomeOnConnect));
+                // #2173 — the guard's one on-demand read decides nothing alone: the mount is not trusted yet.
+                Assert.That(refusal.Parameters["position_unverified_reason"], Is.EqualTo(MountPoseTrust.NotReadYet));
             } finally {
                 hold.Set();
             }
@@ -306,7 +806,8 @@ namespace OpenAstroAra.Test {
         // #2066, #2065 (ARA-10) — a routine that could not confirm its stop (Polar Align's mount_did_not_stop) marks the pose
         // unverified: the mount may have run on. GoTo is refused as after a power loss, the flag is kept across a reconnect
         // and in the store, and only a confirmed Home clears it. The reconnect is the power cycle the user makes after "cut
-        // the mount's power" (M28): the mount wakes reporting Home wherever it points, and the flag stays stop_unconfirmed.
+        // the mount's power" (M28): the mount wakes reporting Home wherever it points, and #2173 review that replaces
+        // stop_unconfirmed with at_home_on_connect, so a later Home needs the eye check.
         [Test]
         public async Task A_routine_that_could_not_confirm_its_stop_leaves_the_position_unverified_until_Home_is_confirmed() {
             var store = new MemoryPoseStore();
@@ -329,9 +830,9 @@ namespace OpenAstroAra.Test {
             await ConnectAsync(svc);
             await WaitForAsync(() => Runtime(svc)?.DeclinationDegrees is > 89.0, "the first read after the power cycle");
             await Task.Delay(100);
-            Assert.That(Runtime(svc)!.PositionUnverifiedReason, Is.EqualTo(MountPoseTrust.StopUnconfirmed),
-                "the power cycle's false Home neither clears nor replaces it");
-            Assert.That(store.UnverifiedReason(Mount.UniqueId), Is.EqualTo(MountPoseTrust.StopUnconfirmed));
+            await WaitForAsync(() => Runtime(svc)?.PositionUnverifiedReason == MountPoseTrust.AtHomeOnConnect,
+                "the power cycle's false Home replacing the reason (it does not clear it)");
+            await WaitForAsync(() => store.UnverifiedReason(Mount.UniqueId) == MountPoseTrust.AtHomeOnConnect, "the new reason persisted");
             Assert.That(Current.Slews, Is.Zero);
 
             // The hand controller's zero search: the mount really is at Home now.

@@ -171,8 +171,8 @@ namespace OpenAstroAra.Server.Services {
         /// <summary>
         /// #2066, #2065 (ARA-10) — the pose flag: a run whose stop was not confirmed (<paramref name="mountStopped"/> false),
         /// or whose mount session changed since its launch (a reconnect or a power cycle while it ran), leaves the mount's
-        /// position unverified (<see cref="MountPoseTrust.StopUnconfirmed"/>). GoTo, Park, Home and the next polar alignment
-        /// are refused until the user confirms the mount is at Home. Once per run; never throws.
+        /// position unverified (<see cref="MountPoseTrust.StopUnconfirmed"/>). GoTo, Park and the next polar alignment
+        /// are refused until a Home search ends at Home (#2173) or the user confirms the mount is at Home. Once per run; never throws.
         /// </summary>
         [SuppressMessage("Design", "CA1031:Do not catch general exception types",
             Justification = "The flag is set on the run's exit and its stop path, which must always finish: a fault is logged as Critical.")]
@@ -728,7 +728,7 @@ namespace OpenAstroAra.Server.Services {
         [LoggerMessage(Level = LogLevel.Information, Message = "§45 polar-align ({Why}): the mount was taken over — no stop of the routine's own, no tracking write")]
         private partial void LogExitLeftToTakeover(string why);
 
-        [LoggerMessage(Level = LogLevel.Critical, Message = "§45 polar-align: the mount's position is now unverified ({Why}) — GoTo, Park, Home and polar alignment are refused until Home is confirmed (#2066)")]
+        [LoggerMessage(Level = LogLevel.Critical, Message = "§45 polar-align: the mount's position is now unverified ({Why}) — GoTo, Park and polar alignment are refused until a Home search ends at Home or Home is confirmed (#2066)")]
         private partial void LogPoseLeftUnverified(string why);
 
         [LoggerMessage(Level = LogLevel.Critical, Message = "§45 polar-align: could not mark the mount's position unverified")]

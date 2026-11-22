@@ -340,6 +340,8 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
                 // §57.8 — the upcoming slew_started event carries the commanded target (a sync
                 // moves nothing, so it never opens a slew episode).
                 SlewWatch.NoteSlewTarget(ra, dec);
+                // #2173 — the Dec the GoTo lands at is its own, never a jump, however long the slew runs.
+                PoseTrust.NoteGotoTarget(dec, PoseClock.GetUtcNow());
             }
         }
         // #2066 — the GoTo's checks are done: its calls (the tracking enable, then the PUT) start here.
@@ -460,7 +462,26 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
                             LogParkDroppedAfterAbort(StoppedSinceWords(abortEpoch)); // #2107 — named: a second park in flight too
                             return;
                         }
-                        SendMotion(motion, c, c.Park);
+                        var poseMove = BeginPoseMove(); // #2173 — the park's own motion, while its call runs and after
+                        var parkSent = false;
+                        try {
+                            SendMotion(motion, c, c.Park);
+                            parkSent = true;
+                        } finally {
+                            if (parkSent) {
+                                // #2173 review — many drivers return from Park at once: the move stays Ara's own until the
+                                // mount reports AtPark or not slewing (bounded), off this control call.
+                                _ = Task.Run(async () => {
+                                    try {
+                                        await HoldPoseMoveUntilSettledAsync(c, abortEpoch, d => d.AtPark).ConfigureAwait(false);
+                                    } finally {
+                                        EndPoseMove(poseMove, arrived: true);
+                                    }
+                                }, CancellationToken.None);
+                            } else {
+                                EndPoseMove(poseMove, arrived: false);
+                            }
+                        }
                     });
                 });
             }, CancellationToken.None);
@@ -488,13 +509,32 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
     [SuppressMessage("Reliability", "CA2000:Dispose objects before losing scope",
         Justification = "#2066 — the dispatch scope is handed to the background send, which disposes it when the move is sent or dropped; a throw before the hand-off disposes it here.")]
     private async Task<OperationAcceptedDto> FindHomeAfterGuidingStoppedAsync(ITelescopeDevice client, string? idempotencyKey, long abortEpoch, long motion, CancellationToken ct) {
+        // #2173 — NINA allows Find Home at any time, so the user's Home is not refused while the position is unverified on
+        // any mount whose Alpaca CanFindHome is true (ADR 0003 rule 2: no brand or driver check): it is the way out, and a
+        // search seen to run that ends at Home trusts the position again by itself only for a reason that leaves the
+        // mount's own model intact; otherwise the user confirms Home by eye after it (TrustPoseAfterHomeSearchAsync). A
+        // mount that cannot find Home keeps the #2070 refusal, with the hand controller's search as the way out. GoTo, Park
+        // and polar alignment stay refused either way, and so does the sequencer's Find Home instruction (RunMountOpAsync).
+        bool? freshCanFindHome;
         try {
-            // #2070 — FindHome goes to Home by the mount's model on today's drivers (AlpacaBridge's iOptron
-            // sends :MH#, a no-op at a false zero), so it is refused while the position is unverified.
-            await ThrowIfPoseUnverifiedAsync(client, "findhome", ct).ConfigureAwait(false);
+            freshCanFindHome = await Task.Run(() => ReadCanFindHomeBestEffort(client), CancellationToken.None)
+                .WaitAsync(PoseReadTimeout, ct).ConfigureAwait(false);
+        } catch (TimeoutException) {
+            freshCanFindHome = null;
         } catch {
             NoteMotionFailed(motion, client);
             throw;
+        }
+        // #2173 review — a read that failed or timed out (a slow link) falls back to the connect's capability read, so a
+        // capable mount is not refused for it, and the refusal below words the same answer the decision used.
+        var canFindHome = freshCanFindHome ?? CanFindHomeKnown;
+        if (!canFindHome) {
+            try {
+                await ThrowIfPoseUnverifiedAsync(client, "findhome", ct, canFindHome: false).ConfigureAwait(false);
+            } catch {
+                NoteMotionFailed(motion, client);
+                throw;
+            }
         }
         // #2066 (ARA-2) — the user's Find Home (nothing else calls this) is counted in the dispatch as the user's park is.
         var dispatch = BeginRestMotionDispatchOrRefuse("telescope.findhome", "home", motion, client);
@@ -515,19 +555,37 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
             // idle-not-parked with tracking off, so a motion note would leave the old expectation
             // armed and fire a spurious TrackingLost ~6 s after a normal Find Home (review finding).
             NoteMountCommand(w => w.NoteParkCommanded());
-            _ = Task.Run(() => {
-                using var sending = dispatch;
-                RunControlInBackground("telescope.findhome", client, c => {
-                    // #2066 — a stop that landed after this Find Home was accepted (Stop Mount, Emergency Stop's latch, the
-                    // watchdog) wins, as it does over a park or a GoTo: the homing is dropped rather than moving the mount
-                    // after the stop.
-                    if (AbortedSince(fence)) {
-                        NoteMotionFailed(motion, c);
-                        LogFindHomeDroppedAfterAbort(StoppedSinceWords(fence));
-                        return;
+            _ = Task.Run(async () => {
+                var sent = false;
+                PoseReading atSend = default;
+                var poseMove = BeginPoseMove(); // #2173 — the search's own motion, until it ends or is given up on
+                try {
+                    using (dispatch) {
+                        RunControlInBackground("telescope.findhome", client, c => {
+                            // #2066 — a stop that landed after this Find Home was accepted (Stop Mount, Emergency Stop's latch, the
+                            // watchdog) wins, as it does over a park or a GoTo: the homing is dropped rather than moving the mount
+                            // after the stop.
+                            if (AbortedSince(fence)) {
+                                NoteMotionFailed(motion, c);
+                                LogFindHomeDroppedAfterAbort(StoppedSinceWords(fence));
+                                return;
+                            }
+                            atSend = canFindHome ? ReadPoseBestEffort(c) : default; // #2173 — where the search starts
+                            SendMotion(motion, c, c.FindHome);
+                            sent = true;
+                        });
                     }
-                    SendMotion(motion, c, c.FindHome);
-                });
+                    if (sent && canFindHome) {
+                        await TrustPoseAfterHomeSearchAsync(client, fence, atSend).ConfigureAwait(false);
+                    } else if (sent) {
+                        // #2173 review — a Home on a mount that says it cannot find Home (sent only from a trusted
+                        // position) whose call returned at once may still move: it stays Ara's own until the mount
+                        // reports Home or not slewing (bounded).
+                        await HoldPoseMoveUntilSettledAsync(client, fence, d => d.AtHome).ConfigureAwait(false);
+                    }
+                } finally {
+                    EndPoseMove(poseMove, arrived: sent);
+                }
             }, CancellationToken.None);
         } catch {
             dispatch.Dispose();
@@ -1188,6 +1246,9 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
                 }
                 LogSlewDroppedOwned(sync ? "sync" : "slew", raHours, decDeg, owner!);
                 ClearPendingSlewTarget();
+                if (!sync) {
+                    ClearPoseGotoTarget(); // #2173 review — never sent: its target explains no later Dec
+                }
                 return;
             }
             if (sync) {
@@ -1209,6 +1270,7 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
                     }
                     LogSlewDroppedAfterAbort(raHours, decDeg);
                     ClearPendingSlewTarget();
+                    ClearPoseGotoTarget(); // #2173 review — never sent
                     return;
                 }
                 // Async goto: returns immediately, Slewing goes true; the refresh cache surfaces
@@ -1261,6 +1323,10 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
             // The dispatch failed — no episode will open for this command, so its noted target
             // must not ride an unrelated later episode's slew_started (#836 r2).
             ClearPendingSlewTarget();
+            // #2173 review — nor may it excuse a later jump near that Dec for the rest of the session.
+            if (!sync) {
+                ClearPoseGotoTarget();
+            }
         }
     }
 

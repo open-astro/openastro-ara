@@ -330,20 +330,41 @@ namespace OpenAstroAra.Test {
         public bool Slewing {
             get {
                 ThrowIfLatched();
+                if (SlewingReadFails) {
+                    throw new InvalidOperationException("Slewing read timed out");
+                }
                 return IsSlewing;
             }
         }
+        /// <summary>#2173 — the Slewing read throws (a slow link mid-slew), while every other read answers.</summary>
+        public volatile bool SlewingReadFails;
+        /// <summary>#2173 — runs on each GoTo with its target (RA hours, Dec degrees), after it is counted.</summary>
+        public volatile Action<double, double>? OnSlew;
         public double RightAscension { get { ThrowIfLatched(); ThrowIfReadFails(); return Ra; } }
         /// <summary>The RA the mount reports (5 h unless a test points it elsewhere).</summary>
         public double Ra { get => Volatile.Read(ref _ra); set => Volatile.Write(ref _ra, value); }
         private double _ra = 5.0;
-        public double Declination { get { ThrowIfLatched(); return Dec; } }
+        public double Declination { get { ThrowIfLatched(); return DecReads.TryDequeue(out var once) ? once : Dec; } }
+        /// <summary>#2173 — Dec values the next reads answer once each (a bad read), before <see cref="Dec"/> again.</summary>
+        public System.Collections.Concurrent.ConcurrentQueue<double> DecReads { get; } = new();
         public double TargetRightAscension => throw new InvalidOperationException("no target set");
         public double TargetDeclination => throw new InvalidOperationException("no target set");
         public DriveRate TrackingRate { get => DriveRate.Sidereal; set { } }
-        public bool Tracking { get { ThrowIfLatched(); return TrackingOn; } set => TrackingOn = value; }
+        public bool Tracking { get { ThrowIfLatched(); return TrackingOn; } set { TrackingOn = value; OnTrackingWrite?.Invoke(value); } }
+        /// <summary>#2173 review — runs on each Tracking write, after it lands (a stop that races the GoTo's enable).</summary>
+        public volatile Action<bool>? OnTrackingWrite;
         public bool AtPark { get { ThrowIfLatched(); return ReportsArrival && _atPark; } }
-        public bool AtHome { get { ThrowIfLatched(); return ReportsAtHome || (ReportsArrival && _atHome); } }
+        public bool AtHome {
+            get {
+                ThrowIfLatched();
+                if (AtHomeReadFails) {
+                    throw new InvalidOperationException("AtHome read timed out");
+                }
+                return ReportsAtHome || (ReportsArrival && _atHome);
+            }
+        }
+        /// <summary>#2173 review — the AtHome read throws (a slow link, or a mount that lost power), while the others answer.</summary>
+        public volatile bool AtHomeReadFails;
         // #2071 — opt-in: Park and FindHome report arriving, so a sequencer park or home completes.
         public volatile bool ReportsArrival;
         private volatile bool _atPark, _atHome;
@@ -360,7 +381,21 @@ namespace OpenAstroAra.Test {
         public bool CanUnpark => true;
         public bool CanSetTracking => true;
         public bool CanPulseGuide => true;
-        public bool CanFindHome => true;
+        public bool CanFindHome {
+            get {
+                if (CanFindHomeReadFails) {
+                    throw new InvalidOperationException("CanFindHome read failed");
+                }
+                CanFindHomeHold?.Wait();
+                return FindHomeCapable;
+            }
+        }
+        /// <summary>#2173 review — the CanFindHome read throws (a driver or link fault), or blocks until the test sets the
+        /// event (a slow link: the read times out).</summary>
+        public volatile bool CanFindHomeReadFails;
+        public volatile ManualResetEventSlim? CanFindHomeHold;
+        /// <summary>#2173 — the mount's Alpaca CanFindHome (true unless a test turns it off).</summary>
+        public volatile bool FindHomeCapable = true;
         public bool CanSetPierSide { get => PierSideSettable; set => PierSideSettable = value; }
         public double FocalLength => 0.5;
         public double ApertureDiameter => 0.1;
@@ -392,7 +427,10 @@ namespace OpenAstroAra.Test {
         public void Unpark() { }
         public void FindHome() { _atHome = true; Interlocked.Increment(ref _homes); }
         // What the mount was told to do (#2071: a refused GoTo or Sync sends nothing; Park and Home always go).
-        public void SlewToCoordinatesAsync(double raHours, double decDegrees) => Interlocked.Increment(ref _slews);
+        public void SlewToCoordinatesAsync(double raHours, double decDegrees) {
+            Interlocked.Increment(ref _slews);
+            OnSlew?.Invoke(raHours, decDegrees);
+        }
         public void SyncToCoordinates(double raHours, double decDegrees) => Interlocked.Increment(ref _syncs);
 
         private sealed class FakeTrackingRates : ITrackingRates {

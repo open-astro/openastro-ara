@@ -117,8 +117,9 @@ class _MountBody extends ConsumerWidget {
         _row('Parked', s.parked ? 'Yes' : 'No'),
         _row('At home', s.atHome ? 'Yes' : 'No'),
         // #2070 — the rig does not trust the mount's position (it may have
-        // lost power): GoTo, Park, Home and Polar Align are refused until the
-        // user confirms Home.
+        // lost power): GoTo, Park and Polar Align are refused until the user
+        // confirms Home (#2173: or, after an unconfirmed stop only, a Home
+        // search ends at Home).
         if (s.positionUnverified) _PositionUnverified(status: s),
         if (s.isBusy)
           Padding(
@@ -225,9 +226,14 @@ class _MountBody extends ConsumerWidget {
               ),
             // Home slews to the mount's homing switch — disabled while parked (must
             // unpark first) or busy. Shown only when the mount supports FindHome.
+            // #2173 — on while the position is unverified, as NINA allows Find
+            // Home at any time: it is the way out. After a power loss or a jump
+            // the user then confirms Home by eye; after an unconfirmed stop a
+            // search seen to run that ends at Home trusts the position again.
             if (caps?.canFindHome ?? false)
               OutlinedButton(
-                onPressed: (s.isBusy || s.parked || s.positionUnverified)
+                key: const Key('mount_find_home'),
+                onPressed: (s.isBusy || s.parked)
                     ? null
                     : () => _run(
                         context,
@@ -345,7 +351,16 @@ class _PositionUnverified extends ConsumerWidget {
               child: Text(l10n.mountConfirmAtHome),
             )
           else
-            Text(l10n.mountPositionUnverifiedRunZeroSearch),
+            // #2173 — Home is the way out on a mount that can find Home (then an
+            // eye check, unless only the stop was unconfirmed); one that cannot
+            // is sent to its hand controller's search.
+            Text(
+              (status.capabilities?.canFindHome ?? false)
+                  ? (status.positionUnverifiedByStop
+                        ? l10n.mountPositionStopUnconfirmedPressHome
+                        : l10n.mountPositionUnverifiedPressHome)
+                  : l10n.mountPositionUnverifiedRunZeroSearch,
+            ),
         ],
       ),
     );

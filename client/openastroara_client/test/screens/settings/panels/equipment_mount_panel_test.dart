@@ -320,28 +320,45 @@ void main() {
     expect(home.onPressed, isNull); // must unpark before homing
   });
 
-  testWidgets('an unverified position turns Park and Home off and says to run the zero search (#2070)', (
+  // #2173 — Home is the way out of an unverified position on any mount that
+  // can find Home, so it stays on; Park stays off.
+  testWidgets('an unverified position turns Park off, keeps Home on and says to press Home (#2173)', (
     tester,
   ) async {
-    await _pump(tester, _status(canFindHome: true, positionUnverified: true));
+    final api = await _pump(tester, _status(canFindHome: true, positionUnverified: true));
     expect(find.byKey(const Key('mount_position_unverified')), findsOneWidget);
     expect(find.text('Mount position unverified'), findsOneWidget);
     final park = tester.widget<OutlinedButton>(
       find.widgetWithText(OutlinedButton, 'Park'),
     );
     expect(park.onPressed, isNull, reason: 'the rig refuses a park from an unverified position');
-    final home = tester.widget<OutlinedButton>(
-      find.widgetWithText(OutlinedButton, 'Home'),
-    );
-    expect(home.onPressed, isNull, reason: 'Home by the mount model is refused too');
     expect(
-      find.textContaining('Run the mount\'s zero search'),
+      find.textContaining('Press Home'),
       findsOneWidget,
     );
+    await tester.tap(find.byKey(const Key('mount_find_home')));
+    await tester.pumpAndSettle();
+    expect(api.calls, contains('command:home:enabled=null'));
     expect(
       find.byKey(const Key('mount_confirm_home')),
       findsNothing,
       reason: 'the mount does not report Home yet',
+    );
+  });
+
+  // #2173 — the Home search ended at Home and the rig trusts the position
+  // again: the warning goes and Park comes back on the next status.
+  testWidgets('the unverified warning clears once the rig trusts the position again (#2173)', (tester) async {
+    final api = await _pump(tester, _status(canFindHome: true, positionUnverified: true));
+    expect(find.byKey(const Key('mount_position_unverified')), findsOneWidget);
+    api.status = _status(canFindHome: true, atHome: true);
+    final container = ProviderScope.containerOf(tester.element(find.byType(EquipmentMountPanel)));
+    await container.read(mountProvider.notifier).refresh();
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('mount_position_unverified')), findsNothing);
+    expect(
+      tester.widget<OutlinedButton>(find.widgetWithText(OutlinedButton, 'Park')).onPressed,
+      isNotNull,
     );
   });
 
@@ -352,6 +369,18 @@ void main() {
     final en = lookupAppLocalizations(const Locale('en'));
     expect(find.text(en.mountPositionStopUnconfirmedBody), findsOneWidget);
     expect(find.text(en.mountPositionUnverifiedBody), findsNothing);
+  });
+
+  // #2173 review — after a power loss the user confirms Home by eye after the
+  // Home; after an unconfirmed stop a Home that ends at Home is enough.
+  testWidgets('Advanced: Home is followed by an eye check after a power loss, not after an unconfirmed stop (#2173)', (tester) async {
+    final en = lookupAppLocalizations(const Locale('en'));
+    await _pump(tester, _status(canFindHome: true, positionUnverified: true));
+    expect(find.text(en.mountPositionUnverifiedPressHome), findsOneWidget);
+    expect(find.textContaining('confirm by eye'), findsOneWidget);
+    await _pump(tester, _status(canFindHome: true, positionUnverified: true, unverifiedReason: 'stop_unconfirmed'));
+    expect(find.text(en.mountPositionStopUnconfirmedPressHome), findsOneWidget);
+    expect(find.textContaining('confirm by eye'), findsNothing);
   });
 
   testWidgets('a trusted position keeps Park and Home on and shows no warning (#2070)', (

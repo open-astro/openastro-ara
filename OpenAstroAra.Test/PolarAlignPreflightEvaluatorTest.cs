@@ -308,5 +308,21 @@ namespace OpenAstroAra.Test {
                 Assert.That(unknown.Dto.Ready, Is.True);
             });
         }
+        [TestCase(true, "The way out is Home", "hand controller")]
+        [TestCase(false, "hand controller", "The way out is Home")]
+        public async Task The_unverified_pose_row_names_Home_or_the_hand_controller_from_CanFindHome(bool canFindHome, string says, string doesNotSay) {
+            var inputs = Inputs(
+                mount: () => new TelescopeInfo { Connected = true, DeviceId = MountId, Name = "Bench GEM", CanFindHome = canFindHome },
+                pose: _ => Task.FromResult<string?>(MountPoseTrust.PoseJumpInSession));
+
+            var result = await PolarAlignPreflightEvaluator.EvaluateAsync(inputs, CancellationToken.None).ConfigureAwait(false);
+
+            var row = Check(result, PolarAlignPreflightChecks.PoseVerified);
+            Assert.Multiple(() => {
+                Assert.That(row.Status, Is.EqualTo(PolarAlignPreflightStatuses.Fail));
+                Assert.That(row.Detail, Does.Contain(says));
+                Assert.That(row.Detail, Does.Not.Contain(doesNotSay));
+            });
+        }
     }
 }

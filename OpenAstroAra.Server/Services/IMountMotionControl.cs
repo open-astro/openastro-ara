@@ -68,7 +68,7 @@ public interface IMountMotionControl {
     /// reading). A stop always reaches the driver, whatever <paramref name="ct"/> says.</summary>
     Task MoveAxisAsync(int axis, double rate, int? leaseMs, long? unlessAbortedSince, CancellationToken ct);
 
-    /// <summary>#2070 — null when the mount's reported position may be trusted for a GoTo, Park, Home or polar alignment;
+    /// <summary>#2070 — null when the mount's reported position may be trusted for a GoTo, Park or polar alignment;
     /// otherwise why not (a <c>position_unverified_reason</c> token, or <c>not_read_yet</c> before the session's first
     /// position read).</summary>
     Task<string?> PositionUnverifiedReasonAsync(CancellationToken ct) => Task.FromResult<string?>(null);
