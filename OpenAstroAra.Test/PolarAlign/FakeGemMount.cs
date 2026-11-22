@@ -195,9 +195,13 @@ namespace OpenAstroAra.Test.PolarAlign {
         /// <summary>The driver's RA motor sign (<c>ra_motor_sign</c>): +1 = a positive rate raises the reported RA (the hour
         /// angle falls), the way PA assumes; −1 inverts it.</summary>
         public double RaMotorSign { get; set; } = 1.0;
-        /// <summary>#2081 — the driver's name and version, as <see cref="GetInfo"/> reports them: Polar Align keys the RA
-        /// motor direction it tests and saves by them.</summary>
-        public string DriverInfo { get; set; } = "Fake GEM driver";
+        /// <summary>#2081/#2167 — the mount's Alpaca UniqueID and name and its driver's name and version, as
+        /// <see cref="GetInfo"/> reports them: Polar Align keys the RA motor direction it tests and saves by the identity
+        /// (the UniqueID, else the name, else <c>unidentified-mount</c>: blank by default, the key the tests' confirmed
+        /// clearance uses) and the driver's name and version.</summary>
+        public string DeviceId { get; set; } = string.Empty;
+        public string Name { get; set; } = string.Empty;
+        public string DriverInfo { get; set; } = string.Empty;
         public string DriverVersion { get; set; } = "1.0";
         /// <summary>The driver's Dec motor sign: +1 = a positive rate lowers the Dec axis angle (from the pole toward the
         /// equator on the normal side), the way PA's tilt off the axis assumes; −1 inverts it.</summary>
@@ -843,6 +847,8 @@ namespace OpenAstroAra.Test.PolarAlign {
                     SideOfPier = PierSource is PierSideSource.Unknown or PierSideSource.Error ? PierSide.pierUnknown : s.Side,
                     AtPark = _atPark,
                     AtHome = ReportedAtHomeLocked(),
+                    DeviceId = DeviceId,
+                    Name = Name,
                     DriverInfo = DriverInfo,
                     DriverVersion = DriverVersion,
                     CanFindHome = CanFindHome,

@@ -7357,17 +7357,18 @@ class AppLocalizationsPt extends AppLocalizations {
   String get polarMotorDirection => 'RA motor direction';
 
   @override
-  String polarMotorDirectionSaved(
-    String driver,
-    String version,
-    String direction,
-  ) {
-    return 'Tested on $driver $version: the motor\'s positive speed turns RA $direction.';
+  String polarMotorDirectionSaved(String mount, String direction) {
+    return 'Tested on $mount: the motor\'s positive speed turns RA $direction.';
   }
 
   @override
-  String polarMotorDirectionOtherDriver(String driver, String version) {
-    return 'Tested on another driver ($driver $version): the next start tests it again with a 0.5° turn.';
+  String polarMotorDirectionOtherDriver(String mount) {
+    return 'Tested on another mount or driver ($mount): the next start tests it again with a 0.5° turn.';
+  }
+
+  @override
+  String polarMotorDirectionMountDriver(String mount, String driver) {
+    return '$mount, driver $driver';
   }
 
   @override
@@ -14874,17 +14875,18 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String get polarMotorDirection => 'Direção do motor de AR';
 
   @override
-  String polarMotorDirectionSaved(
-    String driver,
-    String version,
-    String direction,
-  ) {
-    return 'Testada em $driver $version: a velocidade positiva do motor gira a AR para $direction.';
+  String polarMotorDirectionSaved(String mount, String direction) {
+    return 'Testada em $mount: a velocidade positiva do motor gira a AR para $direction.';
   }
 
   @override
-  String polarMotorDirectionOtherDriver(String driver, String version) {
-    return 'Testada em outro driver ($driver $version): o próximo início testa de novo com um giro de 0,5°.';
+  String polarMotorDirectionOtherDriver(String mount) {
+    return 'Testada em outra montagem ou driver ($mount): o próximo início testa de novo com um giro de 0,5°.';
+  }
+
+  @override
+  String polarMotorDirectionMountDriver(String mount, String driver) {
+    return '$mount, driver $driver';
   }
 
   @override

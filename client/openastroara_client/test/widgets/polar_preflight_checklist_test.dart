@@ -446,6 +446,84 @@ void main() {
     },
   );
 
+  // #2165: the clearance is confirmed for a reach, and the list's is the fine
+  // stage's. A bigger turn size fails it there, but a Check turns by its own
+  // step, so the rig judges the Check: Check stays on and starts.
+  testWidgets(
+    "A Check stays on while the fine stage's clearance fails and starts when the rig accepts its reach",
+    (tester) async {
+      final rig = await _pump(
+        tester,
+        settings: rigPolarAlign.withMountClearance(
+          preflightMountKey,
+          const PolarAlignMountClearance(confirmedReachDeg: 20.5),
+        ),
+      );
+      rig
+        ..reachDeg = 30.5
+        ..checkReachDeg = 20.5;
+      await tester.tap(find.byKey(const Key('polar-preflight-refresh')));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const Key('polar-preflight-check-clearance_confirmed')),
+        findsOneWidget,
+        reason: 'the 20.5° confirmation does not cover the 30.5° fine run',
+      );
+      expect(_onPressed(tester, 'polar-align-start'), isNull);
+      expect(
+        _onPressed(tester, 'polar-align-start-check'),
+        isNotNull,
+        reason: "the Check's 20.5° reach is covered: the rig decides",
+      );
+
+      await tester.tap(find.byKey(const Key('polar-align-start-check')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('polar-clearance-dialog')), findsNothing);
+      await tester.tap(find.byKey(const Key('polar-start-confirm-go')));
+      await tester.pumpAndSettle();
+      expect(rig.started.single.stage, PolarAlignStages.check);
+    },
+  );
+
+  // #2165: the same, with a Check the rig refuses too: the tap asks the
+  // clearance question for the Check's own reach, not the fine stage's.
+  testWidgets(
+    "A Check refused while the fine stage's clearance fails asks about the Check's reach",
+    (tester) async {
+      final rig = await _pump(
+        tester,
+        settings: rigPolarAlign.withMountClearance(
+          preflightMountKey,
+          const PolarAlignMountClearance(confirmedReachDeg: 20.5),
+        ),
+      );
+      rig
+        ..reachDeg = 30.5
+        ..checkReachDeg = 40.5;
+      await tester.tap(find.byKey(const Key('polar-preflight-refresh')));
+      await tester.pumpAndSettle();
+      expect(_onPressed(tester, 'polar-align-start-check'), isNotNull);
+
+      await tester.tap(find.byKey(const Key('polar-align-start-check')));
+      await tester.pumpAndSettle();
+      expect(
+        tester.widget<Text>(find.byKey(const Key('polar-clearance-dialog'))).data,
+        contains('up to 40.5° each way'),
+      );
+      await tester.tap(find.byKey(const Key('polar-clearance-confirm')));
+      await tester.pumpAndSettle();
+
+      expect(
+        rig.section.puts.last.mountClearance[preflightMountKey],
+        const PolarAlignMountClearance(confirmedReachDeg: 40.5),
+      );
+      await tester.tap(find.byKey(const Key('polar-start-confirm-go')));
+      await tester.pumpAndSettle();
+      expect(rig.started.single.stage, PolarAlignStages.check);
+    },
+  );
+
   // #2165: an entry for a smaller reach than the run's still has Take back,
   // which removes it.
   testWidgets(
@@ -537,7 +615,9 @@ void main() {
   );
 
   // #2170 — there is no hand-turn start to fall back on: an unconfirmed
-  // clearance fails the list, so Start and Check stay off until it is confirmed.
+  // clearance fails the list, so Start stays off until it is confirmed. A
+  // Check stays on (#2165): its reach is the Check step's, so the rig judges
+  // it and a refused Check asks the clearance question.
   testWidgets(
     'An unconfirmed clearance fails the list and Start stays off',
     (tester) async {
@@ -556,7 +636,7 @@ void main() {
         reason: 'a fail, not a warn',
       );
       expect(_onPressed(tester, 'polar-align-start'), isNull);
-      expect(_onPressed(tester, 'polar-align-start-check'), isNull);
+      expect(_onPressed(tester, 'polar-align-start-check'), isNotNull);
       expect(find.text('Confirm clearance…'), findsOneWidget);
       expect(rig.started, isEmpty);
     },

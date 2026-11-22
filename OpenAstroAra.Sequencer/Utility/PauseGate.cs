@@ -63,8 +63,9 @@ namespace OpenAstroAra.Sequencer.Utility {
         }
 
         /// <summary>Cancelled only by a pause that asked to interrupt frames, and new again on Resume:
-        /// the frame in progress stops and is taken again. Only the daemon's star-lost pause asks for it
-        /// (a light on a lost star is worthless); a person's pause lets the frame finish.</summary>
+        /// the LIGHT in progress stops and is taken again. Only the daemon's guiding-lost pauses ask for it
+        /// (the star-lost watch, and a guider link loss while guiding, #2169): a light without guiding is
+        /// worthless. A person's pause lets the frame finish.</summary>
         public CancellationToken FrameInterruptToken {
             get { lock (_lock) { return _frameInterrupt.Token; } }
         }
