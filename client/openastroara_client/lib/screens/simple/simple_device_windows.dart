@@ -18,6 +18,7 @@ import '../../models/focuser_status.dart';
 import '../../models/switch_device.dart';
 import '../../models/weather_status.dart';
 import '../../widgets/equipment/cooling_fan_picker.dart';
+import '../../widgets/equipment/pose_solve_check.dart';
 import '../../widgets/settings/section_load_state.dart';
 import '../../widgets/simple/filter_wheel.dart';
 import '../../state/equipment/camera_state.dart';
@@ -1509,6 +1510,8 @@ class _SimpleMountWindowState extends ConsumerState<SimpleMountWindow> {
                 child: Text(l10n.mountConfirmAtHome),
               ),
             ),
+          // #2173 — or a plate solve, which moves nothing.
+          const PoseSolveCheck(textStyle: kSimpleCaption),
         ],
       ),
     );

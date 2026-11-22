@@ -12418,6 +12418,119 @@ abstract class AppLocalizations {
   /// **'move the scope to the start position'**
   String get polarActionMoveToStart;
 
+  /// Mount window (#2173): button on the unverified-position row that takes one short exposure, plate-solves it and compares it with the mount; it sends the mount no motion
+  ///
+  /// In en, this message translates to:
+  /// **'Check position with a plate solve'**
+  String get poseCheckButton;
+
+  /// Mount window (#2173): shown while the plate-solve check runs
+  ///
+  /// In en, this message translates to:
+  /// **'Checking the position with a plate solve…'**
+  String get poseCheckRunning;
+
+  /// Mount window (#2173): the camera the plate-solve check used, inside a sentence
+  ///
+  /// In en, this message translates to:
+  /// **'main camera'**
+  String get poseCheckCameraMain;
+
+  /// Mount window (#2173): the camera the plate-solve check used (only when there is no main camera), inside a sentence
+  ///
+  /// In en, this message translates to:
+  /// **'guide camera'**
+  String get poseCheckCameraGuide;
+
+  /// Mount window (#2173): one position in the plate-solve result; {ra} and {dec} are formatted coordinates
+  ///
+  /// In en, this message translates to:
+  /// **'RA {ra}, Dec {dec}'**
+  String poseCheckPosition(String ra, String dec);
+
+  /// Mount window (#2173): the plate solve matched the mount and its pier side; the unverified flag cleared
+  ///
+  /// In en, this message translates to:
+  /// **'The sky agrees with the mount (checked with the {camera}): its position is trusted again.'**
+  String poseCheckTrusted(String camera);
+
+  /// Mount window (#2173): the plate solve found the sky elsewhere; {mount} and {sky} are positions, {delta} the angle between them in degrees
+  ///
+  /// In en, this message translates to:
+  /// **'The mount reads {mount}, the sky says {sky} (Δ {delta}°). Checked with the {camera}.'**
+  String poseCheckMismatch(
+    String mount,
+    String sky,
+    String delta,
+    String camera,
+  );
+
+  /// Mount window (#2173): the one-tap Sync offered after a plate-solve mismatch; the rig then checks again with a second solve
+  ///
+  /// In en, this message translates to:
+  /// **'Sync the mount to the sky'**
+  String get poseCheckSync;
+
+  /// Mount window (#2173): the pier side the mount reports disagrees with the plate solve; no trust and no Sync
+  ///
+  /// In en, this message translates to:
+  /// **'The pier side does not match the sky (checked with the {camera}): the mount may be a meridian flip off. No Sync is offered; use Home.'**
+  String poseCheckPierSideDisagrees(String camera);
+
+  /// Mount window (#2173): the mount does not report its pier side (or the scope is too near the pole) and no earlier solve tells it
+  ///
+  /// In en, this message translates to:
+  /// **'The pier side could not be checked (with the {camera}), so the position is not trusted. Use Home.'**
+  String poseCheckPierSideUnknown(String camera);
+
+  /// Mount window (#2173): the plate-solve check's frame did not solve
+  ///
+  /// In en, this message translates to:
+  /// **'The frame from the {camera} did not solve: clouds, a closed cover or too few stars. The position stays unverified.'**
+  String poseCheckSolveFailed(String camera);
+
+  /// Mount window (#2173): the mount moved, was commanded or reconnected while the plate-solve check ran
+  ///
+  /// In en, this message translates to:
+  /// **'The mount moved during the check, so nothing was decided. Check again.'**
+  String get poseCheckMountMoved;
+
+  /// Mount window (#2173): the Sync after a plate-solve mismatch was refused
+  ///
+  /// In en, this message translates to:
+  /// **'The mount refused the Sync. The position stays unverified; use Home.'**
+  String get poseCheckSyncRefused;
+
+  /// Mount window (#2173): after the Sync the mount's reading or a second plate solve still disagrees
+  ///
+  /// In en, this message translates to:
+  /// **'After the Sync the mount still disagrees with the sky. The position stays unverified; use Home.'**
+  String get poseCheckSyncNotTaken;
+
+  /// Mount window (#2173): notice when the rig refused or failed the plate-solve check
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t check the position'**
+  String get poseCheckCouldnt;
+
+  /// Refusal (pose-check-not-needed, #2173): the plate-solve check while the mount's position is trusted or not read yet
+  ///
+  /// In en, this message translates to:
+  /// **'The mount\'s position is trusted, or still being read: there is nothing to check.'**
+  String get refusalPoseCheckNotNeeded;
+
+  /// Refusal (pose-sync-not-offered, #2173): the plate-solve Sync with no current mismatch offer
+  ///
+  /// In en, this message translates to:
+  /// **'That Sync is no longer on offer. Check the position again, then tap Sync.'**
+  String get refusalPoseSyncNotOffered;
+
+  /// Refusal (mount-not-connected, #2173): the plate-solve check with no mount connected
+  ///
+  /// In en, this message translates to:
+  /// **'No mount is connected.'**
+  String get refusalMountNotConnected;
+
   /// Sequencer Run (#2168): the daemon refused the save of unsaved edits made before Run; {reason} is its sentence
   ///
   /// In en, this message translates to:

@@ -610,6 +610,77 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
+  /api/v1/equipment/telescope/verify-position-by-solve:
+    get:
+      tags:
+        - Equipment
+      summary: 'Whether the plate-solve check of an unverified mount position can run now, and with which camera.'
+      operationId: GetVerifyPositionBySolve
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PoseSolveAvailabilityDto'
+    post:
+      tags:
+        - Equipment
+      summary: 'Check an unverified mount position with one plate solve; trusts it again when the sky and the pier side agree, or offers one Sync.'
+      description: 'Sends the mount no motion. A 409 or 422 problem carries a stable `reason` (ADR 0022): `mount-not-connected`, `pose-check-not-needed`, `no-camera`, `camera-busy`, `gate-stuck`, `storage-unavailable`, `optics-not-set` (with `missing`), `solver-not-set` and `capture-settings-unsupported`.'
+      operationId: VerifyPositionBySolve
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PoseSolveCheckResultDto'
+        '409':
+          description: Conflict
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '422':
+          description: Unprocessable Entity
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+  /api/v1/equipment/telescope/verify-position-by-solve/sync:
+    post:
+      tags:
+        - Equipment
+      summary: 'Sync the mount to the sky after a plate-solve mismatch, then verify it with a second solve.'
+      description: 'The user''s one tap after a `mismatch`: solve, Sync (the existing Sync and its guards), re-read and solve again; trusts the position only when both agree. Besides the check''s reasons: `pose-sync-not-offered` and `polar-align-moving-mount`.'
+      operationId: SyncPositionBySolve
+      requestBody:
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - type: 'null'
+                - $ref: '#/components/schemas/PoseSolveSyncRequestDto'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PoseSolveCheckResultDto'
+        '409':
+          description: Conflict
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '422':
+          description: Unprocessable Entity
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
   /api/v1/equipment/telescope/abort:
     post:
       tags:
@@ -15262,6 +15333,126 @@ components:
         direction_test:
           type: boolean
           default: false
+    PoseSolveAvailabilityDto:
+      required:
+        - available
+        - camera
+        - unavailable_reason
+      type: object
+      properties:
+        available:
+          type: boolean
+        camera:
+          type:
+            - 'null'
+            - string
+        unavailable_reason:
+          type:
+            - 'null'
+            - string
+    PoseSolveCheckResultDto:
+      required:
+        - outcome
+        - camera
+        - frame
+        - mount_ra_hours
+        - mount_dec_degrees
+        - solved_ra_hours
+        - solved_dec_degrees
+        - separation_degrees
+        - tolerance_degrees
+        - side_of_pier
+        - expected_side_of_pier
+        - position_angle_degrees
+        - position_angle_check
+        - cleared_reason
+        - check_id
+        - detail
+      type: object
+      properties:
+        outcome:
+          type: string
+        camera:
+          type: string
+        frame:
+          type:
+            - 'null'
+            - string
+        mount_ra_hours:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
+        mount_dec_degrees:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
+        solved_ra_hours:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
+        solved_dec_degrees:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
+        separation_degrees:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
+        tolerance_degrees:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - number
+            - string
+          format: double
+        side_of_pier:
+          type: string
+        expected_side_of_pier:
+          type:
+            - 'null'
+            - string
+        position_angle_degrees:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
+        position_angle_check:
+          type: string
+        cleared_reason:
+          type:
+            - 'null'
+            - string
+        check_id:
+          type:
+            - 'null'
+            - string
+        detail:
+          type: string
+    PoseSolveSyncRequestDto:
+      required:
+        - check_id
+      type: object
+      properties:
+        check_id:
+          type:
+            - 'null'
+            - string
     PreflightChecklistDto:
       required:
         - generated_utc
@@ -15805,6 +15996,9 @@ components:
         - polar-align-cannot-move-dec
         - polar-align-move-to-start-not-needed
         - polar-align-move-not-confirmed
+        - pose-check-not-needed
+        - pose-sync-not-offered
+        - mount-not-connected
       type: string
       description: 'The cause of a refusal: the `reason` extension of a 409 or 422 problem. See ADR 0022.'
     ReleaseNotesDto:
