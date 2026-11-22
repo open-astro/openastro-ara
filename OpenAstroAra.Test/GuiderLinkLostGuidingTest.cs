@@ -584,5 +584,31 @@ namespace OpenAstroAra.Test {
                 "the camera came back but its fault row never closed");
             Assert.That(rig.Resumed(), Is.Zero, "the run is the user's");
         }
+
+        [Test]
+        public async Task An_unguided_camera_drop_then_a_link_loss_resumes_only_once_a_guide_frame_comes_back() {
+            // #2169 review — the link drops while the camera is out. The reconnect brings the link back, not the
+            // camera: the run stays paused until a guide frame comes back, and the notice is the camera's.
+            using var rig = new Rig();
+            await using var fake = await ConnectedFakeAsync(rig, guiding: false).ConfigureAwait(false);
+            var cameraOut = true;
+            var captures = CheckFrames(fake, cameraOut: () => Volatile.Read(ref cameraOut));
+
+            await fake.BroadcastAsync(PhdEvents.EquipmentDisconnected()).ConfigureAwait(false);
+            Assert.That(await WaitUntilAsync(() => rig.Paused() == 1).ConfigureAwait(false), Is.True, "the run was not paused");
+            await DropAndReconnectStoppedAsync(rig, fake).ConfigureAwait(false);
+            Assert.That(await WaitUntilAsync(() => rig.WasRecovered("link_down")).ConfigureAwait(false), Is.True, "the link drop never recovered");
+            var atReconnect = captures();
+
+            Assert.That(await WaitUntilAsync(() => captures() >= atReconnect + 2).ConfigureAwait(false), Is.True,
+                "the camera was not checked again after the reconnect");
+            Assert.That((rig.Resumed(), rig.WasRecovered("equipment_disconnected")), Is.EqualTo((0, false)),
+                "the link is back but the camera is not: the run stays paused");
+            Volatile.Write(ref cameraOut, false);
+
+            Assert.That(await WaitUntilAsync(() => rig.Resumed() == 1).ConfigureAwait(false), Is.True, "the run never resumed");
+            Assert.That(rig.WasRecovered("equipment_disconnected"), Is.True);
+            Assert.That((rig.Restarts(), rig.Titled("Guide camera back — sequence resumed")), Is.EqualTo((0, 1)));
+        }
     }
 }
