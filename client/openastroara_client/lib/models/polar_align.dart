@@ -629,8 +629,10 @@ abstract final class PolarAlignPreflightChecks {
 
   /// The checks that depend on the measurement's turn step. The list is read
   /// for the fine stage; a Check plans with its own step, so the rig judges
-  /// these for it when it starts.
-  static const stageDependent = {startPointing};
+  /// these for it when it starts. #2165: the clearance too, as it is confirmed
+  /// for a reach and a Check's reach comes from the Check step; a Check the
+  /// rig refuses for it asks the clearance question for the Check's reach.
+  static const stageDependent = {startPointing, clearanceConfirmed};
 }
 
 /// #2068 one check of the pre-flight list: its id, status and the rig's
@@ -719,8 +721,9 @@ class PolarAlignPreflight {
   bool get blocksStart => !ready || checks.any((c) => c.fails);
 
   /// A check that does not depend on the turn step fails: the rig would
-  /// refuse a Check too ([PolarAlignPreflightChecks.stageDependent] are the
-  /// fine stage's, and a Check turns by its own step).
+  /// refuse a Check too ([PolarAlignPreflightChecks.stageDependent], the start
+  /// pointing and the clearance, are the fine stage's, and a Check turns by
+  /// its own step).
   bool get blocksCheck => checks.any(
     (c) => c.fails && !PolarAlignPreflightChecks.stageDependent.contains(c.id),
   );

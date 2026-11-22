@@ -141,7 +141,8 @@ bool polarPreflightBlocksStart(AsyncValue<PolarAlignPreflight?> preflight) =>
 
 /// [polarPreflightBlocksStart] for a Check: only the checks that do not depend
 /// on the turn step ([PolarAlignPreflight.blocksCheck]). The list is the fine
-/// stage's; the rig judges a Check's own start pointing when it starts.
+/// stage's; the rig judges a Check's own start pointing and clearance when it
+/// starts.
 bool polarPreflightBlocksCheck(AsyncValue<PolarAlignPreflight?> preflight) =>
     switch (preflight) {
       AsyncData(:final value) => value?.blocksCheck ?? false,
