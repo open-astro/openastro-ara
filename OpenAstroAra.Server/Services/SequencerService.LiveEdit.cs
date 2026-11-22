@@ -18,11 +18,13 @@ using OpenAstroAra.Sequencer.Container;
 using OpenAstroAra.Sequencer.Container.ExecutionStrategy;
 using OpenAstroAra.Sequencer.DragDrop;
 using OpenAstroAra.Sequencer.SequenceItem;
+using OpenAstroAra.Sequencer.Validations;
 using OpenAstroAra.Server.Contracts;
 using OpenAstroAra.Server.Contracts.WsEvents;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 
@@ -178,6 +180,149 @@ public sealed partial class SequencerService {
             drop.MoveWithinIntoSequenceBlocks(currentIndex, request.NewIndex);
             return (null, item);
         }, ct);
+    }
+
+    /// <summary>Fields that are the run's own record, not settings: frames taken, loops done,
+    /// and the tree's structure. A client's copy of these is always stale, so a write is refused.</summary>
+    private static readonly HashSet<string> RunOwnedFields = new(StringComparer.Ordinal) {
+        "ExposureCount", "CompletedIterations", "Status", "Items", "Conditions", "Triggers",
+        "Parent", "Strategy", "$type", "$id", "$ref",
+    };
+
+    /// <summary>
+    /// #2168 — change settings on the LIVE run, NINA-style. Items read their fields when they
+    /// start (TakeExposure builds its capture from them per frame; a loop reads its count at
+    /// every check), so setting the live object is enough: the frame in hand keeps its values,
+    /// every later step uses the new ones, and finished counts stay. Applied all-or-nothing;
+    /// a value the item's own validation rejects puts every old value back.
+    /// </summary>
+    public Task<SequenceLiveEditResult> SetRunFieldsAsync(Guid id, SequenceRunFieldsRequestDto request, string? idempotencyKey, CancellationToken ct) {
+        _unattendedShutdown?.NotifyUserActivity("sequencer.live_edit");
+        if (request?.Changes is not { Count: > 0 } changes) {
+            return Task.FromResult(new SequenceLiveEditResult(SequenceLiveEditOutcome.InvalidItem, "no field changes were sent"));
+        }
+        return MutateRunAsync(id, "fields", idempotencyKey, run => {
+            var undo = new List<(object Target, PropertyInfo Prop, object? Old)>();
+            var baseline = new Dictionary<object, List<string>>(ReferenceEqualityComparer.Instance);
+            (SequenceLiveEditResult?, ISequenceItem?) Refuse(SequenceLiveEditOutcome outcome, string reason) {
+                RestoreFields(undo);
+                return (new SequenceLiveEditResult(outcome, reason), null);
+            }
+            foreach (var change in changes) {
+                var (target, pathError) = ResolveFieldTarget(run, change);
+                if (pathError is not null) {
+                    RestoreFields(undo);
+                    return (pathError, null);
+                }
+                var key = change.Key ?? string.Empty;
+                var prop = RunOwnedFields.Contains(key) ? null : FindSettingProperty(target!.GetType(), key);
+                if (prop is null) {
+                    return Refuse(SequenceLiveEditOutcome.InvalidItem, $"{key} can't be changed while the run is going.");
+                }
+                if (!TryReadFieldValue(change.Value, prop.PropertyType, out var value)) {
+                    return Refuse(SequenceLiveEditOutcome.InvalidItem, $"{key} can't be set to {change.Value.GetRawText()}.");
+                }
+                if (target is IValidatable validatable && !baseline.ContainsKey(target)) {
+                    validatable.Validate();
+                    baseline[target] = [.. validatable.Issues];
+                }
+                undo.Add((target!, prop, prop.GetValue(target)));
+                prop.SetValue(target, value);
+            }
+            // Only a problem the change brought in refuses it: a camera that is off right now
+            // already fails Validate and is not the edit's fault.
+            foreach (var (target, before) in baseline) {
+                var validatable = (IValidatable)target;
+                validatable.Validate();
+                var fresh = validatable.Issues.FirstOrDefault(i => !before.Contains(i));
+                if (fresh is not null) {
+                    var keys = string.Join(", ", changes.Select(c => c.Key).Distinct());
+                    RestoreFields(undo);
+                    foreach (var t in baseline.Keys) ((IValidatable)t).Validate();
+                    return (new SequenceLiveEditResult(SequenceLiveEditOutcome.InvalidItem, $"{keys} not changed: {fresh}"), null);
+                }
+            }
+            return (null, null);
+        }, ct);
+    }
+
+    /// <summary>The object a field change addresses: the node at the path, or one of its conditions or triggers.</summary>
+    private static (object? Target, SequenceLiveEditResult? Error) ResolveFieldTarget(RunState run, SequenceRunFieldChangeDto change) {
+        ISequenceItem node;
+        if (change.Path is null || change.Path.Count == 0) {
+            node = run.BodyTop!;
+        } else {
+            var resolved = ResolveItem(run, change.Path, out _);
+            if (resolved.Error is not null) return (null, resolved.Error);
+            node = resolved.Item!;
+        }
+        var target = change.Target ?? "item";
+        if (target == "item") return (node, null);
+        if (target is not ("condition" or "trigger")) {
+            return (null, new SequenceLiveEditResult(SequenceLiveEditOutcome.InvalidPath, $"unknown field target '{target}' (item, condition or trigger)"));
+        }
+        List<object>? list = target == "condition"
+            ? (node as OpenAstroAra.Sequencer.Conditions.IConditionable)?.Conditions.Cast<object>().ToList()
+            : (node as OpenAstroAra.Sequencer.Trigger.ITriggerable)?.GetTriggersSnapshot().Cast<object>().ToList();
+        if (list is null) {
+            return (null, new SequenceLiveEditResult(SequenceLiveEditOutcome.InvalidPath, $"the addressed item has no {target}s"));
+        }
+        var index = change.Index ?? -1;
+        if (index < 0 || index >= list.Count) {
+            return (null, new SequenceLiveEditResult(SequenceLiveEditOutcome.InvalidPath,
+                $"{target} index {index} is out of range (the item has {list.Count})"));
+        }
+        return (list[index], null);
+    }
+
+    /// <summary>A public, writable setting the stored body carries under <paramref name="key"/>
+    /// (a Json.NET <c>[JsonProperty]</c>), of a plain value type. Most-derived declaration wins
+    /// (a container re-declares <c>Name</c>).</summary>
+    private static PropertyInfo? FindSettingProperty(Type type, string key) {
+        for (var t = type; t is not null; t = t.BaseType) {
+            foreach (var prop in t.GetProperties(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly)) {
+                var attr = prop.GetCustomAttribute<Newtonsoft.Json.JsonPropertyAttribute>();
+                if (attr is null || (attr.PropertyName ?? prop.Name) != key) continue;
+                return prop.GetSetMethod() is not null && prop.GetIndexParameters().Length == 0 && IsSettingType(prop.PropertyType)
+                    ? prop : null;
+            }
+        }
+        return null;
+    }
+
+    private static bool IsSettingType(Type type) {
+        var t = Nullable.GetUnderlyingType(type) ?? type;
+        return t.IsPrimitive || t.IsEnum || t == typeof(string) || t == typeof(decimal)
+            || t == typeof(DateTime) || t == typeof(DateTimeOffset) || t == typeof(TimeSpan)
+            || t == typeof(OpenAstroAra.Core.Model.Equipment.BinningMode);
+    }
+
+    private static bool TryReadFieldValue(JsonElement raw, Type type, out object? value) {
+        value = null;
+        if (raw.ValueKind == JsonValueKind.Undefined) return false;
+        try {
+            var token = Newtonsoft.Json.Linq.JToken.Parse(raw.GetRawText());
+            if (token is Newtonsoft.Json.Linq.JObject obj) {
+                obj.Remove("$type");
+                obj.Remove("$id");
+            }
+            if (token.Type == Newtonsoft.Json.Linq.JTokenType.Null) {
+                if (type.IsValueType && Nullable.GetUnderlyingType(type) is null) return false;
+                return true;
+            }
+            value = token.ToObject(type);
+            return value is not null;
+        } catch (Exception ex) when (ex is Newtonsoft.Json.JsonException or ArgumentException or FormatException
+                                         or InvalidCastException or OverflowException) {
+            return false;
+        }
+    }
+
+    private static void RestoreFields(List<(object Target, PropertyInfo Prop, object? Old)> undo) {
+        for (var i = undo.Count - 1; i >= 0; i--) {
+            undo[i].Prop.SetValue(undo[i].Target, undo[i].Old);
+        }
+        undo.Clear();
     }
 
     /// <summary>

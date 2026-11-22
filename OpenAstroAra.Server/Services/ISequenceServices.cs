@@ -215,6 +215,11 @@ public interface ISequencerService {
     /// <summary>§38.9 — reorder a not-yet-started item within its parent, to a
     /// position strictly after the parent's last started item.</summary>
     Task<SequenceLiveEditResult> MoveRunItemAsync(Guid id, SequenceRunItemMoveRequestDto request, string? idempotencyKey, CancellationToken ct);
+
+    /// <summary>#2168 — change settings (exposure time, a loop's count, …) on the live run and
+    /// the stored body. Steps that start later use the new values; the frame in hand keeps its
+    /// own, and run counters (frames taken, loops done) are never written. All-or-nothing.</summary>
+    Task<SequenceLiveEditResult> SetRunFieldsAsync(Guid id, SequenceRunFieldsRequestDto request, string? idempotencyKey, CancellationToken ct);
 }
 
 /// <summary>Templates per §38.6 / §38.7 — built-ins + user-saved.</summary>

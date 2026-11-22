@@ -250,6 +250,23 @@ public sealed record SequenceRunItemMoveRequestDto(
     IReadOnlyList<int> Path,
     int NewIndex);
 
+/// <summary>POST /api/v1/sequences/{id}/run/fields body — #2168: change settings on the LIVE
+/// run (and the stored body) while it runs or is paused, NINA-style: every step that starts
+/// after the change uses the new value; the frame in hand and finished counts are kept.
+/// Applied all-or-nothing.</summary>
+public sealed record SequenceRunFieldsRequestDto(IReadOnlyList<SequenceRunFieldChangeDto> Changes);
+
+/// <summary>One field change. <c>Path</c> addresses a node like the other live edits (empty =
+/// the body's top container). <c>Target</c>: <c>item</c> (the node itself), <c>condition</c> or
+/// <c>trigger</c> (then <c>Index</c> picks it from the node's list). <c>Key</c> is the field's
+/// name in the stored body; <c>Value</c> its new JSON value.</summary>
+public sealed record SequenceRunFieldChangeDto(
+    IReadOnlyList<int> Path,
+    string Target,
+    int? Index,
+    string Key,
+    System.Text.Json.JsonElement Value);
+
 /// <summary>POST /api/v1/sequences/{id}/autoflats body — §48.1: the user's answer to
 /// the "capture calibration tonight?" prompt. Choice: <c>panel_at_end</c> |
 /// <c>sky_at_twilight</c> | <c>later</c>. Remember=true persists the choice as the

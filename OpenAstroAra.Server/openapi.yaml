@@ -3403,6 +3403,47 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
+  '/api/v1/sequences/{id}/run/fields':
+    post:
+      tags:
+        - Sequences
+      operationId: SetRunFields
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: Idempotency-Key
+          in: header
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SequenceRunFieldsRequestDto'
+        required: true
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SequenceDto'
+        '409':
+          description: Conflict
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '422':
+          description: Unprocessable Entity
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
   '/api/v1/sequences/{id}/abort':
     post:
       tags:
@@ -16617,6 +16658,45 @@ components:
           type:
             - 'null'
             - boolean
+    SequenceRunFieldChangeDto:
+      required:
+        - path
+        - target
+        - index
+        - key
+        - value
+      type: object
+      properties:
+        path:
+          type: array
+          items:
+            pattern: '^-?(?:0|[1-9]\d*)$'
+            type:
+              - integer
+              - string
+            format: int32
+        target:
+          type: string
+        index:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - 'null'
+            - integer
+            - string
+          format: int32
+        key:
+          type: string
+        value:
+          $ref: '#/components/schemas/JsonElement'
+    SequenceRunFieldsRequestDto:
+      required:
+        - changes
+      type: object
+      properties:
+        changes:
+          type: array
+          items:
+            $ref: '#/components/schemas/SequenceRunFieldChangeDto'
     SequenceRunItemAddRequestDto:
       required:
         - parent_path

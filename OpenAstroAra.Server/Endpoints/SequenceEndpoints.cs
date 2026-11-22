@@ -283,6 +283,16 @@ public static class SequenceEndpoints {
            .ProducesProblem(StatusCodes.Status422UnprocessableEntity)
            .WithName("MoveRunItem");
 
+        // #2168 — change settings on the live run (NINA: later steps use the new values).
+        seq.MapPost("/{id:guid}/run/fields",
+                async (Guid id, [FromBody] SequenceRunFieldsRequestDto request, [FromHeader(Name = "Idempotency-Key")] string? key, ISequencerService svc, CancellationToken ct) =>
+                    LiveEditResultToHttp(id, await svc.SetRunFieldsAsync(id, request, key, ct)))
+           .Accepts<SequenceRunFieldsRequestDto>("application/json")
+           .Produces<SequenceDto>(StatusCodes.Status200OK)
+           .ProducesProblem(StatusCodes.Status409Conflict)
+           .ProducesProblem(StatusCodes.Status422UnprocessableEntity)
+           .WithName("SetRunFields");
+
         seq.MapPost("/{id:guid}/abort",
                 async (Guid id, [FromHeader(Name = "Idempotency-Key")] string? key, ISequencerService svc, CancellationToken ct) =>
                     Results.Accepted(value: await svc.AbortAsync(id, key, ct)))
