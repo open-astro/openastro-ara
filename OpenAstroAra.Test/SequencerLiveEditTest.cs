@@ -13,13 +13,16 @@
 #endregion "copyright"
 
 using NUnit.Framework;
+using OpenAstroAra.Sequencer.Conditions;
 using OpenAstroAra.Sequencer.Container;
+using OpenAstroAra.Sequencer.SequenceItem.Imaging;
 using OpenAstroAra.Sequencer.SequenceItem.Utility;
 using OpenAstroAra.Sequencer.Serialization;
 using OpenAstroAra.Server.Contracts;
 using OpenAstroAra.Server.Contracts.WsEvents;
 using OpenAstroAra.Server.Services;
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
 using System.Threading;
@@ -463,6 +466,314 @@ namespace OpenAstroAra.Test {
             await WaitForTerminalAsync(svc, id);
         }
 
+        // ── #2168 — field edits on the live run (NINA: later steps use the new values) ──────────
+
+        /// <summary>A TakeExposure prototype on mocks that records every frame's settings. The first
+        /// frame waits for <see cref="ReleaseFirst"/>, so a test can edit or pause mid-frame.</summary>
+        private sealed class ExposureRig {
+            public readonly System.Collections.Concurrent.ConcurrentQueue<(double Time, int Gain)> Frames = new();
+            public readonly TaskCompletionSource FirstStarted = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            public readonly TaskCompletionSource ReleaseFirst = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            public readonly HeadlessSequencerFactory Factory;
+            public volatile bool CameraConnected = true;
+
+            public ExposureRig(OpenAstroAra.Profile.Interfaces.IProfileService? profile = null,
+                    OpenAstroAra.Equipment.Interfaces.Mediator.IFilterWheelMediator? wheel = null) {
+                Factory = HeadlessSequencerFactory.WithDefaults(filterWheelMediator: wheel, profileService: profile);
+                var camera = new Moq.Mock<OpenAstroAra.Equipment.Interfaces.Mediator.ICameraMediator>();
+                camera.Setup(c => c.GetInfo()).Returns(() => new OpenAstroAra.Equipment.Equipment.MyCamera.CameraInfo { Connected = CameraConnected });
+                var imaging = new Moq.Mock<OpenAstroAra.Equipment.Interfaces.Mediator.IImagingMediator>();
+                imaging.Setup(m => m.CaptureImage(Moq.It.IsAny<OpenAstroAra.Equipment.Model.CaptureSequence>(), Moq.It.IsAny<CancellationToken>(),
+                        Moq.It.IsAny<IProgress<OpenAstroAra.Core.Model.ApplicationStatus>?>(), Moq.It.IsAny<string>()))
+                    .Returns(async (OpenAstroAra.Equipment.Model.CaptureSequence s, CancellationToken _, IProgress<OpenAstroAra.Core.Model.ApplicationStatus>? _, string _) => {
+                        var first = Frames.IsEmpty;
+                        Frames.Enqueue((s.ExposureTime, s.Gain));
+                        if (first) {
+                            FirstStarted.TrySetResult();
+                            await ReleaseFirst.Task;
+                        }
+                        return new Moq.Mock<OpenAstroAra.Image.Interfaces.IExposureData>().Object;
+                    });
+                var stock = Factory.Items.OfType<TakeExposure>().ToList();
+                foreach (var s in stock) Factory.Items.Remove(s);
+                Factory.Items.Add(new TakeExposure(camera.Object, imaging.Object));
+            }
+
+            /// <summary>Body: one "Imaging" block looping <paramref name="iterations"/> × a 5 s frame,
+            /// then whatever <paramref name="after"/> adds to the top.</summary>
+            public JsonElement Body(int iterations, Action<SequentialContainer>? after = null) => BuildBodyWith(Factory, root => {
+                var block = new SequentialContainer { Name = "Imaging" };
+                block.Add(new LoopCondition { Iterations = iterations });
+                var exposure = (TakeExposure)Factory.Items.OfType<TakeExposure>().First().Clone();
+                exposure.ExposureTime = 5;
+                block.Add(exposure);
+                root.Add(block);
+                after?.Invoke(root);
+            });
+
+            public (SequencerService Svc, RecordingSequenceStore Store) Service(Guid id, int iterations, Action<SequentialContainer>? after = null) {
+                var store = new RecordingSequenceStore(id, Body(iterations, after));
+                var svc = new SequencerService(new SequenceBodyDeserializer(Factory), ws: null, sequencesResolver: () => store, checkpoint: null);
+                return (svc, store);
+            }
+        }
+
+        private static readonly double[] FiveThen180Twice = [5.0, 180.0, 180.0];
+        private static readonly double[] FiveThen180 = [5.0, 180.0];
+
+        private static SequenceRunFieldChangeDto ExposureField(string key, object value) =>
+            new(Path: [0, 0], Target: "item", Index: null, Key: key, Value: JsonSerializer.SerializeToElement(value));
+
+        private static SequenceRunFieldsRequestDto Fields(params SequenceRunFieldChangeDto[] changes) => new(changes);
+
+        private static async Task WaitForStateAsync(SequencerService svc, Guid id, SequenceRunState state) {
+            for (var i = 0; i < 250; i++) {
+                if ((await svc.GetRunStateAsync(id, CancellationToken.None))?.State == state) return;
+                await Task.Delay(20);
+            }
+            Assert.Fail($"run never reached {state}");
+        }
+
+        /// <summary>Pause after this frame, armed during frame 1; the frame finishes and the run parks at
+        /// the boundary. A plain Pause would stop frame 1 and take it again on Resume (#2172).</summary>
+        private static async Task PauseAfterFirstFrameAsync(SequencerService svc, Guid id, ExposureRig rig) {
+            await svc.StartAsync(id, StartReq, null, CancellationToken.None);
+            await rig.FirstStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            await svc.PauseAsync(id, afterFrame: true, null, CancellationToken.None);
+            rig.ReleaseFirst.TrySetResult();
+            await WaitForStateAsync(svc, id, SequenceRunState.Paused);
+        }
+
+        [Test]
+        public async Task Changed_exposure_time_while_paused_is_used_by_later_frames() {
+            // The rig, 2026-11-21: paused Imaging ×60 at 5 s, set 180 s, resumed — frames stayed 5 s.
+            var id = Guid.NewGuid();
+            var rig = new ExposureRig();
+            var (svc, _) = rig.Service(id, iterations: 3);
+            await PauseAfterFirstFrameAsync(svc, id, rig);
+
+            var result = await svc.SetRunFieldsAsync(id, Fields(ExposureField("ExposureTime", 180.0)), null, CancellationToken.None);
+            Assert.That(result.Outcome, Is.EqualTo(SequenceLiveEditOutcome.Applied), result.Reason);
+
+            await svc.ResumeAsync(id, null, null, CancellationToken.None);
+            var terminal = await WaitForTerminalAsync(svc, id);
+            Assert.That(terminal!.State, Is.EqualTo(SequenceRunState.Completed));
+            Assert.That(rig.Frames.Select(f => f.Time), Is.EqualTo(FiveThen180Twice),
+                "the finished frame stays 5 s, the loop's later frames use 180 s, and the loop still runs 3 times");
+        }
+
+        [Test]
+        public async Task Changed_exposure_time_while_running_spares_the_frame_in_hand() {
+            var id = Guid.NewGuid();
+            var rig = new ExposureRig();
+            var (svc, _) = rig.Service(id, iterations: 2);
+            await svc.StartAsync(id, StartReq, null, CancellationToken.None);
+            await rig.FirstStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
+
+            var result = await svc.SetRunFieldsAsync(id, Fields(ExposureField("ExposureTime", 180.0)), null, CancellationToken.None);
+            Assert.That(result.Outcome, Is.EqualTo(SequenceLiveEditOutcome.Applied), result.Reason);
+            rig.ReleaseFirst.TrySetResult();
+
+            await WaitForTerminalAsync(svc, id);
+            Assert.That(rig.Frames.Select(f => f.Time), Is.EqualTo(FiveThen180));
+        }
+
+        [Test]
+        public async Task Loop_iterations_edit_extends_the_running_loop() {
+            var id = Guid.NewGuid();
+            var rig = new ExposureRig();
+            var (svc, _) = rig.Service(id, iterations: 2);
+            await PauseAfterFirstFrameAsync(svc, id, rig);
+
+            var result = await svc.SetRunFieldsAsync(id, Fields(new SequenceRunFieldChangeDto(
+                Path: [0], Target: "condition", Index: 0, Key: "Iterations", Value: JsonSerializer.SerializeToElement(4))),
+                null, CancellationToken.None);
+            Assert.That(result.Outcome, Is.EqualTo(SequenceLiveEditOutcome.Applied), result.Reason);
+
+            await svc.ResumeAsync(id, null, null, CancellationToken.None);
+            await WaitForTerminalAsync(svc, id);
+            Assert.That(rig.Frames, Has.Count.EqualTo(4), "the loop's finished frame counts toward the new total of 4");
+        }
+
+        [Test]
+        public async Task Field_edit_is_persisted_to_the_stored_body() {
+            var id = Guid.NewGuid();
+            var rig = new ExposureRig();
+            var (svc, store) = rig.Service(id, iterations: 3);
+            await PauseAfterFirstFrameAsync(svc, id, rig);
+
+            var result = await svc.SetRunFieldsAsync(id, Fields(ExposureField("ExposureTime", 180.0)), null, CancellationToken.None);
+            Assert.That(result.Outcome, Is.EqualTo(SequenceLiveEditOutcome.Applied), result.Reason);
+
+            var raw = store.ReplacedBody!.Value.GetRawText();
+            Assert.That(raw, Does.Contain("\"ExposureTime\":180"), "the stored file matches the running plan");
+            Assert.That(raw, Does.Contain("\"ExposureCount\":1"), "the run's own frame count is kept, not reset");
+            await svc.StopAsync(id, null, CancellationToken.None);
+            await WaitForTerminalAsync(svc, id);
+        }
+
+        [Test]
+        public async Task Invalid_value_is_refused_and_rolled_back() {
+            var id = Guid.NewGuid();
+            var rig = new ExposureRig();
+            var (svc, store) = rig.Service(id, iterations: 2);
+            await PauseAfterFirstFrameAsync(svc, id, rig);
+
+            // All or nothing: the good gain change rides with the bad exposure and is undone too.
+            var result = await svc.SetRunFieldsAsync(id, Fields(ExposureField("Gain", 100), ExposureField("ExposureTime", 0.0)),
+                null, CancellationToken.None);
+            Assert.That(result.Outcome, Is.EqualTo(SequenceLiveEditOutcome.InvalidItem));
+            Assert.That(result.Reason, Does.Contain("ExposureTime"));
+            Assert.That(store.ReplacedBody, Is.Null, "nothing persisted for a refused edit");
+
+            await svc.ResumeAsync(id, null, null, CancellationToken.None);
+            await WaitForTerminalAsync(svc, id);
+            Assert.That(rig.Frames, Is.EqualTo(new[] { (5.0, -1), (5.0, -1) }), "both old values came back");
+        }
+
+        [Test]
+        public async Task A_problem_already_there_does_not_refuse_the_edit() {
+            // The camera dropped during the pause: TakeExposure already fails Validate, and that is
+            // not the edit's fault. The new exposure time is still taken.
+            var id = Guid.NewGuid();
+            var rig = new ExposureRig();
+            var (svc, store) = rig.Service(id, iterations: 2);
+            await PauseAfterFirstFrameAsync(svc, id, rig);
+            rig.CameraConnected = false;
+
+            var result = await svc.SetRunFieldsAsync(id, Fields(ExposureField("ExposureTime", 180.0)), null, CancellationToken.None);
+            Assert.That(result.Outcome, Is.EqualTo(SequenceLiveEditOutcome.Applied), result.Reason);
+            Assert.That(store.ReplacedBody!.Value.GetRawText(), Does.Contain("\"ExposureTime\":180"));
+            await svc.StopAsync(id, null, CancellationToken.None);
+            await WaitForTerminalAsync(svc, id);
+        }
+
+        [Test]
+        public async Task Filter_change_uses_the_wheel_filter_of_that_name() {
+            // NINA lets a pending Switch Filter change mid-run. The client sends a copy of the filter;
+            // the run must use the profile's own Ha (its wheel position), not the copy.
+            var profile = new HeadlessProfileService();
+            var filters = profile.ActiveProfile.FilterWheelSettings.FilterWheelFilters;
+            filters.Add(new OpenAstroAra.Core.Model.Equipment.FilterInfo("L", 0, 0));
+            filters.Add(new OpenAstroAra.Core.Model.Equipment.FilterInfo("Ha", 0, 4));
+            var wheel = new Moq.Mock<OpenAstroAra.Equipment.Interfaces.Mediator.IFilterWheelMediator>();
+            wheel.Setup(w => w.GetInfo()).Returns(new OpenAstroAra.Equipment.Equipment.MyFilterWheel.FilterWheelInfo { Connected = true });
+            var changedTo = new System.Collections.Concurrent.ConcurrentQueue<OpenAstroAra.Core.Model.Equipment.FilterInfo>();
+            wheel.Setup(w => w.ChangeFilter(Moq.It.IsAny<OpenAstroAra.Core.Model.Equipment.FilterInfo>(),
+                    Moq.It.IsAny<IProgress<OpenAstroAra.Core.Model.ApplicationStatus>?>(), Moq.It.IsAny<CancellationToken>()))
+                .Returns((OpenAstroAra.Core.Model.Equipment.FilterInfo f, IProgress<OpenAstroAra.Core.Model.ApplicationStatus>? _, CancellationToken _) => {
+                    changedTo.Enqueue(f);
+                    return Task.FromResult(f);
+                });
+            var id = Guid.NewGuid();
+            var rig = new ExposureRig(profile, wheel.Object);
+            var (svc, _) = rig.Service(id, iterations: 1, after: root => {
+                var sw = (OpenAstroAra.Sequencer.SequenceItem.FilterWheel.SwitchFilter)rig.Factory.Items
+                    .OfType<OpenAstroAra.Sequencer.SequenceItem.FilterWheel.SwitchFilter>().First().Clone();
+                sw.Filter = filters[0];
+                root.Add(sw);
+            });
+            await PauseAfterFirstFrameAsync(svc, id, rig);
+
+            var sent = JsonSerializer.SerializeToElement(new Dictionary<string, object> {
+                ["$type"] = "OpenAstroAra.Core.Model.Equipment.FilterInfo, OpenAstroAra.Core",
+                ["_name"] = "Ha", ["_focusOffset"] = 0, ["_position"] = 4,
+            });
+            var result = await svc.SetRunFieldsAsync(id, Fields(new SequenceRunFieldChangeDto(
+                Path: [1], Target: "item", Index: null, Key: "Filter", Value: sent)), null, CancellationToken.None);
+            Assert.That(result.Outcome, Is.EqualTo(SequenceLiveEditOutcome.Applied), result.Reason);
+
+            await svc.ResumeAsync(id, null, null, CancellationToken.None);
+            await WaitForTerminalAsync(svc, id);
+            Assert.That(changedTo, Has.Count.EqualTo(1));
+            Assert.That(changedTo.Single(), Is.SameAs(filters[1]), "the profile's own Ha, not the client's copy");
+        }
+
+        [Test]
+        public async Task Filter_the_wheel_does_not_have_is_refused() {
+            var profile = new HeadlessProfileService();
+            var filters = profile.ActiveProfile.FilterWheelSettings.FilterWheelFilters;
+            filters.Add(new OpenAstroAra.Core.Model.Equipment.FilterInfo("L", 0, 0));
+            var id = Guid.NewGuid();
+            var rig = new ExposureRig(profile);
+            var (svc, store) = rig.Service(id, iterations: 1, after: root => {
+                var sw = (OpenAstroAra.Sequencer.SequenceItem.FilterWheel.SwitchFilter)rig.Factory.Items
+                    .OfType<OpenAstroAra.Sequencer.SequenceItem.FilterWheel.SwitchFilter>().First().Clone();
+                sw.Filter = filters[0];
+                root.Add(sw);
+            });
+            await PauseAfterFirstFrameAsync(svc, id, rig);
+
+            var sent = JsonSerializer.SerializeToElement(new Dictionary<string, object> { ["_name"] = "OIII", ["_position"] = 7 });
+            var result = await svc.SetRunFieldsAsync(id, Fields(new SequenceRunFieldChangeDto(
+                Path: [1], Target: "item", Index: null, Key: "Filter", Value: sent)), null, CancellationToken.None);
+            Assert.That(result.Outcome, Is.EqualTo(SequenceLiveEditOutcome.InvalidItem));
+            Assert.That(result.Reason, Does.Contain("OIII isn't one of the filter wheel's filters"));
+            Assert.That(store.ReplacedBody, Is.Null);
+            await svc.StopAsync(id, null, CancellationToken.None);
+            await WaitForTerminalAsync(svc, id);
+        }
+
+        [Test]
+        public async Task Field_edit_against_an_older_copy_is_refused() {
+            // Positions come from the client's copy. Once someone else adds, removes or moves an
+            // item, [0, 0] may be a different item, so nothing is changed until the client reloads.
+            var id = Guid.NewGuid();
+            var rig = new ExposureRig();
+            var (svc, store) = rig.Service(id, iterations: 3);
+            await PauseAfterFirstFrameAsync(svc, id, rig);
+            var read = store.Modified;
+            var other = await svc.AddRunItemAsync(id, new SequenceRunItemAddRequestDto(ParentPath: [], Index: null,
+                Item: Fragment("added elsewhere")), null, CancellationToken.None);
+            Assert.That(other.Outcome, Is.EqualTo(SequenceLiveEditOutcome.Applied), other.Reason);
+            var stale = store.ReplacedBody;
+
+            var refused = await svc.SetRunFieldsAsync(id, new SequenceRunFieldsRequestDto(
+                [ExposureField("ExposureTime", 180.0)], BaseModifiedUtc: read), null, CancellationToken.None);
+            Assert.That(refused.Outcome, Is.EqualTo(SequenceLiveEditOutcome.PlanChanged));
+            Assert.That(store.ReplacedBody, Is.EqualTo(stale), "nothing persisted");
+
+            var fresh = await svc.SetRunFieldsAsync(id, new SequenceRunFieldsRequestDto(
+                [ExposureField("ExposureTime", 180.0)], BaseModifiedUtc: store.Modified), null, CancellationToken.None);
+            Assert.That(fresh.Outcome, Is.EqualTo(SequenceLiveEditOutcome.Applied), fresh.Reason);
+            await svc.StopAsync(id, null, CancellationToken.None);
+            await WaitForTerminalAsync(svc, id);
+        }
+
+        [Test]
+        public async Task Run_counter_fields_are_refused() {
+            var id = Guid.NewGuid();
+            var rig = new ExposureRig();
+            var (svc, store) = rig.Service(id, iterations: 2);
+            await PauseAfterFirstFrameAsync(svc, id, rig);
+
+            var count = await svc.SetRunFieldsAsync(id, Fields(ExposureField("ExposureCount", 0)), null, CancellationToken.None);
+            var done = await svc.SetRunFieldsAsync(id, Fields(new SequenceRunFieldChangeDto(
+                Path: [0], Target: "condition", Index: 0, Key: "CompletedIterations", Value: JsonSerializer.SerializeToElement(0))),
+                null, CancellationToken.None);
+
+            Assert.That(count.Outcome, Is.EqualTo(SequenceLiveEditOutcome.InvalidItem));
+            Assert.That(count.Reason, Does.Contain("can't be changed while the run is going"));
+            Assert.That(done.Outcome, Is.EqualTo(SequenceLiveEditOutcome.InvalidItem));
+            Assert.That(store.ReplacedBody, Is.Null);
+            await svc.ResumeAsync(id, null, null, CancellationToken.None);
+            await WaitForTerminalAsync(svc, id);
+            Assert.That(rig.Frames, Has.Count.EqualTo(2), "the loop's count was not reset");
+        }
+
+        [Test]
+        public async Task Field_edit_on_a_terminal_run_is_refused() {
+            var id = Guid.NewGuid();
+            var (svc, _) = BuildService(id, BuildBody(c => c.Items.Add(new Annotation { Name = "quick" })));
+            await svc.StartAsync(id, StartReq, null, CancellationToken.None);
+            await WaitForTerminalAsync(svc, id);
+
+            var result = await svc.SetRunFieldsAsync(id, Fields(new SequenceRunFieldChangeDto(
+                Path: [], Target: "item", Index: null, Key: "Name", Value: JsonSerializer.SerializeToElement("late"))),
+                null, CancellationToken.None);
+            Assert.That(result.Outcome, Is.EqualTo(SequenceLiveEditOutcome.NoActiveRun));
+        }
+
         /// <summary>Serialize with a specific factory (for bodies referencing custom test items).</summary>
         private static JsonElement BuildBodyWith(
                 HeadlessSequencerFactory factory, Action<SequentialContainer> populate) {
@@ -499,21 +810,24 @@ namespace OpenAstroAra.Test {
 
             public JsonElement? ReplacedBody { get; private set; }
             public bool FailReplacements { get; set; }
+            /// <summary>The stored record's modified time; every accepted live edit moves it on a second.</summary>
+            public DateTimeOffset Modified { get; set; } = DateTimeOffset.UnixEpoch;
 
             public Task<SequenceDto?> GetAsync(Guid id, CancellationToken ct) {
                 if (id != _id) return Task.FromResult<SequenceDto?>(null);
                 return Task.FromResult<SequenceDto?>(new SequenceDto(
                     Id: id, Name: "Test", Description: null,
-                    CreatedUtc: DateTimeOffset.UnixEpoch, ModifiedUtc: DateTimeOffset.UnixEpoch,
-                    Body: _body, TemplateOrigin: null));
+                    CreatedUtc: DateTimeOffset.UnixEpoch, ModifiedUtc: Modified,
+                    Body: ReplacedBody ?? _body, TemplateOrigin: null));
             }
 
             public Task<SequenceDto?> ReplaceRunBodyAsync(Guid id, JsonElement body, CancellationToken ct) {
                 if (id != _id || FailReplacements) return Task.FromResult<SequenceDto?>(null);
                 ReplacedBody = body;
+                Modified = Modified.AddSeconds(1);
                 return Task.FromResult<SequenceDto?>(new SequenceDto(
                     Id: id, Name: "Test", Description: null,
-                    CreatedUtc: DateTimeOffset.UnixEpoch, ModifiedUtc: DateTimeOffset.UnixEpoch,
+                    CreatedUtc: DateTimeOffset.UnixEpoch, ModifiedUtc: Modified,
                     Body: body, TemplateOrigin: null));
             }
 

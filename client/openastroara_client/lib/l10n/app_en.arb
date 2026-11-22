@@ -9291,5 +9291,11 @@
   "refusalPoseSyncNotOffered": "That Sync is no longer on offer. Check the position again, then tap Sync.",
   "@refusalPoseSyncNotOffered": {"description": "Refusal (pose-sync-not-offered, #2173): the plate-solve Sync with no current mismatch offer"},
   "refusalMountNotConnected": "No mount is connected.",
-  "@refusalMountNotConnected": {"description": "Refusal (mount-not-connected, #2173): the plate-solve check with no mount connected"}
+  "@refusalMountNotConnected": {"description": "Refusal (mount-not-connected, #2173): the plate-solve check with no mount connected"},
+  "sequencerRunSaveRefused": "Your changes couldn't be saved, so the run didn't start: {reason}",
+  "@sequencerRunSaveRefused": {"description": "Sequencer Run (#2168): the daemon refused the save of unsaved edits made before Run; {reason} is its sentence", "placeholders": {"reason": {"type": "String"}}},
+  "sequencerRunSaveInvalid": "the sequence is invalid.",
+  "@sequencerRunSaveInvalid": {"description": "Sequencer Run (#2168): the reason when the daemon's refusal had no sentence"},
+  "sequencerRunSaveFailed": "Your changes couldn't be saved, so the run didn't start. Check the connection and try again.",
+  "@sequencerRunSaveFailed": {"description": "Sequencer Run (#2168): saving unsaved edits before Run failed to reach the rig"}
 }

@@ -12518,6 +12518,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'No mount is connected.'**
   String get refusalMountNotConnected;
+
+  /// Sequencer Run (#2168): the daemon refused the save of unsaved edits made before Run; {reason} is its sentence
+  ///
+  /// In en, this message translates to:
+  /// **'Your changes couldn\'t be saved, so the run didn\'t start: {reason}'**
+  String sequencerRunSaveRefused(String reason);
+
+  /// Sequencer Run (#2168): the reason when the daemon's refusal had no sentence
+  ///
+  /// In en, this message translates to:
+  /// **'the sequence is invalid.'**
+  String get sequencerRunSaveInvalid;
+
+  /// Sequencer Run (#2168): saving unsaved edits before Run failed to reach the rig
+  ///
+  /// In en, this message translates to:
+  /// **'Your changes couldn\'t be saved, so the run didn\'t start. Check the connection and try again.'**
+  String get sequencerRunSaveFailed;
 }
 
 class _AppLocalizationsDelegate

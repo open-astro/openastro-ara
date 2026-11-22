@@ -595,7 +595,41 @@ Future<void> preflightAndRunSequence(BuildContext context, ProviderReader read) 
     if (go != true) return;
   }
   if (!context.mounted) return;
+  // #2168 — Run starts what the editor shows: unsaved edits are saved first.
+  // Started from the stored copy, they could never join the run (a running
+  // plan can't take them), and Resume would be stuck behind them.
+  if (!await _saveBeforeRun(context, read) || !context.mounted) return;
   await runSequenceLifecycle(context, read, (api, id) => api.start(id));
+}
+
+/// Save the editor's unsaved edits to the sequence about to run. True when
+/// there was nothing to save or it saved; false (with the reason) when the
+/// daemon refused, so the run doesn't start on the old copy.
+Future<bool> _saveBeforeRun(BuildContext context, ProviderReader read) async {
+  final editor = read(sequenceEditorProvider);
+  final api = read(sequenceApiProvider);
+  final id = read(selectedSequenceIdProvider);
+  if (editor == null || api == null || !editor.isDirty || editor.id != id) {
+    return true;
+  }
+  final messenger = ScaffoldMessenger.of(context);
+  final l = context.l10n;
+  final sent = editor.body;
+  try {
+    final saved = await api.updateSequence(editor.id, body: sent);
+    read(sequenceEditorProvider.notifier)
+        .markSaved(sent, modifiedUtc: saved.modifiedUtc);
+    return true;
+  } on DioException catch (e) {
+    messenger.showSnackBar(SnackBar(
+      content: Text(e.response?.statusCode == 422
+          ? l.sequencerRunSaveRefused(
+              _validationMessage(e) ?? l.sequencerRunSaveInvalid)
+          : l.sequencerRunSaveFailed),
+      backgroundColor: AraColors.accentError,
+    ));
+    return false;
+  }
 }
 
 enum _PreflightChoice { cancel, goToSetup, runAnyway }
@@ -737,10 +771,22 @@ Future<void> _save(BuildContext context, WidgetRef ref) async {
   // api.updateSequence below (canSave already implies a non-null api when Save
   // is tappable on a daemon sequence).
   if (api == null) return;
+  // #2168 — while the run is going (running or paused) the daemon owns the
+  // file: send the changed settings to the live plan instead of a PATCH (which
+  // it refuses, and which would roll back the run's own frame counts).
+  if (editorNotifier.liveRunActive) {
+    busy.setBusy(true);
+    try {
+      await editorNotifier.applyLiveEdits();
+    } finally {
+      busy.setBusy(false);
+    }
+    return;
+  }
   busy.setBusy(true);
   try {
-    await api.updateSequence(editor.id, body: sentBody);
-    editorNotifier.markSaved(sentBody);
+    final saved = await api.updateSequence(editor.id, body: sentBody);
+    editorNotifier.markSaved(sentBody, modifiedUtc: saved.modifiedUtc);
     messenger.showSnackBar(const SnackBar(content: Text('Sequence saved.')));
   } on DioException catch (e) {
     final code = e.response?.statusCode;
@@ -801,8 +847,10 @@ Future<void> _validate(BuildContext context, WidgetRef ref) async {
 void _deleteSelectedItem(
     BuildContext context, WidgetRef ref, NodePath path, String label) {
   final notifier = ref.read(sequenceEditorProvider.notifier);
+  // A live delete goes to the running plan: nothing to undo locally.
+  final live = notifier.liveRunActive;
   notifier.removeNode(path);
-  if (!notifier.canUndo) return;
+  if (live || !notifier.canUndo) return;
   ScaffoldMessenger.of(context).showSnackBar(SnackBar(
     content: Text('Deleted $label'),
     // The default action colour is near-white on the light snackbar.
@@ -972,6 +1020,13 @@ Future<void> promptAndResumeSequence(BuildContext context, ProviderReader read) 
     ),
   );
   if (choice == null || !context.mounted) return; // dismissed — user backed out
+  // #2168 — settings changed during the pause join the run first, so Resume
+  // without Save still uses them. A refusal keeps the run paused (with the
+  // daemon's reason) rather than resuming on the old values.
+  final editor = read(sequenceEditorProvider.notifier);
+  if ((read(sequenceEditorProvider)?.isDirty ?? false) && editor.liveRunActive) {
+    if (!await editor.applyLiveEdits() || !context.mounted) return;
+  }
   await runSequenceLifecycle(
       context,
       read,

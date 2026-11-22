@@ -2066,5 +2066,8 @@
   "poseCheckCouldnt": "Não foi possível verificar a posição",
   "refusalPoseCheckNotNeeded": "A posição da montagem é confiável, ou ainda está sendo lida: não há nada para verificar.",
   "refusalPoseSyncNotOffered": "Esse Sync não está mais disponível. Verifique a posição de novo e depois toque em Sync.",
-  "refusalMountNotConnected": "Nenhuma montagem está conectada."
+  "refusalMountNotConnected": "Nenhuma montagem está conectada.",
+  "sequencerRunSaveRefused": "Não foi possível salvar suas alterações, então a execução não começou: {reason}",
+  "sequencerRunSaveInvalid": "a sequência é inválida.",
+  "sequencerRunSaveFailed": "Não foi possível salvar suas alterações, então a execução não começou. Verifique a conexão e tente de novo."
 }

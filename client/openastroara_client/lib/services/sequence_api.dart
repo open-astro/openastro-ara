@@ -1,10 +1,21 @@
 import 'package:dio/dio.dart';
 
+import '../models/sequence/nina_dom.dart';
 import '../models/sequence/nina_sequence_parser.dart';
 import '../models/sequence/sequence_node.dart';
 import '../models/sequence/sequence_share_export.dart';
 import '../models/sequence/sequence_summary.dart';
 import '../models/server.dart';
+
+/// #2168 — the daemon refused a live setting edit because the plan changed
+/// since the client read it (someone added, removed or moved an item): 409
+/// with the `sequence-plan-changed` problem type.
+bool isPlanChangedError(Object e) {
+  if (e is! DioException || e.response?.statusCode != 409) return false;
+  final data = e.response?.data;
+  final type = data is Map ? data['type'] : null;
+  return type is String && type.endsWith('/sequence-plan-changed');
+}
 
 /// The §38 sequencer operations the state layer depends on. An interface so
 /// tests can supply a pure fake (no Dio); [SequenceApi] is the Dio-backed
@@ -133,6 +144,16 @@ abstract interface class SequenceClient {
   /// [newIndex] within its parent (destination must be after the running
   /// item). Returns the updated detail.
   Future<SequenceDetail> moveRunItem(String id, List<int> path, int newIndex);
+
+  /// #2168 live mid-run edit: change settings (exposure time, a loop's count,
+  /// …) on the RUNNING or paused plan. Steps that start later use the new
+  /// values; the frame in hand keeps its own. All-or-nothing: a refusal
+  /// (409/422 with the daemon's reason) changes nothing. Returns the updated
+  /// detail. [baseModifiedUtc] is the `modified_utc` of the copy the paths
+  /// came from: when the plan changed since, the daemon changes nothing and
+  /// answers 409 `sequence-plan-changed` ([isPlanChangedError]).
+  Future<SequenceDetail> setRunFields(String id, List<FieldChange> changes,
+      {String? baseModifiedUtc});
 
   /// §70.5 share-export: fetch the sequence's shareable manifest
   /// (`POST /{id}/share-export`) so the client can write it to a `.araseq.json`
@@ -463,6 +484,17 @@ class SequenceApi implements SequenceClient {
               options: options,
               data: {'path': path, 'new_index': newIndex}));
 
+  @override
+  Future<SequenceDetail> setRunFields(String id, List<FieldChange> changes,
+          {String? baseModifiedUtc}) =>
+      _liveEdit(
+          id,
+          (url, options) => _dio.post<dynamic>(url, options: options, data: {
+                'changes': [for (final c in changes) c.toJson()],
+                'base_modified_utc': ?baseModifiedUtc,
+              }),
+          endpoint: 'fields');
+
   /// Shared §38.9 live-edit plumbing: build the run-items URL, stamp a fresh
   /// Idempotency-Key (a retry after a lost response replays the original
   /// outcome daemon-side instead of double-applying against a live run), run
@@ -472,13 +504,14 @@ class SequenceApi implements SequenceClient {
   Future<SequenceDetail> _liveEdit(
       String id,
       Future<Response<dynamic>> Function(String url, Options options)
-          send) async {
+          send,
+      {String endpoint = 'items'}) async {
     if (id.isEmpty) {
       throw ArgumentError.value(id, 'id', 'sequence id must not be empty');
     }
     final key = 'le-${DateTime.now().microsecondsSinceEpoch}-'
         '${identityHashCode(this).toRadixString(16)}';
-    final url = '/api/v1/sequences/${Uri.encodeComponent(id)}/run/items';
+    final url = '/api/v1/sequences/${Uri.encodeComponent(id)}/run/$endpoint';
     final options = Options(headers: {'Idempotency-Key': key});
     Response<dynamic> res;
     try {
