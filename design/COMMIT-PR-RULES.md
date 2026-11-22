@@ -344,7 +344,7 @@ Open items for that v2 pass:
 - [ ] **Pre-commit hooks for contributors** — beyond the already-baked settings-registry gate (see "Settings-registry gate" section above — settled, applies to community too): additional lint rules enforcing no `--no-verify`, no force pushes to main/master, license-header presence on new C# files
 - [ ] ~~**`.coderabbit.yaml`**~~ — obsolete: CodeRabbit removed from the org 2026-05-29, and the file is no longer in the tree. The current reviewer runs from `.github/workflows/claude-review.yml`; its rubric lives in that workflow, not in a per-repo config.
 - [ ] **Issue templates** (`.github/ISSUE_TEMPLATE/`) — bug-report (auto-filled with §54 bug-report-submission zip), feature-request (labelled `P1`–`P5` on triage), driver-quirk-report (auto-routed upstream per §52.5)
-- [ ] **Release cadence post-first-release** — semver discipline, RELEASE_NOTES.md entry per release, GitHub Releases pipeline (already in §14.3 CI), how community PRs feed into next-release vs current-release branches
+- [ ] **Release cadence post-first-release** — semver discipline, a `docs/releases/<version>.md` notes file per release, GitHub Releases pipeline (already in §14.3 CI), how community PRs feed into next-release vs current-release branches
 - [ ] **Maintainer workflow** — who reviews, merge criteria, how long PRs sit before stale-bot pings, etc. Light-touch at first (small project); formalize as community grows.
 
 The unifying theme: **community contributors should follow the same discipline the AI follows during the port.** Same PR sizes, same review markers, same registry requirements, same hooks. That keeps `master` clean across the lifetime of the project, not just through Phase 15.

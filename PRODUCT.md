@@ -62,7 +62,7 @@ An open appliance with NINA depth. ARA has ASIAir's "close the laptop, imaging k
 
 - **App icon:** `client/openastroara_client/icon_sources/` (1024 px master plus iOS/Android variants) and `client/openastroara_client/assets/icons/app_icon.png`.
 - **Bundled sky data and audio:** `client/openastroara_client/assets/catalogs/`, `assets/stellarium/` (AGPL-licensed offline sky data) and `assets/audio/`.
-- **Feature documentation:** `docs/USER_GUIDE.md`, `docs/RELEASE_NOTES.md`, `CHANGELOG.md`.
+- **Feature documentation:** `docs/USER_GUIDE.md`, `docs/releases/` (one file per release), `CHANGELOG.md`.
 - **Attribution:** `LICENSE.txt`, `COPYING`, `AUTHORS`, `NOTICE.md`.
 - **Absent, never fabricate:** testimonials, user counts, customers, press, benchmarks, pricing, hardware certifications or endorsements. There is also no tagged release yet.
 
