@@ -264,6 +264,27 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task A_guiding_lost_pause_lets_a_bias_finish_and_count() {
+            // #2169 review — a bias needs no guiding either: it is not a light and is not stopped.
+            var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var (frame, captures, started) = Frame("BIAS", release);
+            var after = new AfterItem();
+            var (block, gate, entered) = Plan(frame, after);
+
+            var run = block.Execute(NoProgress, CancellationToken.None);
+            await started.Task.WaitAsync(Soon);
+            gate.RequestPause(interruptFrames: true);
+
+            release.SetResult();
+            await entered.Task.WaitAsync(Soon);
+            Assert.That((frame.ExposureCount, captures(), after.Ran), Is.EqualTo((1, 1, false)), "the bias filed once; the pause lands after it");
+
+            gate.Resume();
+            await run.WaitAsync(Soon);
+            Assert.That((frame.ExposureCount, captures(), after.Ran), Is.EqualTo((1, 1, true)));
+        }
+
+        [Test]
         public async Task A_pause_lets_a_meridian_flip_finish() {
             var after = new AfterItem();
             var (block, gate, entered) = Plan(after);
