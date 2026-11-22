@@ -1471,7 +1471,11 @@ is connected, straight from its GuideStep events):
       #1311 — the polar alignment residual from the first 300 s of clean
       guiding of each guided run: status measuring (at the start, then every
       30 s of sample) → done | unavailable (reason). pa_error_min_arcmin is a
-      lower bound. A dropped measurement re-publishes the previous result, or
+      lower bound. #2072: frames after a Dec pulse reversal are left out until
+      the star answers the new pulses (at most 60 s), and Dec pulses the star
+      did not answer (one-sided, the star's offset on the far side growing)
+      publish reliable false with no above_align.
+      A dropped measurement re-publishes the previous result, or
       { status: "idle" }. The same object is runtime.pa_residual on
       GET /equipment/guider.
   profile.updated { section }

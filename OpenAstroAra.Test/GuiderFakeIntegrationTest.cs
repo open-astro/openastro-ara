@@ -3235,6 +3235,24 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task Dec_pulses_the_star_does_not_answer_publish_an_unreliable_residual_with_no_verdict_against_polar_align() {
+            // #2072 — every Dec pulse South while the star creeps North of the lock position: the figure is the pulses
+            // (backlash), so it is not reliable and says nothing about the alignment.
+            await using var rig = await StartPaRigAsync().ConfigureAwait(false);
+            rig.Svc.PolarAlignmentLog = new FixedAlignLog(0.9);
+            await rig.Fake.BroadcastAsync(PhdEvents.StartGuiding()).ConfigureAwait(false);
+            for (var frame = 1; frame <= 20; frame++) {
+                await rig.Fake.BroadcastAsync(PhdEvents.GuideStep(0, 0.02 * frame, frame: frame, decDurationMs: 30, decDirection: "South"))
+                    .ConfigureAwait(false);
+            }
+
+            var done = await DoneAsync(rig).ConfigureAwait(false);
+            Assert.That(done.GetProperty("reliable").GetBoolean(), Is.False);
+            Assert.That(done.TryGetProperty("above_align", out var above) ? above.ValueKind : System.Text.Json.JsonValueKind.Null,
+                Is.EqualTo(System.Text.Json.JsonValueKind.Null), "no disagrees verdict");
+        }
+
+        [Test]
         public async Task A_residual_within_the_recent_polar_align_result_stays_reliable() {
             await using var rig = await StartPaRigAsync().ConfigureAwait(false);
             rig.Svc.PolarAlignmentLog = new FixedAlignLog(15.5); // 17.1′ is inside 15.5′ + the 2′ margin
