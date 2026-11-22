@@ -37,7 +37,7 @@ public sealed record PoseSolveSyncRequestDto(string? CheckId);
 /// past ±90° is folded over the pole first. <c>SeparationDegrees</c> is the angle between them, <c>ToleranceDegrees</c>
 /// max(0.5°, 2 × the solve's uncertainty). <c>SideOfPier</c> is what the mount reports (<c>east</c>, <c>west</c>,
 /// <c>unknown</c>), <c>ExpectedSideOfPier</c> the side the solved hour angle gives (null when it gives none: near the
-/// pole, or no site). <c>PositionAngleCheck</c>: <c>agrees</c>, <c>flipped</c> (about 180° from the last trusted solve's
+/// pole, with no site, or within the profile's past-meridian limit plus 1 h of the meridian or of hour angle 12 h). <c>PositionAngleCheck</c>: <c>agrees</c>, <c>flipped</c> (about 180° from the last trusted solve's
 /// position angle for this camera and rotator angle: the other pier side), <c>turned</c> (the camera was turned: no
 /// answer), <c>none_stored</c>. <c>ClearedReason</c> is the reason the trust cleared. <c>Detail</c> is an English
 /// sentence for the log.</para></summary>
