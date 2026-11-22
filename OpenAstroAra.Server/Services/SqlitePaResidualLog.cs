@@ -49,9 +49,9 @@ public sealed class SqlitePaResidualLog : IPaResidualLog {
             INSERT INTO pa_residuals
                 (id, session_id, started_at, completed_at, sample_seconds, frames, drift_arcsec_per_min,
                  pa_error_min_arcmin, uncertainty_arcmin, reliable, hour_angle_hours, dec_deg,
-                 align_error_arcmin, align_ended_at, align_sigma_arcmin)
+                 align_error_arcmin, align_ended_at, align_sigma_arcmin, dec_pulses_unanswered)
             VALUES ($id, $session, $started, $completed, $sample, $frames, $drift,
-                    $error, $uncertainty, $reliable, $ha, $dec, $align, $alignEnded, $alignSigma);
+                    $error, $uncertainty, $reliable, $ha, $dec, $align, $alignEnded, $alignSigma, $unanswered);
             """;
         cmd.Parameters.AddWithValue("$id", result.Id.ToString());
         cmd.Parameters.AddWithValue("$session", result.SessionId is Guid session ? session.ToString() : DBNull.Value);
@@ -68,6 +68,7 @@ public sealed class SqlitePaResidualLog : IPaResidualLog {
         cmd.Parameters.AddWithValue("$align", ToDb(result.AlignErrorArcmin));
         cmd.Parameters.AddWithValue("$alignEnded", result.AlignEndedUtc is DateTimeOffset a ? Iso(a) : DBNull.Value);
         cmd.Parameters.AddWithValue("$alignSigma", ToDb(result.AlignSigmaArcmin));
+        cmd.Parameters.AddWithValue("$unanswered", result.DecPulsesUnanswered ? 1 : 0);
         await cmd.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
     }
 
@@ -77,7 +78,7 @@ public sealed class SqlitePaResidualLog : IPaResidualLog {
         cmd.CommandText = """
             SELECT id, session_id, started_at, completed_at, sample_seconds, frames, drift_arcsec_per_min,
                    pa_error_min_arcmin, uncertainty_arcmin, reliable, hour_angle_hours, dec_deg,
-                   align_error_arcmin, align_ended_at, align_sigma_arcmin
+                   align_error_arcmin, align_ended_at, align_sigma_arcmin, dec_pulses_unanswered
             FROM pa_residuals
             WHERE ($session IS NULL OR session_id = $session)
             ORDER BY completed_at DESC
@@ -107,6 +108,7 @@ public sealed class SqlitePaResidualLog : IPaResidualLog {
                 AlignErrorArcmin: await IsNull(12) ? null : reader.GetDouble(12),
                 AlignEndedUtc: await IsNull(13) ? null : ParseIso(reader.GetString(13)),
                 AlignSigmaArcmin: await IsNull(14) ? null : reader.GetDouble(14),
+                DecPulsesUnanswered: reader.GetInt32(15) != 0,
                 SessionId: await IsNull(1) ? null : Guid.Parse(reader.GetString(1))));
         }
         return rows;

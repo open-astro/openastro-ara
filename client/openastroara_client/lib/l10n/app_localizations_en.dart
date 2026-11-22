@@ -7105,6 +7105,11 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String paResidualChipBacklash(String value) {
+    return 'PA ≥ $value · backlash';
+  }
+
+  @override
   String paResidualChipNoisy(String value) {
     return 'PA ≥ $value · noisy';
   }
@@ -7178,6 +7183,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String paResidualDetailDisagree(String align, String guiding) {
     return 'Polar Align and guiding disagree ($align vs at least $guiding). Either Dec backlash ate guide pulses, so the guiding figure is too high, or the mount shifted since the alignment or its reference was wrong, so the Polar Align figure is too low. Run Polar Align again: about $align again points at backlash, much more points at the mount or the alignment.';
   }
+
+  @override
+  String get paResidualDetailBacklash =>
+      'Dec backlash ate the guide pulses, so this window can\'t measure polar alignment.';
 
   @override
   String get paResidualDetailNoisy =>

@@ -767,6 +767,9 @@ public sealed record GuidingAssistantApplyResultDto(IReadOnlyList<string> Applie
 /// above the result by more than twice their combined 1σ, √(<c>UncertaintyArcmin</c>² + <c>AlignSigmaArcmin</c>²)
 /// (without it, an older row, the fixed 2′ margin stands in for the result's error). Stored with the row
 /// (<c>pa_residuals.align_sigma_arcmin</c>), so a listed row is judged as the live one was; null on a row stored before it.
+/// <c>DecPulsesUnanswered</c> (#2072) is true when the star did not answer the Dec pulses (Dec backlash: the pulses went one
+/// way and the star kept moving away from them), so the figure is the pulses, not drift: <c>Reliable</c> is false and
+/// <c>AboveAlign</c> null. Always sent; false while measuring, when unavailable, and on a row stored before it.
 /// </summary>
 public sealed record PaResidualDto(
     Guid Id,
@@ -787,7 +790,8 @@ public sealed record PaResidualDto(
     Guid? SessionId = null,
     string? Reason = null,
     bool? AboveAlign = null,
-    double? AlignSigmaArcmin = null);
+    double? AlignSigmaArcmin = null,
+    bool DecPulsesUnanswered = false);
 
 /// <summary>Null host/port mean "use the ACTIVE PROFILE's phd2 host/port" — an
 /// omitted field must not silently repoint a remote-PHD2 profile (e.g. an SBC at

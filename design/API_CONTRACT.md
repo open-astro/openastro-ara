@@ -1467,14 +1467,17 @@ is connected, straight from its GuideStep events):
                        target_seconds, frames, drift_arcsec_per_min?,
                        pa_error_min_arcmin?, uncertainty_arcmin?, reliable?,
                        hour_angle_hours?, dec_deg?, align_error_arcmin?,
-                       align_ended_utc?, session_id?, reason?, above_align? }
+                       align_ended_utc?, session_id?, reason?, above_align?,
+                       dec_pulses_unanswered }
       #1311 — the polar alignment residual from the first 300 s of clean
       guiding of each guided run: status measuring (at the start, then every
       30 s of sample) → done | unavailable (reason). pa_error_min_arcmin is a
       lower bound. #2072: frames after a Dec pulse reversal are left out until
       the star answers the new pulses (at most 60 s), and Dec pulses the star
       did not answer (one-sided, the star's offset on the far side growing)
-      publish reliable false with no above_align.
+      publish reliable false with no above_align and dec_pulses_unanswered
+      true (always sent; false otherwise, and on a row stored before it).
+      The client words that case as Dec backlash, not as noisy guiding.
       A dropped measurement re-publishes the previous result, or
       { status: "idle" }. The same object is runtime.pa_residual on
       GET /equipment/guider.
@@ -2222,3 +2225,13 @@ The push applies the same limits to values already saved: a bad value is left ou
 **Spec ref:** `Contracts/ProfileDtos.cs` (`PolarAlignSettingsDto.EastDirection`, `PolarAlignEastDirection`, `PolarAlignMotorDirectionDto`, `PolarAlignMotorDirectionStateDto`), `Contracts/EquipmentDtos.cs`, `Contracts/ProfileSnapshotDto.cs`, `Services/ProfileSections.cs`, `Services/PolarAlignService.MotorDirection.cs`, `Services/PolarAlignService.SweepOrigin.cs` (`PlanSweep`), `Services/PolarAlignService.cs` (`PlanStartAsync`, `ThrowIfNotConfirmed`), `Services/PolarAlignService.Stages.cs` (`MoveAxisUntilAsync`), `Endpoints/EquipmentEndpoints.cs`; client `lib/screens/settings/panels/imaging_polar_panel.dart`, `lib/widgets/imaging/polar_start_confirm.dart`, `lib/state/polar_align/polar_align_motor_direction_state.dart`, `lib/util/polar_align_error_text.dart`. PORT_PLAYBOOK §45.11.
 
 **Related:** #2081, #2048, #2089, #2067, #2070, #2071, AlpacaBridge #2424, ADR 0012; tests `PolarAlignServiceTest.MotorDirection.cs`, `PolarAlignServiceTest` (`A_motor_that_runs_the_other_way_from_its_saved_direction_fails_and_is_never_reversed`).
+
+## 2026-11-22 — The guiding PA residual leaves out settles and Dec backlash: `settle_begin`, `dec_pulses_unanswered` (#2072)
+
+**Endpoint(s) or area:** `guider.event` gains the kind `settle_begin` (no fields). `PaResidualDto` (`guider.pa_residual`, `runtime.pa_residual`, `GET …/guider/pa-residuals`) gains `dec_pulses_unanswered` (bool, always sent; false while measuring, when unavailable, and on a row stored before it; stored as `pa_residuals.dec_pulses_unanswered`).
+
+**Decision:** a settle the guider reports (`settle_begin`, `settling`, `dithered`) holds frames back until `settle_done`, across a guiding start. After a Dec pulse reversal (three pulses in a row against the direction before) frames are held back until DECRaw reaches the side the new pulses push to, at most 60 s. When at least 80 % of the Dec pulse time goes one way and the star's offset on the far side grows by 0.1 px or more from the first half of the frames to the second, the result is `dec_pulses_unanswered` true, `reliable` false and `above_align` null. The client words it as Dec backlash ("PA ≥ x · backlash"); a payload without the key (an older daemon) reads as before and shows "noisy".
+
+**Spec ref:** `Services/PaResidualTracker.cs`, `Services/PaResidualEstimator.cs`, `Services/GuiderService.PaResidual.cs`, `Services/SqlitePaResidualLog.cs`, `Contracts/EquipmentDtos.cs`; client `lib/models/pa_residual.dart`, `lib/widgets/imaging/guiding_strip.dart`, `lib/widgets/imaging/polar_error_rating.dart`.
+
+**Related:** #2072, #1311, #1731; rig night 2026-11-22.

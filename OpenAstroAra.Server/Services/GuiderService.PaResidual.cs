@@ -305,6 +305,7 @@ public sealed partial class GuiderService {
                     AlignErrorArcmin = align?.FinalErrorArcmin,
                     AlignSigmaArcmin = align?.FinalSigmaArcmin is double alignSigma ? Math.Round(alignSigma, 2) : null,
                     AlignEndedUtc = align?.EndedAt,
+                    DecPulsesUnanswered = f.DecPulsesUnanswered,
                     SessionId = ActiveRunSession?.Invoke(),
                 };
                 LogPaResidualMeasured(f.PaErrorMinArcmin, f.UncertaintyArcmin, f.DriftArcsecPerMin, f.SampleSeconds, f.Frames,

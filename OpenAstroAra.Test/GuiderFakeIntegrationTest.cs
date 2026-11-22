@@ -3253,6 +3253,28 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task The_published_residual_carries_dec_pulses_unanswered_exactly_when_the_fit_says_so() {
+            // #2072 — the client words the backlash case from this field, so it must follow the fit both ways.
+            await using (var honest = await StartPaRigAsync().ConfigureAwait(false)) {
+                await honest.Fake.BroadcastAsync(PhdEvents.StartGuiding()).ConfigureAwait(false);
+                await honest.GuideAsync(firstFrame: 1, frames: 20).ConfigureAwait(false);
+                var done = await DoneAsync(honest).ConfigureAwait(false);
+                Assert.That(done.GetProperty("dec_pulses_unanswered").GetBoolean(), Is.False, "real drift held by the guider");
+                Assert.That(honest.Events[0].GetProperty("dec_pulses_unanswered").GetBoolean(), Is.False, "always sent, measuring too");
+            }
+            await using var backlash = await StartPaRigAsync().ConfigureAwait(false);
+            await backlash.Fake.BroadcastAsync(PhdEvents.StartGuiding()).ConfigureAwait(false);
+            for (var frame = 1; frame <= 20; frame++) {
+                await backlash.Fake.BroadcastAsync(PhdEvents.GuideStep(0, 0.02 * frame, frame: frame, decDurationMs: 30, decDirection: "South"))
+                    .ConfigureAwait(false);
+            }
+            var unanswered = await DoneAsync(backlash).ConfigureAwait(false);
+            Assert.That(unanswered.GetProperty("dec_pulses_unanswered").GetBoolean(), Is.True);
+            Assert.That(await WaitUntilAsync(() => backlash.Log.Rows.Count == 1).ConfigureAwait(false), Is.True);
+            Assert.That(backlash.Log.Rows[0].DecPulsesUnanswered, Is.True, "the logged row says so too");
+        }
+
+        [Test]
         public async Task A_residual_within_the_recent_polar_align_result_stays_reliable() {
             await using var rig = await StartPaRigAsync().ConfigureAwait(false);
             rig.Svc.PolarAlignmentLog = new FixedAlignLog(15.5); // 17.1′ is inside 15.5′ + the 2′ margin
