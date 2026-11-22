@@ -54,6 +54,7 @@ namespace OpenAstroAra.Test {
         private static readonly string[] GaveUp = ["gave_up"];
         private static readonly string[] PausedReleased = ["sequence_paused", "released"];
         private static readonly string[] GuidingLostTitle = ["Guiding lost"];
+        private static readonly string[] GuideCameraDroppedThenBack = ["Guide camera dropped", "Guide camera back"];
         private static readonly string[] NotifyNotifyEscalated = ["notify_only", "notify_only", "escalated"];
         private static readonly string[] PauseReconnectReleased = ["sequence_paused", "reconnecting", "released"];
 
@@ -851,6 +852,42 @@ namespace OpenAstroAra.Test {
             log.Verify(l => l.RecordActionAsync(fault, "notify_only", null, It.IsAny<CancellationToken>()), Times.Once);
             Assert.That(posted.Select(n => n.Title), Is.EqualTo(GuidingLostTitle));
             sequencer.Verify(s => s.ResumeRunsAsync(It.IsAny<IReadOnlyCollection<Guid>>(), It.IsAny<CancellationToken>()), Times.Never);
+        }
+
+        // #1871 — rig 2026-11-22: with no run active, the guide camera drop posted "Guide camera dropped"
+        // and its recovery posted nothing, so the critical notice read as still down.
+        [Test]
+        public async Task A_guide_camera_drop_with_no_run_active_posts_guide_camera_back_when_it_recovers() {
+            var (hub, guiderService, _) = GuiderRig();
+            using var _ = guiderService;
+            var fault = GuiderFault(EquipmentFaultKind.Disconnected, "equipment_disconnected");
+
+            hub.Publish(fault);
+            await Task.Delay(50);
+            await guiderService.WhenIdleAsync();
+            hub.Recovered(fault);
+
+            Assert.That(await WaitUntilAsync(() => { lock (posted) { return posted.Count == 2; } }), Is.True);
+            Assert.That(posted.Select(n => n.Title), Is.EqualTo(GuideCameraDroppedThenBack));
+            Assert.That(posted[0].Message, Does.Not.Contain("equipment_disconnected"), "the user reads words, not the wire token");
+        }
+
+        [Test]
+        public async Task A_guide_camera_that_recovers_before_its_drop_is_announced_posts_back_once() {
+            var pausing = new TaskCompletionSource<IReadOnlyList<Guid>>(TaskCreationOptions.RunContinuationsAsynchronously);
+            sequencer.Setup(s => s.PauseActiveRunsAsync(It.IsAny<bool>(), It.IsAny<CancellationToken>())).Returns(pausing.Task);
+            sequencer.Setup(s => s.PauseActiveRunsAsync(It.IsAny<CancellationToken>())).Returns(pausing.Task);
+            var (hub, guiderService, _) = GuiderRig();
+            using var _ = guiderService;
+            var fault = GuiderFault(EquipmentFaultKind.Disconnected, "equipment_disconnected");
+
+            hub.Publish(fault);
+            hub.Recovered(fault); // back before the episode learned no run was active
+            pausing.SetResult(new List<Guid>());
+            await guiderService.WhenIdleAsync();
+            await Task.Delay(50);
+
+            Assert.That(posted.Select(n => n.Title), Is.EqualTo(GuideCameraDroppedThenBack));
         }
 
         [Test]
