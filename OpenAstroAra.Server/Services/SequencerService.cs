@@ -515,7 +515,10 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
 
     public Task<IReadOnlyList<Guid>> PauseActiveRunsAsync(CancellationToken ct) => PauseActiveRunsAsync(adoptable: false, ct);
 
-    public Task<IReadOnlyList<Guid>> PauseActiveRunsAsync(bool adoptable, CancellationToken ct) {
+    public Task<IReadOnlyList<Guid>> PauseActiveRunsAsync(bool adoptable, CancellationToken ct) =>
+        PauseActiveRunsAsync(adoptable, interruptFrames: adoptable, ct);
+
+    public Task<IReadOnlyList<Guid>> PauseActiveRunsAsync(bool adoptable, bool interruptFrames, CancellationToken ct) {
         // §35 safety pause — daemon-automated, so no NotifyUserActivity (an automated
         // reaction must never masquerade as the user coming back per §58.12). Same
         // gate-arm semantics as PauseAsync: the work in progress stops (a frame finishes
@@ -541,9 +544,10 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
                 }
                 continue;
             }
-            // An adoptable pause is the star-lost watch's: a frame in flight on a lost star is stopped
-            // (not saved) and taken again on Resume. Every other pause lets the frame finish.
-            run.Gate.RequestPause(interruptFrames: adoptable);
+            // An adoptable pause is the star-lost watch's, and a guided link loss asks for the same (#2169):
+            // a light in flight without guiding is stopped (not saved) and taken again on Resume. Every
+            // other pause lets the frame finish.
+            run.Gate.RequestPause(interruptFrames: adoptable || interruptFrames);
             run.DaemonPaused = true;
             run.AdoptablePause = adoptable;
             paused.Add(id);

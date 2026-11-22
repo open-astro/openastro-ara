@@ -1270,6 +1270,44 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task A_guided_link_loss_pause_stops_the_frame_but_no_later_daemon_pause_adopts_it() {
+            // #2169 — the guider asks for the frame stop without the star-lost watch's adoptable custody.
+            var id = Guid.NewGuid();
+            var svc = BuildService(id, BuildBody(c => {
+                c.Items.Add(new WaitForTimeSpan { Time = 600 });
+            }), new RecordingWsBroadcaster());
+            await svc.StartAsync(id, StartReq, null, CancellationToken.None);
+            await WaitForInstructionInFlightAsync(svc, id, 0);
+
+            Assert.That(await svc.PauseActiveRunsAsync(adoptable: false, interruptFrames: true, CancellationToken.None), Is.EquivalentTo(new[] { id }));
+            Assert.That(svc.PauseInterruptsFrame(id), Is.True, "the guided link-loss pause stops the frame");
+            await WaitForStateAsync(svc, id, SequenceRunState.Paused);
+            Assert.That(await svc.PauseActiveRunsAsync(CancellationToken.None), Is.Empty, "the pause is not adoptable");
+
+            await svc.StopAsync(id, null, CancellationToken.None);
+            await WaitForTerminalAsync(svc, id);
+        }
+
+        [Test]
+        public async Task A_guided_link_loss_pause_cancels_the_light_capture_in_progress() {
+            // #2169 review — through the service to a real TakeExposure: the light's capture is cancelled at once.
+            var (svc, id, imaging, _) = ExposingRun(exposureSeconds: 300);
+            await svc.StartAsync(id, StartReq, null, CancellationToken.None);
+            await WaitForInstructionInFlightAsync(svc, id, 0);
+            for (var i = 0; i < 500 && !imaging.Invocations.Any(v => v.Method.Name == "CaptureImage"); i++) {
+                await Task.Delay(10);
+            }
+            var capture = (CancellationToken)imaging.Invocations.Last(v => v.Method.Name == "CaptureImage").Arguments[1]!;
+            Assert.That(capture.IsCancellationRequested, Is.False, "precondition: the light is exposing");
+
+            await svc.PauseActiveRunsAsync(adoptable: false, interruptFrames: true, CancellationToken.None);
+
+            Assert.That(capture.IsCancellationRequested, Is.True, "the light's capture is cancelled, not left to finish unguided");
+            await svc.AbortAsync(id, null, CancellationToken.None);
+            await WaitForTerminalAsync(svc, id);
+        }
+
+        [Test]
         public async Task DaemonPausedRunsAsync_drops_a_run_the_user_re_paused_or_stopped() {
             var id = Guid.NewGuid();
             var svc = BuildService(id, BuildBody(c => {

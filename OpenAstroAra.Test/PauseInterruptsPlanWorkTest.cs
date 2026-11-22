@@ -12,13 +12,18 @@
 
 #endregion "copyright"
 
+using Moq;
 using NUnit.Framework;
 using OpenAstroAra.Core.Model;
 using OpenAstroAra.Core.Model.Equipment;
+using OpenAstroAra.Equipment.Interfaces.Mediator;
+using OpenAstroAra.Equipment.Model;
+using OpenAstroAra.Image.Interfaces;
 using OpenAstroAra.Sequencer.Container;
 using OpenAstroAra.Sequencer.Interfaces;
 using OpenAstroAra.Sequencer.SequenceItem;
 using OpenAstroAra.Sequencer.SequenceItem.FlatDevice;
+using OpenAstroAra.Sequencer.SequenceItem.Imaging;
 using OpenAstroAra.Sequencer.Trigger;
 using OpenAstroAra.Sequencer.Utility;
 using System;
@@ -193,6 +198,90 @@ namespace OpenAstroAra.Test {
             Assert.That(gate.FrameInterruptToken.IsCancellationRequested, Is.False, "Resume clears the frame interrupt");
             await run.WaitAsync(Soon);
             Assert.That((frame.Starts, frame.Finished, after.Ran), Is.EqualTo((2, true, true)), "the frame ran again after the resume");
+        }
+
+        /// <summary>A real TakeExposure whose capture waits for [release] and honours its token, as the
+        /// camera service does (a cancelled capture aborts the exposure and saves nothing).</summary>
+        private static (TakeExposure Item, Func<int> Captures, TaskCompletionSource Started) Frame(string imageType, TaskCompletionSource release) {
+            var camera = new Mock<ICameraMediator>();
+            camera.Setup(c => c.GetInfo()).Returns(new OpenAstroAra.Equipment.Equipment.MyCamera.CameraInfo { Connected = true });
+            var imaging = new Mock<IImagingMediator>();
+            var calls = 0;
+            var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            imaging.Setup(m => m.CaptureImage(It.IsAny<CaptureSequence>(), It.IsAny<CancellationToken>(), It.IsAny<IProgress<ApplicationStatus>?>(), It.IsAny<string>()))
+                .Returns(async (CaptureSequence _, CancellationToken token, IProgress<ApplicationStatus>? _, string _) => {
+                    var call = Interlocked.Increment(ref calls);
+                    started.TrySetResult();
+                    if (call == 1) {
+                        await release.Task.WaitAsync(token);
+                    }
+                    return new Mock<IExposureData>().Object;
+                });
+            return (new TakeExposure(camera.Object, imaging.Object) { ExposureTime = 300, ImageType = imageType }, () => Volatile.Read(ref calls), started);
+        }
+
+        [Test]
+        public async Task A_guiding_lost_pause_stops_a_light_which_is_not_counted_and_is_taken_again_on_resume() {
+            // #2169 — the star-lost watch's pause and a guided link loss's: the light stops at once, files
+            // nothing and counts nothing; Resume takes it again.
+            var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var (frame, captures, started) = Frame("LIGHT", release);
+            var after = new AfterItem();
+            var (block, gate, entered) = Plan(frame, after);
+
+            var run = block.Execute(NoProgress, CancellationToken.None);
+            await started.Task.WaitAsync(Soon);
+            gate.RequestPause(interruptFrames: true);
+
+            await entered.Task.WaitAsync(Soon);
+            Assert.That((frame.ExposureCount, captures(), after.Ran), Is.EqualTo((0, 1, false)), "the light was stopped, not counted");
+
+            gate.Resume();
+            await run.WaitAsync(Soon);
+            Assert.That((frame.ExposureCount, captures(), after.Ran), Is.EqualTo((1, 2, true)), "taken again once, counted once");
+        }
+
+        [Test]
+        public async Task A_guiding_lost_pause_lets_a_dark_finish_and_count() {
+            // #2169 — a dark or bias needs no guiding: it finishes, then the pause lands.
+            var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var (frame, captures, started) = Frame("DARK", release);
+            var after = new AfterItem();
+            var (block, gate, entered) = Plan(frame, after);
+
+            var run = block.Execute(NoProgress, CancellationToken.None);
+            await started.Task.WaitAsync(Soon);
+            gate.RequestPause(interruptFrames: true);
+
+            // A stopped dark would reach the pause with nothing filed; this one is held until released.
+            release.SetResult();
+            await entered.Task.WaitAsync(Soon);
+            Assert.That((frame.ExposureCount, captures(), after.Ran), Is.EqualTo((1, 1, false)), "the dark filed once; the pause lands after it");
+
+            gate.Resume();
+            await run.WaitAsync(Soon);
+            Assert.That((frame.ExposureCount, captures(), after.Ran), Is.EqualTo((1, 1, true)));
+        }
+
+        [Test]
+        public async Task A_guiding_lost_pause_lets_a_bias_finish_and_count() {
+            // #2169 review — a bias needs no guiding either: it is not a light and is not stopped.
+            var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var (frame, captures, started) = Frame("BIAS", release);
+            var after = new AfterItem();
+            var (block, gate, entered) = Plan(frame, after);
+
+            var run = block.Execute(NoProgress, CancellationToken.None);
+            await started.Task.WaitAsync(Soon);
+            gate.RequestPause(interruptFrames: true);
+
+            release.SetResult();
+            await entered.Task.WaitAsync(Soon);
+            Assert.That((frame.ExposureCount, captures(), after.Ran), Is.EqualTo((1, 1, false)), "the bias filed once; the pause lands after it");
+
+            gate.Resume();
+            await run.WaitAsync(Soon);
+            Assert.That((frame.ExposureCount, captures(), after.Ran), Is.EqualTo((1, 1, true)));
         }
 
         [Test]

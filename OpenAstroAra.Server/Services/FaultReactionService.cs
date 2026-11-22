@@ -46,6 +46,23 @@ public interface IGuiderEpisodeListener {
     /// joined a guider episode already running. A fault the guider still has open can then make way for a
     /// new one that runs the plan again. Called outside the reaction's lock.</summary>
     void Released(EquipmentFaultEvent fault) { }
+
+    /// <summary>#2169 — the guider was guiding when this fault took guiding away (a link loss mid-guide):
+    /// the pause also stops the LIGHT in progress, which is not saved or counted and is taken again on
+    /// Resume. Called outside the reaction's lock.</summary>
+    bool GuidedWhenLost(EquipmentFaultEvent fault) => false;
+
+    /// <summary>#2169 — the episode's fault was one <see cref="GuidedWhenLost"/> said took guiding away; it is
+    /// recovered and the runs it paused are about to resume. The guider starts guiding again and waits for it
+    /// to settle first, so the run never resumes unguided. False = guiding did not come back: the runs stay
+    /// paused and the reaction tries again later. Cancelled when the guider is lost again first. Called outside
+    /// the reaction's lock.</summary>
+    Task<bool> RestoreGuidingAsync(IReadOnlyList<Guid> runIds, CancellationToken ct) => Task.FromResult(true);
+
+    /// <summary>#2169 — the guide frames the guider took to check this camera-drop fault that did not come back
+    /// (0 once it is closed, or for any other fault). Called outside the reaction's lock.</summary>
+    int FailedCameraChecks(EquipmentFaultEvent fault) => 0;
+
 }
 
 /// <summary>
@@ -85,6 +102,10 @@ public sealed partial class FaultReactionService : IHostedService, IDisposable {
     // not behind a Recovery rung yet). Registered in OnFault, before the episode task starts, so a
     // Recovered that lands while the pause is still being placed is not lost. Mutated under _gate.
     private readonly Dictionary<object, (EquipmentFaultEvent Fault, TaskCompletionSource Recovered)> _recoveryWaiters = [];
+    // #2169 review — a guider episode whose fault recovered and that is now restoring guiding or resuming.
+    // A guider fault that lands in that window is the episode's follow-up (the runs it paused stay paused
+    // and it waits for that fault's recovery) instead of being let go with no episode. Mutated under _gate.
+    private readonly Dictionary<object, GuiderRestore> _guiderRestores = [];
     // §42.2 items 2+5 — persistence counter for op-channel faults (mutated under _gate).
     private readonly OpFaultEscalator _escalator = new();
     private readonly CancellationTokenSource _cts = new();
@@ -102,6 +123,11 @@ public sealed partial class FaultReactionService : IHostedService, IDisposable {
     // §42.3 linger phase — slow-cadence post-give-up re-adoption (~an hour at the defaults).
     // How often a guider episode that waits for Recovered checks whether the user disconnected the guider.
     internal TimeSpan ReleasePollInterval { get; set; } = TimeSpan.FromSeconds(2);
+    /// <summary>#2169 — the waits between tries to bring guiding (or a dropped guide camera) back; the last
+    /// one repeats. Internal so tests can shorten it.</summary>
+    internal IReadOnlyList<TimeSpan> GuiderRetryBackoff { get; set; } = [
+        TimeSpan.FromSeconds(30), TimeSpan.FromMinutes(1), TimeSpan.FromMinutes(2),
+    ];
     internal TimeSpan LingerInterval { get; set; } = TimeSpan.FromSeconds(120);
     internal int LingerMaxAttempts { get; set; } = 30;
     /// <summary>#2066 — how long the park waits for polar alignment and the Polar Aligner to stop first. A routine that
@@ -166,10 +192,36 @@ public sealed partial class FaultReactionService : IHostedService, IDisposable {
         // methods (Paused, Released) take that _gate. So never call _guiderEpisodes
         // inside this service's lock(_gate): a guider thread holding its _gate would wait here for
         // ours while we wait for its _gate — a deadlock. Call the listener after the lock is released.
-        if (!TryStartEpisode(fault) && fault.DeviceType == DeviceType.Guider) {
+        if (!TryStartEpisode(fault) && !TryFollowUpGuiderEpisode(fault) && fault.DeviceType == DeviceType.Guider) {
             // #1589 — joined the running guider episode (or none started): no episode holds this fault.
             _guiderEpisodes?.Invoke()?.Released(fault);
         }
+    }
+
+    // #2169 review — the guider episode is restoring guiding after its fault recovered: a new guider loss
+    // (the link dropped again, the star lost in the restart's settle) becomes its follow-up. The restore in
+    // flight is cut short and the episode waits for the new fault's recovery, with the runs still paused.
+    private bool TryFollowUpGuiderEpisode(EquipmentFaultEvent fault) {
+        if (fault.DeviceType != DeviceType.Guider || fault.Kind is not (EquipmentFaultKind.Disconnected or EquipmentFaultKind.TrackingLost)) {
+            return false;
+        }
+        lock (_gate) {
+            var key = (object)NormalizeType(fault.DeviceType);
+            if (_disposed || _cts.IsCancellationRequested || !_guiderRestores.TryGetValue(key, out var restore)
+                    || restore.FollowUp is not null) {
+                return false;
+            }
+            restore.FollowUp = fault;
+            _recoveryWaiters[key] = (fault, new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously));
+            // Asynchronous continuations: the restore stops on the pool, never on the guider's publishing thread.
+            restore.LostAgain.TrySetResult();
+            return true;
+        }
+    }
+
+    private sealed class GuiderRestore {
+        public readonly TaskCompletionSource LostAgain = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public EquipmentFaultEvent? FollowUp;
     }
 
     private bool TryStartEpisode(EquipmentFaultEvent fault) {
@@ -201,8 +253,10 @@ public sealed partial class FaultReactionService : IHostedService, IDisposable {
     /// not end it.</summary>
     internal void OnRecovered(EquipmentFaultEvent fault) {
         lock (_gate) {
-            if (_recoveryWaiters.TryGetValue(NormalizeType(fault.DeviceType), out var waiter) && waiter.Fault == fault) {
-                waiter.Recovered.TrySetResult();
+            var key = (object)NormalizeType(fault.DeviceType);
+            if (_recoveryWaiters.TryGetValue(key, out var waiter) && waiter.Fault == fault && waiter.Recovered.TrySetResult()) {
+                // #2169 review — from here a new guider fault is this episode's follow-up (TryFollowUpGuiderEpisode).
+                _guiderRestores.TryAdd(key, new GuiderRestore());
             }
         }
     }
@@ -240,7 +294,7 @@ public sealed partial class FaultReactionService : IHostedService, IDisposable {
                 }
             }
             if (guiderRecovered is not null) {
-                await RunGuiderEpisodeAsync(fault, plan, label, guiderRecovered).ConfigureAwait(false);
+                await RunGuiderEpisodeAsync(key, fault, plan, label, guiderRecovered).ConfigureAwait(false);
                 return;
             }
 
@@ -329,13 +383,20 @@ public sealed partial class FaultReactionService : IHostedService, IDisposable {
             LogEpisodeFailed(fault.DeviceType, ex);
         } finally {
             bool guiderEpisode;
+            EquipmentFaultEvent? lastHeld = null;
             lock (_gate) {
                 _episodes.Remove(key);
-                guiderEpisode = _recoveryWaiters.Remove(key, out var waiter) && ReferenceEquals(waiter.Fault, fault);
+                guiderEpisode = _recoveryWaiters.Remove(key, out var waiter);
+                lastHeld = waiter.Fault;
+                _guiderRestores.Remove(key);
             }
             // #1589 — after the slot is free, so a fault the guider publishes in answer starts its own episode.
+            // #2169 review — a follow-up the episode took over is let go too.
             if (guiderEpisode) {
                 _guiderEpisodes?.Invoke()?.Released(fault);
+                if (lastHeld is not null && !ReferenceEquals(lastHeld, fault)) {
+                    _guiderEpisodes?.Invoke()?.Released(lastHeld);
+                }
             }
         }
     }
@@ -343,7 +404,7 @@ public sealed partial class FaultReactionService : IHostedService, IDisposable {
     // §42.2 guider row (FaultPolicyMatrix.ResolveGuider): skip / abort act and end; a pause waits for
     // the guider service's Recovered (or the user taking the guider back) and resumes exactly the runs
     // it paused. No runs: the fault is recorded and broadcast, the action is notify_only.
-    private async Task RunGuiderEpisodeAsync(EquipmentFaultEvent fault, FaultPlan plan, string label, Task recovered) {
+    private async Task RunGuiderEpisodeAsync(object key, EquipmentFaultEvent fault, FaultPlan plan, string label, Task recovered) {
         var disconnectsAtFault = _guiderEpisodes?.Invoke()?.UserDisconnects ?? 0;
         var what = fault.Details switch {
             "star_lost" => "Guide star lost",
@@ -375,8 +436,12 @@ public sealed partial class FaultReactionService : IHostedService, IDisposable {
             return;
         }
 
-        var paused = await PauseActiveRunsAsync(plan.Adoptable).ConfigureAwait(false);
         // Outside _gate: the guider takes its own lock (lock order guider, hub, reaction).
+        // #2169 — guiding was on when the link went: the light in progress is stopped, not finished unguided,
+        // and guiding is restarted before the runs resume.
+        var guided = _guiderEpisodes?.Invoke()?.GuidedWhenLost(fault) == true;
+        var interruptFrames = plan.Adoptable || guided;
+        var paused = await PauseActiveRunsAsync(plan.Adoptable, interruptFrames).ConfigureAwait(false);
         _guiderEpisodes?.Invoke()?.Paused(fault, paused);
         if (paused.Count == 0) {
             await PublishActionAsync(fault, "notify_only").ConfigureAwait(false);
@@ -388,15 +453,71 @@ public sealed partial class FaultReactionService : IHostedService, IDisposable {
             $"'{label}' reported {fault.Details}: {paused.Count} run(s) paused so no unguided frame burns sky time. "
             + $"They resume on their own once the guider is back; otherwise Resume them.{advice}").ConfigureAwait(false);
 
-        while (!recovered.IsCompleted) {
-            await Task.WhenAny(recovered, Task.Delay(ReleasePollInterval, _cts.Token)).ConfigureAwait(false);
-            if (_cts.IsCancellationRequested) {
-                return; // daemon shutdown: the runs stay paused, as the ladder leaves them
+        var current = fault;
+        var retry = new GuiderRetry();
+        while (true) {
+            // #2169 rig check — a camera drop is over only when real frames come (the guider's own camera watch
+            // checks it); until then the user is told once and a run the user takes over ends the wait.
+            var cameraDrop = current.Details == "equipment_disconnected";
+            while (!recovered.IsCompleted) {
+                await Task.WhenAny(recovered, Task.Delay(ReleasePollInterval, _cts.Token)).ConfigureAwait(false);
+                if (_cts.IsCancellationRequested) {
+                    return; // daemon shutdown: the runs stay paused, as the ladder leaves them
+                }
+                if (recovered.IsCompleted) {
+                    break;
+                }
+                if (cameraDrop) {
+                    if (await UserTookOverAsync(current, label, paused, disconnectsAtFault).ConfigureAwait(false)) {
+                        return;
+                    }
+                    if (!retry.Told && (_guiderEpisodes?.Invoke()?.FailedCameraChecks(current) ?? 0) > 0) {
+                        await TellStillTryingAsync(retry, label, paused, guided: false, camera: !guided).ConfigureAwait(false);
+                    }
+                    continue;
+                }
+                var userDisconnected = (_guiderEpisodes?.Invoke()?.UserDisconnects ?? 0) != disconnectsAtFault;
+                if (await ReleasedByUserAsync(current, label, paused, userDisconnected).ConfigureAwait(false)) {
+                    return;
+                }
             }
-            var userDisconnected = (_guiderEpisodes?.Invoke()?.UserDisconnects ?? 0) != disconnectsAtFault;
-            if (!recovered.IsCompleted && await ReleasedByUserAsync(fault, label, paused, userDisconnected).ConfigureAwait(false)) {
-                return;
+            GuiderRestore restore;
+            lock (_gate) {
+                if (!_guiderRestores.TryGetValue(key, out restore!)) {
+                    restore = new GuiderRestore();
+                    _guiderRestores[key] = restore;
+                }
             }
+            // #2169 — guiding first: a run that was guided resumes only once guiding is back and settled. If it
+            // does not come back yet, the runs stay paused (never resumed unguided) and Ara tries again.
+            var outcome = guided
+                ? await RetryUntilBackAsync(current, label, paused, restore.LostAgain.Task, disconnectsAtFault, retry).ConfigureAwait(false)
+                : GuiderRetryOutcome.Back;
+            EquipmentFaultEvent? followUp = null;
+            lock (_gate) {
+                if (_guiderRestores.Remove(key)) {
+                    followUp = restore.FollowUp;
+                    if (followUp is not null && _recoveryWaiters.TryGetValue(key, out var waiter)) {
+                        recovered = waiter.Recovered.Task;
+                    }
+                }
+            }
+            if (followUp is not null) {
+                // #2169 review — guider lost again before the runs resumed: they stay paused for the new fault.
+                // A link or camera loss during a guided restore still needs guiding back; a star loss
+                // relocks on its own.
+                guided = followUp.Kind == EquipmentFaultKind.Disconnected
+                    ? guided || _guiderEpisodes?.Invoke()?.GuidedWhenLost(followUp) == true
+                    : _guiderEpisodes?.Invoke()?.GuidedWhenLost(followUp) == true;
+                _guiderEpisodes?.Invoke()?.Paused(followUp, paused);
+                LogGuiderFollowUp(followUp.Details ?? EquipmentFaultHub.WireToken(followUp.Kind));
+                current = followUp;
+                continue;
+            }
+            if (outcome != GuiderRetryOutcome.Back) {
+                return; // daemon shutdown, or the user took the runs or the guider over
+            }
+            break;
         }
         var resumed = await ResumeRunsAsync(paused).ConfigureAwait(false);
         // The hub's Recovered already broadcast `recovered` and resolved the fault-log row.
@@ -409,7 +530,7 @@ public sealed partial class FaultReactionService : IHostedService, IDisposable {
             _ => "Guiding restored",
         };
         await NotifyQuietlyAsync(NotificationSeverity.Info, $"{back} — sequence resumed",
-            $"'{label}' is guiding again; {resumed} paused sequence run(s) resumed.").ConfigureAwait(false);
+            $"'{label}' is {(guided || fault.Details != "equipment_disconnected" ? "guiding" : "sending guide frames")} again; {resumed} paused sequence run(s) resumed.").ConfigureAwait(false);
     }
 
     // §42.2 items 2+5 — a persistent-op-fault escalation is not a failed recovery: the device is
@@ -696,16 +817,20 @@ public sealed partial class FaultReactionService : IHostedService, IDisposable {
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Best-effort rung: a sequencer fault must not stop the remaining reaction steps. CA1031's log-and-recover boundary applies.")]
-    private async Task<IReadOnlyList<Guid>> PauseActiveRunsAsync(bool adoptable = false) {
+    private async Task<IReadOnlyList<Guid>> PauseActiveRunsAsync(bool adoptable = false, bool interruptFrames = false) {
         var sequencer = _sequencerResolver?.Invoke();
         if (sequencer is null) {
             return [];
         }
         try {
             // An adoptable pause lets the safety engine take the runs over (a parked guider sends no
-            // guide step to resume on).
-            return adoptable
-                ? await sequencer.PauseActiveRunsAsync(adoptable: true, CancellationToken.None).ConfigureAwait(false)
+            // guide step to resume on), and stops the light in progress. #2169 — a guided link loss stops
+            // the light too, without handing the pause to anyone.
+            if (adoptable) {
+                return await sequencer.PauseActiveRunsAsync(adoptable: true, CancellationToken.None).ConfigureAwait(false);
+            }
+            return interruptFrames
+                ? await sequencer.PauseActiveRunsAsync(adoptable: false, interruptFrames: true, CancellationToken.None).ConfigureAwait(false)
                 : await sequencer.PauseActiveRunsAsync(CancellationToken.None).ConfigureAwait(false);
         } catch (Exception ex) {
             LogRungFailed("pause", ex);
@@ -725,6 +850,122 @@ public sealed partial class FaultReactionService : IHostedService, IDisposable {
         } catch (Exception ex) {
             LogRungFailed("resume", ex);
             return 0;
+        }
+    }
+
+    private enum GuiderRetryOutcome { Back, Stopped }
+
+    private sealed class GuiderRetry {
+        public int Waits;   // waits so far this episode: picks the next backoff step
+        public bool Told;   // the one "still trying" notice was sent
+    }
+
+    // #2169 — Joey's rule: Ara recovers on its own and never gives up after one try. Tries to bring guiding
+    // back until it works, the user takes the runs or the guider over, the daemon stops, or the guider is lost
+    // again (the caller picks up that follow-up). The runs stay paused throughout; the user hears it once.
+    private async Task<GuiderRetryOutcome> RetryUntilBackAsync(EquipmentFaultEvent fault, string label, IReadOnlyList<Guid> paused,
+            Task lostAgain, int disconnectsAtFault, GuiderRetry retry) {
+        var wait = false;
+        while (true) {
+            if (wait) {
+                var backoff = GuiderRetryBackoff;
+                var delay = backoff.Count == 0 ? TimeSpan.Zero : backoff[Math.Min(retry.Waits, backoff.Count - 1)];
+                retry.Waits++;
+                var deadline = DateTime.UtcNow + delay;
+                while (!lostAgain.IsCompleted) {
+                    var left = deadline - DateTime.UtcNow;
+                    if (left <= TimeSpan.Zero) {
+                        break;
+                    }
+                    await Task.WhenAny(lostAgain, Task.Delay(left < ReleasePollInterval ? left : ReleasePollInterval, _cts.Token))
+                        .ConfigureAwait(false);
+                    if (_cts.IsCancellationRequested) {
+                        return GuiderRetryOutcome.Stopped;
+                    }
+                    if (await UserTookOverAsync(fault, label, paused, disconnectsAtFault).ConfigureAwait(false)) {
+                        return GuiderRetryOutcome.Stopped;
+                    }
+                }
+            }
+            wait = true;
+            if (lostAgain.IsCompleted) {
+                return GuiderRetryOutcome.Stopped; // the caller takes the follow-up
+            }
+            if (_cts.IsCancellationRequested || await UserTookOverAsync(fault, label, paused, disconnectsAtFault).ConfigureAwait(false)) {
+                return GuiderRetryOutcome.Stopped;
+            }
+            var back = await RestoreGuidingQuietlyAsync(paused, lostAgain).ConfigureAwait(false);
+            if (lostAgain.IsCompleted || _cts.IsCancellationRequested) {
+                return GuiderRetryOutcome.Stopped;
+            }
+            if (back) {
+                return GuiderRetryOutcome.Back;
+            }
+            await TellStillTryingAsync(retry, label, paused, guided: true, camera: false).ConfigureAwait(false);
+        }
+    }
+
+    // The one "still trying" notice of an episode, sent only while the runs are still the daemon's. [camera] =
+    // an unguided run waits for its guide camera; [guided] = a guiding start failed (else no guide frames yet).
+    private async Task TellStillTryingAsync(GuiderRetry retry, string label, IReadOnlyList<Guid> paused, bool guided, bool camera) {
+        if (retry.Told || !await AnyStillDaemonPausedAsync(paused).ConfigureAwait(false)) {
+            return;
+        }
+        retry.Told = true;
+        var title = camera ? "Guide camera not back yet — still trying, sequence stays paused"
+            : "Guiding not back yet — still trying, sequence stays paused";
+        await NotifyQuietlyAsync(NotificationSeverity.Warning, title, camera
+            ? $"'{label}' sends no guide frames yet, so {paused.Count} run(s) stay paused. "
+              + "Ara keeps checking and resumes them once the guide camera is back. You can also Resume them yourself."
+            : $"'{label}' did not {(guided ? "restart guiding and settle" : "send guide frames")} yet, so {paused.Count} run(s) stay paused "
+              + "and no unguided frame is taken. Ara keeps trying and resumes them once guiding is back. You can also Resume them yourself.")
+            .ConfigureAwait(false);
+    }
+
+    // The user disconnected the guider, or resumed, paused or stopped the runs: the retries stop.
+    private async Task<bool> UserTookOverAsync(EquipmentFaultEvent fault, string label, IReadOnlyList<Guid> paused, int disconnectsAtFault) {
+        var userDisconnected = (_guiderEpisodes?.Invoke()?.UserDisconnects ?? 0) != disconnectsAtFault;
+        if (await ReleasedByUserAsync(fault, label, paused, userDisconnected).ConfigureAwait(false)) {
+            return true;
+        }
+        return !await AnyStillDaemonPausedAsync(paused).ConfigureAwait(false);
+    }
+
+    // #2169 — the guider brings guiding back before its runs resume (IGuiderEpisodeListener.RestoreGuidingAsync).
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Best-effort rung: a guider fault while restarting guiding leaves the runs paused, the safe outcome. CA1031's log-and-recover boundary applies.")]
+    private async Task<bool> RestoreGuidingQuietlyAsync(IReadOnlyList<Guid> paused, Task? lostAgain) {
+        var listener = _guiderEpisodes?.Invoke();
+        if (listener is null) {
+            return true;
+        }
+        using var ct = CancellationTokenSource.CreateLinkedTokenSource(_cts.Token);
+        try {
+            var restore = listener.RestoreGuidingAsync(paused, ct.Token);
+            if (lostAgain is not null && await Task.WhenAny(restore, lostAgain).ConfigureAwait(false) == lostAgain) {
+                await ct.CancelAsync().ConfigureAwait(false); // the guider was lost again: stop waiting on this restore
+            }
+            return await restore.ConfigureAwait(false);
+        } catch (OperationCanceledException) when (ct.IsCancellationRequested) {
+            return false; // daemon shutdown, or the guider was lost again (the episode's follow-up)
+        } catch (Exception ex) {
+            LogRungFailed("restore_guiding", ex);
+            return false;
+        }
+    }
+
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Best-effort read: a sequencer fault counts as still paused, so the user hears why. CA1031's log-and-recover boundary applies.")]
+    private async Task<bool> AnyStillDaemonPausedAsync(IReadOnlyList<Guid> ids) {
+        var sequencer = _sequencerResolver?.Invoke();
+        if (sequencer is null) {
+            return false;
+        }
+        try {
+            return (await sequencer.DaemonPausedRunsAsync(ids.ToArray(), CancellationToken.None).ConfigureAwait(false)).Count > 0;
+        } catch (Exception ex) {
+            LogRungFailed("custody", ex);
+            return true;
         }
     }
 
@@ -939,4 +1180,7 @@ public sealed partial class FaultReactionService : IHostedService, IDisposable {
 
     [LoggerMessage(Level = LogLevel.Error, Message = "Fault reaction: episode for {DeviceType} failed unexpectedly")]
     private partial void LogEpisodeFailed(DeviceType deviceType, Exception ex);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Fault reaction: the guider was lost again ({Details}) before its paused runs resumed; they stay paused until it is back")]
+    private partial void LogGuiderFollowUp(string details);
 }
