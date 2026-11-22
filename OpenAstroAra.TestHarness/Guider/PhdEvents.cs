@@ -126,6 +126,9 @@ public static class PhdEvents {
         return e;
     }
 
+    /// <summary>A guide or dither settle starts (a guiding start's follows StartGuiding, before its first GuideStep).</summary>
+    public static JsonObject SettleBegin() => Base("SettleBegin");
+
     /// <summary>Settle progress during a dither/guide settle.</summary>
     public static JsonObject Settling(double distance, double time, double settleTime) {
         var e = Base("Settling");

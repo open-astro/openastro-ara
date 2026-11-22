@@ -1451,6 +1451,8 @@ is connected, straight from its GuideStep events):
       the things PHD2's own graph annotates. kind and its detail fields
       (omitted when PHD2 sent none):
         dithered            { dx_px, dy_px }
+        settle_begin        (no fields) #2072 — a guide or dither settle starts; a
+                            guiding start's follows guiding_started, before its first step
         settling            { distance_px, time_sec, settle_time_sec }
         settle_done         { status (0 = ok), error? }
         star_lost           { frame?, star_mass?, snr?, distance_px?, status?, error? }
@@ -1465,11 +1467,18 @@ is connected, straight from its GuideStep events):
                        target_seconds, frames, drift_arcsec_per_min?,
                        pa_error_min_arcmin?, uncertainty_arcmin?, reliable?,
                        hour_angle_hours?, dec_deg?, align_error_arcmin?,
-                       align_ended_utc?, session_id?, reason?, above_align? }
+                       align_ended_utc?, session_id?, reason?, above_align?,
+                       dec_pulses_unanswered }
       #1311 — the polar alignment residual from the first 300 s of clean
       guiding of each guided run: status measuring (at the start, then every
       30 s of sample) → done | unavailable (reason). pa_error_min_arcmin is a
-      lower bound. A dropped measurement re-publishes the previous result, or
+      lower bound. #2072: frames after a Dec pulse reversal are left out until
+      the star answers the new pulses (at most 60 s), and Dec pulses the star
+      did not answer (one-sided, the star's offset on the far side growing)
+      publish reliable false with no above_align and dec_pulses_unanswered
+      true (always sent; false otherwise, and on a row stored before it).
+      The client words that case as Dec backlash, not as noisy guiding.
+      A dropped measurement re-publishes the previous result, or
       { status: "idle" }. The same object is runtime.pa_residual on
       GET /equipment/guider.
   profile.updated { section }
@@ -2234,6 +2243,18 @@ The push applies the same limits to values already saved: a bad value is left ou
 **Spec ref:** `Endpoints/EquipmentEndpoints.cs` (`MapPolarAlign`, `StartConfirmation`), `Contracts/EquipmentDtos.cs`, `Services/PolarAlignPreflightEvaluator.cs` (`EvaluateCanMoveAxis`), `Services/PolarAlignService.cs`, `Contracts/Refusals/RefusalCatalog.cs`, `Contracts/WsEvents/WsEventCatalog.cs`; client `services/polar_align_api.dart`, `widgets/imaging/polar_start_confirm.dart`.
 
 **Related:** #2170, #2083, #2121, #2129, #2160, ADR 0022, ADR 0014; tests `EquipmentEndpointsPolarAlignHttpTest` (`A_start_body_with_the_removed_hand_turn_field_is_a_motor_start`, `Preflight_ignores_the_removed_hand_turn_query`, `Start_plan_ignores_the_removed_hand_turn_query`), `PolarAlignPreflightEvaluatorTest.A_mount_that_cannot_move_its_RA_axis_refuses`.
+
+---
+
+## 2026-11-22 — The guiding PA residual leaves out settles and Dec backlash: `settle_begin`, `dec_pulses_unanswered` (#2072)
+
+**Endpoint(s) or area:** `guider.event` gains the kind `settle_begin` (no fields). `PaResidualDto` (`guider.pa_residual`, `runtime.pa_residual`, `GET …/guider/pa-residuals`) gains `dec_pulses_unanswered` (bool, always sent; false while measuring, when unavailable, and on a row stored before it; stored as `pa_residuals.dec_pulses_unanswered`).
+
+**Decision:** a settle the guider reports (`settle_begin`, `settling`, `dithered`) holds frames back until `settle_done`, across a guiding start. After a Dec pulse reversal (three pulses in a row against the direction before) frames are held back until DECRaw reaches the side the new pulses push to, at most 60 s. When at least 80 % of the Dec pulse time goes one way and the star's offset on the far side grows by 0.1 px or more from the first half of the frames to the second, the result is `dec_pulses_unanswered` true, `reliable` false and `above_align` null. The client words it as Dec backlash ("PA ≥ x · backlash"); a payload without the key (an older daemon) reads as before and shows "noisy".
+
+**Spec ref:** `Services/PaResidualTracker.cs`, `Services/PaResidualEstimator.cs`, `Services/GuiderService.PaResidual.cs`, `Services/SqlitePaResidualLog.cs`, `Contracts/EquipmentDtos.cs`; client `lib/models/pa_residual.dart`, `lib/widgets/imaging/guiding_strip.dart`, `lib/widgets/imaging/polar_error_rating.dart`.
+
+**Related:** #2072, #1311, #1731; rig night 2026-11-22.
 
 ---
 

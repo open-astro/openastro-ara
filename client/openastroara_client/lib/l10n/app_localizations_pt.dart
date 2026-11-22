@@ -7071,6 +7071,11 @@ class AppLocalizationsPt extends AppLocalizations {
   }
 
   @override
+  String paResidualChipBacklash(String value) {
+    return 'PA ≥ $value · backlash';
+  }
+
+  @override
   String paResidualChipNoisy(String value) {
     return 'PA ≥ $value · noisy';
   }
@@ -7144,6 +7149,10 @@ class AppLocalizationsPt extends AppLocalizations {
   String paResidualDetailDisagree(String align, String guiding) {
     return 'Polar Align and guiding disagree ($align vs at least $guiding). Either Dec backlash ate guide pulses, so the guiding figure is too high, or the mount shifted since the alignment or its reference was wrong, so the Polar Align figure is too low. Run Polar Align again: about $align again points at backlash, much more points at the mount or the alignment.';
   }
+
+  @override
+  String get paResidualDetailBacklash =>
+      'Dec backlash ate the guide pulses, so this window can\'t measure polar alignment.';
 
   @override
   String get paResidualDetailNoisy =>
@@ -14520,6 +14529,11 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   }
 
   @override
+  String paResidualChipBacklash(String value) {
+    return 'PA ≥ $value · folga';
+  }
+
+  @override
   String paResidualChipNoisy(String value) {
     return 'PA ≥ $value · ruidoso';
   }
@@ -14593,6 +14607,10 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String paResidualDetailDisagree(String align, String guiding) {
     return 'Polar Align e guiagem divergem ($align contra pelo menos $guiding). Ou a folga em Dec engoliu pulsos de guiagem, e o número da guiagem está alto demais, ou a montagem se moveu desde o alinhamento ou a referência dele estava errada, e o número do Polar Align está baixo demais. Rode o Polar Align de novo: cerca de $align outra vez aponta para a folga, muito mais aponta para a montagem ou o alinhamento.';
   }
+
+  @override
+  String get paResidualDetailBacklash =>
+      'A folga em Dec engoliu os pulsos de guiagem, então esta janela não consegue medir o alinhamento polar.';
 
   @override
   String get paResidualDetailNoisy =>

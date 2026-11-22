@@ -319,6 +319,9 @@ public sealed partial class SqliteAraDatabase : IAraDatabase {
         // #2072 review — the compared Polar Align result's 1σ, so a stored row is judged as the live one was; NULL on a row
         // written before this column.
         await AddColumnIfMissingAsync(conn, "pa_residuals", "align_sigma_arcmin", "REAL", ct);
+        // #2072 — the star did not answer the Dec pulses (backlash), so a listed row is worded as the live one was; 0 on a
+        // row written before this column.
+        await AddColumnIfMissingAsync(conn, "pa_residuals", "dec_pulses_unanswered", "INTEGER NOT NULL DEFAULT 0", ct);
         await ExecAsync(conn, "CREATE INDEX IF NOT EXISTS idx_pa_residuals_completed_at ON pa_residuals(completed_at);", ct);
         await ExecAsync(conn, "CREATE INDEX IF NOT EXISTS idx_pa_residuals_session_id ON pa_residuals(session_id);", ct);
 

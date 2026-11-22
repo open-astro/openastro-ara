@@ -45,6 +45,14 @@ class PaResidual {
   /// row, or with no Polar Align result to compare.
   final bool? aboveAlignFlag;
 
+  /// #2072 the star did not answer the Dec pulses (`dec_pulses_unanswered`):
+  /// Dec backlash, so the figure is the pulses, not drift. Nullable with no
+  /// default because an older daemon does not send it, and a missing key must
+  /// not make the whole residual unreadable: it only picks the wording (null
+  /// reads as plain "noisy"). A display hint, not a safety key, so it is not
+  /// in `ProfileApi.safetyModeledKeys`.
+  final bool? decPulsesUnanswered;
+
   const PaResidual({
     required this.id,
     required this.status,
@@ -63,7 +71,12 @@ class PaResidual {
     this.completedUtc,
     this.reason,
     this.aboveAlignFlag,
+    this.decPulsesUnanswered,
   });
+
+  /// #2072 the figure is Dec backlash: worded as such, never as a rating or a
+  /// disagreement with Polar Align.
+  bool get backlash => decPulsesUnanswered == true;
 
   /// #1731 / #2072 — the lower bound sits past the total error Polar Align
   /// measured: the two numbers disagree. The daemon's `above_align` decides;
@@ -72,6 +85,7 @@ class PaResidual {
   /// Align; without it, the value less 2σ more than
   /// [alignDisagreementMarginArcmin] above Align.
   bool get aboveAlign {
+    if (backlash) return false; // the daemon sends no verdict: the figure says nothing about the alignment
     final flag = aboveAlignFlag;
     if (flag != null) return flag;
     final value = paErrorMinArcmin,
@@ -122,6 +136,7 @@ class PaResidual {
       completedUtc: _t(json['completed_utc']),
       reason: json['reason'] is String ? json['reason'] as String : null,
       aboveAlignFlag: json['above_align'] is bool ? json['above_align'] as bool : null,
+      decPulsesUnanswered: json['dec_pulses_unanswered'] is bool ? json['dec_pulses_unanswered'] as bool : null,
     );
   }
 
@@ -144,7 +159,8 @@ class PaResidual {
       other.alignErrorArcmin == alignErrorArcmin &&
       other.alignSigmaArcmin == alignSigmaArcmin &&
       other.reason == reason &&
-      other.aboveAlignFlag == aboveAlignFlag;
+      other.aboveAlignFlag == aboveAlignFlag &&
+      other.decPulsesUnanswered == decPulsesUnanswered;
 
   @override
   int get hashCode => Object.hash(
@@ -158,5 +174,6 @@ class PaResidual {
     alignSigmaArcmin,
     reason,
     aboveAlignFlag,
+    decPulsesUnanswered,
   );
 }

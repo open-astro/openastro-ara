@@ -20,7 +20,9 @@ namespace OpenAstroAra.Server.Services;
 /// <summary>One polar-alignment residual fit (#1311). <see cref="PaErrorMinArcmin"/> is a lower
 /// bound on the polar axis error: Dec drift at one hour angle sees only one component of it.
 /// <see cref="DecPulseNetMs"/> (North positive) and <see cref="DecPulseTotalMs"/> are the Dec pulses the fit added
-/// back, for the log (#2072): with the calibration's rate they say how much of the figure is rebuilt from pulses.</summary>
+/// back, for the log (#2072): with the calibration's rate they say how much of the figure is rebuilt from pulses.
+/// <see cref="DecPulsesUnanswered"/> (#2072): the star did not answer the Dec pulses (<see cref="PaResidualEstimator.PulsesUnanswered"/>),
+/// so the figure is the pulses, not drift.</summary>
 internal readonly record struct PaResidualFit(
     double DriftArcsecPerMin,
     double PaErrorMinArcmin,
@@ -28,7 +30,8 @@ internal readonly record struct PaResidualFit(
     int Frames,
     double SampleSeconds,
     double DecPulseNetMs = 0,
-    double DecPulseTotalMs = 0);
+    double DecPulseTotalMs = 0,
+    bool DecPulsesUnanswered = false);
 
 /// <summary>
 /// #1311 — the polar alignment error left after Align, measured from the guiding Ara already does.
@@ -63,6 +66,15 @@ internal sealed class PaResidualEstimator {
 
     // 2π per sidereal day (86164.0905 s).
     private const double SiderealRateRadPerSec = 7.2921159e-5;
+
+    /// <summary>#2072 — Dec pulses this one-sided (share of the pulse time in one direction) can be eaten by the gear.</summary>
+    internal const double OneSidedShare = 0.8;
+
+    /// <summary>#2072 — growth (px) of the star's offset on the far side of the pulses, from the first half of the frames
+    /// to the second, that says the pulses are not reaching the star. A proportional guider holding a steady drift keeps a
+    /// steady offset (drift per frame ÷ aggressiveness), so the offset alone cannot tell; its growth can. The 2026-11-22
+    /// rig grew it 0.17 → 0.33 px in two minutes under South pulses.</summary>
+    internal const double UnansweredGrowthPx = 0.1;
 
     // A segment shorter than this many frames carries no usable slope.
     private const int MinSegmentFrames = 3;
@@ -183,6 +195,7 @@ internal sealed class PaResidualEstimator {
         var rho = sse > 0 ? Math.Clamp(lag / sse, 0.0, 0.95) : 0.0;
         var slopeSe = Math.Sqrt(sse / dof / sxx * (1 + rho) / (1 - rho));
 
+        var unanswered = PulsesUnanswered(pulseNetMs, pulseTotalMs);
         var toArcsecPerMin = 60.0 * pixelScaleArcsec;
         var drift = slope * toArcsecPerMin;
         return new PaResidualFit(
@@ -192,7 +205,39 @@ internal sealed class PaResidualEstimator {
             Frames: n,
             SampleSeconds: SampleSeconds,
             DecPulseNetMs: pulseNetMs,
-            DecPulseTotalMs: pulseTotalMs);
+            DecPulseTotalMs: pulseTotalMs,
+            DecPulsesUnanswered: unanswered);
+    }
+
+    /// <summary>
+    /// #2072 — the Dec pulses did not reach the star: at least <see cref="OneSidedShare"/> of the pulse time went one way,
+    /// and the star sat on the far side of them (the side they push it away from) by an offset that grew by
+    /// <see cref="UnansweredGrowthPx"/> or more from the first half of the frames to the second. Dec backlash or a
+    /// slipping clutch does this: the guider keeps pushing, the star keeps going away, and the fit reads every pulse as
+    /// drift. Real drift held by the guider keeps its offset steady, so it still measures.
+    /// </summary>
+    private bool PulsesUnanswered(double pulseNetMs, double pulseTotalMs) {
+        if (!(pulseTotalMs > 0) || (pulseTotalMs + Math.Abs(pulseNetMs)) / 2 < OneSidedShare * pulseTotalMs) {
+            return false;
+        }
+        var push = Math.Sign(pulseNetMs); // the side the pulses push the star to
+        var far = new List<double>();
+        foreach (var segment in Usable()) {
+            foreach (var sample in segment) {
+                far.Add(-push * sample.DecRawPx);
+            }
+        }
+        var half = far.Count / 2;
+        if (half < MinSegmentFrames) {
+            return false;
+        }
+        double first = 0, second = 0;
+        for (var k = 0; k < half; k++) {
+            first += far[k];
+            second += far[far.Count - half + k];
+        }
+        (first, second) = (first / half, second / half);
+        return second > 0 && second - first >= UnansweredGrowthPx;
     }
 
     private static bool IsUsable(List<Sample>? segment) => segment is { Count: >= MinSegmentFrames };

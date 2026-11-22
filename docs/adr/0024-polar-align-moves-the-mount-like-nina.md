@@ -1,0 +1,101 @@
+# Polar Align moves the mount the way NINA does, with a short list of added guards
+
+Status: proposed
+
+## Context
+
+On 2026-11-19 Polar Align drove the RC51 rig (an iOptron HAE29C on AlpacaBridge) into its pier ([#2048](https://github.com/open-astro/openastro-ara/issues/2048)). Every stage started with Find Home, and the routine took AlpacaBridge's "at Home" flag as proof of where the mount was. With `use_home` off, each later stage sent a GoTo back to an RA/Dec cached at run start. Stop did not stop it. The same night the mount woke at a false zero ([#2070](https://github.com/open-astro/openastro-ara/issues/2070)), and Ara's 0.2′ readout disagreed with the 16′ guiding residual ([#2072](https://github.com/open-astro/openastro-ara/issues/2072)).
+
+Ara's Polar Align is a port of NINA's Three Point Polar Alignment plugin (`isbeorn/nina.plugin.polaralignment` at `e5afbf54`). Its only motion is `MoveToNextPoint` (`PolarAlignment/Instructions/PolarAlignment.cs` 985-1042): one East/West setting picks the sign, `MoveAxis(Primary, ±rate)` at the fastest supported rate at or below the request, poll RA every 100 ms until the distance is turned, a failsafe timeout of 2 × distance / rate, then `MoveAxis 0`, wait while `Slewing`, settle, tracking on; any exception sends `MoveAxis 0`. NINA has no counterweight model, start band, pose envelope or motion budget.
+
+The first fix plan (ARA-1 to ARA-19 on #2048, then a 16-PR plan for `stable/1.0`) added layers NINA never needed, and each layer raised design questions. On 2026-11-21 the maintainer set NINA parity as the baseline: what NINA does is the answer, and Ara adds a guard only where a real incident made it a must.
+
+## Decision
+
+We decided (2026-11-21, [#2048](https://github.com/open-astro/openastro-ara/issues/2048)) that Polar Align moves the mount the way NINA's `MoveToNextPoint` does, and that Ara's additions are the guards listed in the Rules below, each of which landed on `stable/1.0`. Nothing else is added for parity's sake.
+
+What landed, by plan step:
+
+- Start like NINA, the sweep bound and the confirm step ([#2089](https://github.com/open-astro/openastro-ara/pull/2089)).
+- Emergency Stop's latch and the end on any stop from outside ([#2097](https://github.com/open-astro/openastro-ara/pull/2097)).
+- PR 1, the stop-contract holes ([#2112](https://github.com/open-astro/openastro-ara/pull/2112)).
+- PR 2, named stop reasons and an unconfirmed stop that blocks motion ([#2118](https://github.com/open-astro/openastro-ara/pull/2118)).
+- PR 3 and 5, one measurement per Start, the camera and frames per point ([#2116](https://github.com/open-astro/openastro-ara/pull/2116), [#2124](https://github.com/open-astro/openastro-ara/pull/2124)).
+- PR 4, the settings section loaded before it is saved ([#2114](https://github.com/open-astro/openastro-ara/pull/2114)).
+- PR 6, fresh mount reads ([#2119](https://github.com/open-astro/openastro-ara/pull/2119)).
+- PR 7, one motion owner for the whole run ([#2123](https://github.com/open-astro/openastro-ara/pull/2123)).
+- PR 8, the move guards, the arrival check and the field-rotation check ([#2128](https://github.com/open-astro/openastro-ara/pull/2128)).
+- PR 10, the mount clock gate ([#2087](https://github.com/open-astro/openastro-ara/pull/2087), [#2120](https://github.com/open-astro/openastro-ara/pull/2120)).
+- PR 11, the pre-flight list and the per-mount clearance confirm ([#2129](https://github.com/open-astro/openastro-ara/pull/2129)).
+- PR 14, the Polar Aligner's verified stop and caps ([#2115](https://github.com/open-astro/openastro-ara/pull/2115)).
+- PR 15, each fit's uncertainty ([#2131](https://github.com/open-astro/openastro-ara/pull/2131)).
+- PR 13, the refusals `polar-align-site-not-set`, `polar-align-alt-az-mount` and `polar-align-cannot-move-axis` ([#2159](https://github.com/open-astro/openastro-ara/pull/2159)).
+- PR 9, the East/West setting and a saved motor direction ([#2157](https://github.com/open-astro/openastro-ara/pull/2157)); its rig check P0-6 passed on 2026-11-21.
+
+There is no manual mode. The hand-turn mode that [#2121](https://github.com/open-astro/openastro-ara/pull/2121) added (NINA's manual mode) was removed by [#2174](https://github.com/open-astro/openastro-ara/pull/2174) (#2170): Ara is about automation (the maintainer, 2026-11-21). A mount that cannot move its RA axis is refused, with no fallback.
+
+Dropped on 2026-11-21 as beyond NINA parity: PR 12 (the counterweight limit and the start band, [#2065](https://github.com/open-astro/openastro-ara/issues/2065)) and the rest of the old PR 13 (the pose envelope, the motion budget, the fork-mount opt-in, the pier-side checks and the `motionsafety` marker). #2065 was closed as NINA parity; #2068 was closed as done by #2129.
+
+Where Ara differs from the ARA spec on #2048, on purpose (the maintainer's re-spec, 2026-11-20): Stop answers after the stop is verified, not with an immediate 202; AbortSlew is sent before `MoveAxis 0`; `MoveAxis 0` is sent while adjusting too; Polar Align turns tracking on while it measures, as NINA does; Guiding taking the camera hands tracking back; an unconfirmed stop is reported as `failed` with `mount_did_not_stop`. Where Ara differs from NINA, on purpose: NINA's 2× timeout ends the turn and goes on, Ara's fails the run (`slew_timeout`); NINA trusts the cached position, Ara reads the driver (#2070's false zero); NINA's direction is a setting only, Ara also learns the motor's sign once per driver (ASCOM leaves the sign of a positive rate to the driver, AlpacaBridge #2424).
+
+The maintainer's choices on the way (2026-11-20 and 2026-11-21, on #2048 and the pull requests):
+
+- Polar Align holds the mount for the whole run, adjusting included.
+- A sync is refused during a run.
+- ARA-13 accepts a field turn within 10° of 0° or of the turn the geometry predicts.
+- "Rough first" is offered only after `seed_solve_failed`.
+- The clearance check blocks every start; there is no hand-turn start to exempt.
+- A clearance confirmation lasts per mount, inside each profile, for the limit it confirmed, and can be taken back.
+- Start stays enabled while the pre-flight list is loading (the daemon checks every row at Start).
+- Done is always allowed, and "aligned" is shown only when error + 2σ is within the tolerance.
+- The σ floor is 0.15 px × the solving camera's pixel scale, 1″ when the scale is unknown.
+- The East/West setting picks the way only at a new sweep origin, and the confirm step that names direction and distance is "shown before motion".
+- The aligner travel cap is max(3 × first offset + 30′, 10′).
+
+No request flag lifts these guards. `force` on `POST /equipment/telescope/slew` lifts only the `run_in_progress` answer, and `polar-align-moving-mount`, `below-horizon-limit` and `counterweight-limit` (the GoTo-wide refusal of #2073, not the dropped #2065 limit) are thrown before it is read. A Polar Align start has no `force` field.
+
+## Rules
+
+1. Polar Align moves the mount only by `MoveAxis(Primary)` turns of its planned step (and the 0.5° direction test of rule 11), and only after a Start the daemon checked the user confirmed for the shown direction; it never sends a GoTo, a Find Home, an unpark or a Dec motor move, and a parked mount is refused. Scope: `OpenAstroAra.Server/Services/PolarAlignService.cs`, `OpenAstroAra.Server/Services/PolarAlignService.Stages.cs`. Checked by: `PolarAlignServiceTest.A_start_without_the_users_confirmation_is_refused_and_moves_nothing`, `PolarAlignServiceTest.A_parked_mount_is_refused_before_anything_moves_and_is_never_unparked`.
+2. One Start is one three-point measurement with two RA turns (plus the direction test of rule 11 when one is owed), a Check is its own confirmed Start, and no start takes the RA axis more than max(30°, 2 × step + 2°) from the session's sweep origin, checked at the plan and before each turn. Scope: `OpenAstroAra.Server/Services/PolarAlignService.SweepOrigin.cs`, `OpenAstroAra.Server/Services/PolarAlignService.Stages.cs`. Checked by: `PolarAlignServiceTest.One_Start_on_the_GEM_makes_two_RA_turns_and_no_Dec_move_and_Next_starts_nothing`, `PolarAlignServiceTest.Repeated_Checks_are_refused_at_the_sweep_limit`.
+3. A stop wins over any motion that races it: Emergency Stop latches before its other steps, any stop count Polar Align did not raise ends the run as `slew_aborted_externally`, and a GoTo whose PUT returns after a stop is aborted again. Scope: `OpenAstroAra.Server/Services/TelescopeService.cs`, `OpenAstroAra.Server/Services/EmergencyStopService.cs`, `OpenAstroAra.Server/Services/PolarAlignService.MountStop.cs`. Checked by: `TelescopeRestGotoTrackingTest.Abort_racing_a_delayed_slew_PUT_aborts_again`, `EmergencyStopServiceTest.Execute_LatchesTheStopInTheMount_BeforeTheEventAndTheRunAbort`, `PolarAlignServiceTest.A_pad_stop_mid_turn_ends_the_run_and_the_motor_is_not_restarted`.
+4. Every end of a run that keeps the mount sends AbortSlew when a move may be running or the mount reads as slewing (or gives no reading), then `MoveAxis 0` on both axes, and confirms on fresh reads that the mount stands still; a stop it cannot confirm ends the run `failed` with `mount_did_not_stop` and marks the position unverified, which refuses GoTo, Park, Home and Polar Align before Home is confirmed. Scope: `OpenAstroAra.Server/Services/PolarAlignService.MountStop.cs`, `OpenAstroAra.Server/Services/TelescopeService.PoseTrust.cs`. Checked by: `PolarAlignServiceTest.Stop_retries_until_stopped`, `PolarAlignServiceTest.Pose_unverified_after_mount_did_not_stop_blocks_motion`.
+5. Every pointing Polar Align plans or moves from is a fresh driver read through `IMountMotionControl.ReadNowAsync`; a missing reading, the (0, 0) placeholder, one older than 2 s or one from another mount session fails or refuses with `pointing_unknown`, and the refresh cache is never read. Scope: `OpenAstroAra.Server/Services/PolarAlignService.FreshReads.cs`, `OpenAstroAra.Server/Services/TelescopeService.FreshReads.cs`. Checked by: `PolarAlignServiceTest.M18_a_reading_older_than_2_s_fails_the_run_as_pointing_unknown_before_any_motion`.
+6. Polar Align holds the mount's one motion owner from Start to the end of its run, during which the REST GoTo, sync, Center, Home and Park routes refuse with `polar-align-moving-mount` whatever `force` says, a sequencer or mediator GoTo, Park or Home fails before anything reaches the mount, and a mediator sync is not sent; Emergency Stop, Stop Mount, AbortSlew, a rate-0 MoveAxis, tracking off and the safety, fault and shutdown parks are never refused. Scope: `OpenAstroAra.Server/Services/TelescopeService.MotionOwner.cs`, `OpenAstroAra.Server/Services/PolarAlignService.MotionOwner.cs`, `OpenAstroAra.Server/Endpoints/EquipmentEndpoints.cs`. Checked by: `EquipmentEndpointsSlewTest.A_goto_or_sync_while_polar_align_turns_the_mount_is_refused`, `TelescopeMotionOwnerTest.Emergency_Stop_and_the_safety_park_go_through_while_Polar_Align_holds_the_mount`.
+7. Each turn runs at the mount's fastest rates at or below 3°/s and 1°/s, never rounded up, fails after 2× its planned time at those rates plus 2 s (`slew_timeout`) or 2 s without progress (`slew_stalled`), stops on Dec moving more than 0.1° or a pier-side change, and must arrive within max(2°, 10%) of its step. Scope: `OpenAstroAra.Server/Services/PolarAlignService.MoveGuards.cs`, `OpenAstroAra.Server/Services/PolarAlignService.Stages.cs`. Checked by: `PolarAlignServiceTest.A_mount_slower_than_its_rate_fails_at_twice_the_planned_time_as_slew_timeout`, `PolarAlignServiceTest.A_Dec_that_drifts_during_an_RA_turn_stops_it_within_0_1_degrees_as_dec_moved`.
+8. Between two frames of a measurement the solved position angle stays within 10° of 0° or of the turn `PredictedFieldTurnDeg` gives for the mount's RA turn; within 10° of 180° from either is `pier_flip`, which ends the run with tracking off. Scope: `OpenAstroAra.Server/Services/PolarAlignService.MoveGuards.cs`. Checked by: `PolarAlignServiceTest.M05_a_seed_c_frame_turned_180_degrees_fails_the_run_as_pier_flip_after_the_second_turn`, `PolarAlignServiceTest.A_field_turned_by_a_roughly_aligned_axis_near_the_pole_passes_and_a_flip_of_it_does_not`.
+9. Every pre-flight check is a row of the one pre-flight evaluator (only `polar-align-unconfirmed`, `polar-align-already-running` and the motion owner's `polar-align-mount-busy` sit outside it), and Start, start-plan and the adjust screen's Check refuse on its first failing row before anything moves: an unverified mount clock, a parked mount, an unverified position, and a counterweight clearance not confirmed for the mount's current limit; no request flag skips a row. Scope: `OpenAstroAra.Server/Services/PolarAlignPreflightEvaluator.cs`, `OpenAstroAra.Server/Services/PolarAlignService.Preflight.cs`, `OpenAstroAra.Server/Services/TelescopeService.MountClock.cs`. Checked by: `PolarAlignServiceTest.Preflight_lists_every_check_and_Start_refuses_on_a_fail`, `PolarAlignServiceTest.Start_with_the_mount_clock_not_verified_is_refused_before_anything_moves`.
+10. The pre-flight evaluator also refuses a site with no finite longitude or sidereal time or at latitude 0° and longitude 0° (`polar-align-site-not-set`), an alt-az mount (`polar-align-alt-az-mount`), and a mount whose `CanMoveAxis(Primary)` is false (`polar-align-cannot-move-axis`). Scope: `OpenAstroAra.Server/Services/PolarAlignPreflightEvaluator.cs`. Checked by: `PolarAlignPreflightEvaluatorTest.A_site_without_a_longitude_or_sidereal_time_or_at_0_0_refuses`, `PolarAlignPreflightEvaluatorTest.An_alt_az_mount_refuses_and_an_equatorial_one_passes`, `PolarAlignPreflightEvaluatorTest.A_mount_that_cannot_move_its_RA_axis_refuses`.
+11. `polar_align.east_direction` picks the first turn's way at a new sweep origin, the RA motor's sign is learned by a guarded 0.5° test move that counts toward the sweep limit and is saved per profile for the mount's identity and its driver's name and version (#2167), and a turn more than 0.5° the wrong way stops the motor as `turn_wrong_way` and is never reversed. Scope: `OpenAstroAra.Server/Services/PolarAlignService.SweepOrigin.cs`, `OpenAstroAra.Server/Services/PolarAlignService.Stages.cs`, `OpenAstroAra.Server/Services/PolarAlignService.MotorDirection.cs`. Checked by: `PolarAlignServiceTest.A_motor_that_runs_the_other_way_from_its_saved_direction_fails_and_is_never_reversed`, `PolarAlignServiceTest.The_direction_test_counts_toward_the_sweep_limit`.
+12. Every stop of the Polar Aligner is verified (Stop, then Status polled for a reading where neither axis moves, at most three sends in 3 s); an unconfirmed one is owed and blocks Resume and Home, and a run keeps each axis's net travel within max(3 × its first offset + 30′, 10′) and sends at most 40 moves. Scope: `OpenAstroAra.Server/Services/PolarAligner.cs`, `OpenAstroAra.Server/Services/PolarAlignerService.cs`, `OpenAstroAra.Server/Services/PolarAlignService.Aligner.cs`. Checked by: `PolarAlignerServiceTest.Aligner_stop_is_retried_until_the_device_reports_still`, `PolarAlignServiceTest.Aligner_stop_not_confirmed_is_reported_and_owed`, `PolarAlignServiceTest.Aligner_stops_at_the_run_travel_cap`.
+13. Each readout shows its 1σ. "Aligned" and a Check's verdict use error + 2σ against the tolerance. The σ never holds Done back. Scope: `OpenAstroAra.Server/Services/PolarAlignService.Uncertainty.cs`, `client/openastroara_client/lib/widgets/imaging/polar_align_readout.dart`, `client/openastroara_client/lib/widgets/imaging/polar_error_rating.dart`. Checked by: `PolarAlignServiceTest.A_check_verdict_rates_the_error_plus_twice_its_sigma_so_0_2_plus_or_minus_1_3_is_not_excellent`, `PolarAlignServiceTest.Rough_Done_inside_the_tolerance_completes_even_while_the_error_plus_two_sigma_is_over_it`.
+
+## Alternatives rejected
+
+- **The full ARA-1 to ARA-19 spec** (a counterweight model, a start band, a pose envelope, a motion budget, a fork opt-in, pier-side checks): it covers poses NINA users never meet, needs a per-mount clearance measurement before any run, and raised a design question per layer. The sweep bound, the clearance confirm and the move guards already keep a confirmed start from walking into the pier.
+- **NINA's code as it is, with no additions**: its 2× timeout carries on, it steers by the cached position (the #2070 false zero), its stop is not verified, and nothing stops a GoTo beside the turn. Each of those is a cause of the #2048 incident.
+- **NINA's own start GoTo** (Alt = latitude + 2°, Az 1°): it needs a verified mount clock, AlpacaBridge #2395 and a pier-side read after the slew; Ara starts from where the user pointed the mount, as NINA's "start from current position".
+- **The motion owner only while a turn runs** (ARA-2 as written): a GoTo between turns, during a solve or while adjusting, would change the RA reading the next turn steers by and the sweep it is measured from.
+- **A manual (hand-turn) mode, as NINA offers**: Ara is about automation; a mount that cannot turn its own RA axis is refused (the maintainer, 2026-11-21, #2170).
+- **A `force` that lifts the Polar Align refusals**: it would put back the two-commands-at-once case the owner exists to stop.
+
+## Consequences
+
+- A change to Polar Align's motion is reviewed against NINA's `MoveToNextPoint` first; a guard beyond this list needs an incident and a new record or an edit of this one.
+- The dropped layers' five placeholder pre-flight rows (`motionsafety`, `pier_side`, `pose_envelope`, `start_cw_angle`, `turn_step`) were removed by #2159; the pre-flight list holds only the checks above.
+- A motor start on a new mount needs one clearance confirm and one 0.5° test turn per mount and driver name and version.
+- The rig checks on #2048 (the stop traces P0-3/4/5, the motor sign P0-6, the staged 5°/10°/30° runs) tune the timings in the Rules; a tuned number is an edit of this record.
+- `stable/1.0` holds this work alone; one merge of `stable/1.0` into `master` carries it there.
+
+## How to reverse
+
+Each guard is its own partial class or evaluator row, so one can be removed by deleting its file or row, its refusal cause from `RefusalCatalog` and `openapi.yaml`, its sentences from the two arb files and its tests, then editing this record. Going back to the full ARA spec means building the dropped #2065 layers (a counterweight model, a measured clearance per mount, a start band) and adding their pre-flight rows back. Going back to the pre-#2048 routine (Find Home and GoTo between stages) is not a reversal anyone should make: it is the cause of the incident.
+
+## Links
+
+- [#2048](https://github.com/open-astro/openastro-ara/issues/2048) (the incident, the re-spec and the decisions)
+- [#2066](https://github.com/open-astro/openastro-ara/issues/2066), [#2067](https://github.com/open-astro/openastro-ara/issues/2067), [#2069](https://github.com/open-astro/openastro-ara/issues/2069), [#2071](https://github.com/open-astro/openastro-ara/issues/2071), [#2072](https://github.com/open-astro/openastro-ara/issues/2072), [#2081](https://github.com/open-astro/openastro-ara/issues/2081), [#2082](https://github.com/open-astro/openastro-ara/issues/2082), [#2083](https://github.com/open-astro/openastro-ara/issues/2083)
+- NINA's Three Point Polar Alignment, `isbeorn/nina.plugin.polaralignment` at `e5afbf54`, `PolarAlignment/Instructions/PolarAlignment.cs` 985-1042
+- ADR 0022 (each refusal cause is declared once)
+- [`design/PORT_PLAYBOOK.md`](../../design/PORT_PLAYBOOK.md) §45.11, §45.17
+- [`design/API_CONTRACT.md`](../../design/API_CONTRACT.md) (the 2026-11-19 to 2026-11-21 Polar Align entries)

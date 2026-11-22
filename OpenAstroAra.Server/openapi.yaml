@@ -14294,6 +14294,9 @@ components:
             - number
             - string
           format: double
+        dec_pulses_unanswered:
+          type: boolean
+          default: false
     ParkRequestDto:
       type: object
       properties:
