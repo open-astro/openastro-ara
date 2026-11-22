@@ -171,8 +171,11 @@ class PolarAlignApi implements PolarAlignClient {
     return PolarAlignMoveToStartResult.fromJson(data);
   }
 
-  /// #2166 how long the app waits for the move to the start position.
-  static const moveToStartTimeout = Duration(seconds: 120);
+  /// #2166 how long the app waits for the move to the start position. Going
+  /// away stops the move, so this is above the rig's worst case: the rig fails
+  /// a mount whose probe and move could take more than 5 min before anything
+  /// moves (`MoveToStartMotorBudget`), and the settles, stops and lists after.
+  static const moveToStartTimeout = Duration(minutes: 10);
 
   /// Abort — the mount stops where it is (#2048: AbortSlew and both motors
   /// stopped, confirmed on the daemon, tracking left off); logged as

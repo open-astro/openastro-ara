@@ -7433,7 +7433,7 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String polarMoveToStartBlockedClearance(String deg) {
-    return 'Confirm the clearance first: the move turns the Dec axis up to $deg°.';
+    return 'Confirm clearance first: Polar align moves nothing until you do. The move turns the Dec axis alone, up to $deg°.';
   }
 
   @override
@@ -14941,7 +14941,7 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String polarMoveToStartBlockedClearance(String deg) {
-    return 'Confirme a folga primeiro: o movimento gira o eixo de Dec até $deg°.';
+    return 'Confirme a folga primeiro: o Polar align não move nada até lá. O movimento gira só o eixo de Dec, até $deg°.';
   }
 
   @override

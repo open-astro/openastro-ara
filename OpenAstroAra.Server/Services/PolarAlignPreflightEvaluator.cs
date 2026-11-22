@@ -379,7 +379,7 @@ internal static class PolarAlignPreflightEvaluator {
             Block(PolarAlignMoveToStartBlocks.ClearanceNotConfirmed, settingsError);
         } else if (clearance is null || !PolarAlignSettingsClamp.ReachCovered(clearance.ConfirmedReachDeg, reach)) {
             Block(PolarAlignMoveToStartBlocks.ClearanceNotConfirmed, new RefusalException(RefusalCatalog.PolarAlignClearanceNotConfirmed,
-                $"Confirm this mount's clearance first: the move to the start position turns the Dec axis up to {ReachText(reach)}°. Check there is room for the tube, counterweight and cables to move that far, then confirm it in Polar Align",
+                $"Confirm this mount's clearance in Polar Align first: Polar Align moves nothing until you do. The move to the start position turns the Dec axis alone, up to {ReachText(reach)}°, and leaves the RA axis where it is",
                 new Dictionary<string, object?> { ["reach_deg"] = reach }));
         }
         if (rows[PolarAlignPreflightChecks.MountType].Status == PolarAlignPreflightStatuses.Fail) {

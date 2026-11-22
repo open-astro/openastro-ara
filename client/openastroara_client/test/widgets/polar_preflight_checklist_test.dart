@@ -821,7 +821,10 @@ void main() {
     );
     expect(_onPressed(tester, 'polar-move-to-start-button'), isNull);
     expect(
-      find.text('Confirm the clearance first: the move turns the Dec axis up to 4.3°.'),
+      find.text(
+        'Confirm clearance first: Polar align moves nothing until you do. '
+        'The move turns the Dec axis alone, up to 4.3°.',
+      ),
       findsOneWidget,
     );
   });
@@ -896,6 +899,63 @@ void main() {
       await tester.tap(find.byKey(const Key('polar-move-to-start-stop')));
       await tester.pumpAndSettle();
       expect(rig.stops, 1);
+    },
+  );
+
+  testWidgets(
+    'The move progress and Stop come back after a tab switch mid-move',
+    (tester) async {
+      final rig = _Rig()
+        ..onAxis = true
+        ..offer = _offer
+        ..moveGate = Completer<void>();
+      rig.section.initial = rigPolarAlign.withMountClearance(
+        preflightMountKey,
+        const PolarAlignMountClearance(confirmedReachDeg: 20.5),
+      );
+      final shown = ValueNotifier<bool>(true);
+      addTearDown(shown.dispose);
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            ...polarAlignSectionOverrides(rig.section),
+            polarAlignApiProvider.overrideWithValue(rig),
+            polarAlignLiveProvider.overrideWith(_Idle.new),
+          ],
+          child: MaterialApp(
+            home: Scaffold(
+              body: ValueListenableBuilder<bool>(
+                valueListenable: shown,
+                builder: (_, show, _) => show
+                    ? const SingleChildScrollView(child: PolarPreflightChecklist())
+                    : const SizedBox.shrink(),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const Key('polar-move-to-start-button')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('polar-move-to-start-confirm-go')));
+      await tester.pump();
+      // The user opens another tab while the mount moves, then comes back.
+      shown.value = false;
+      await tester.pump();
+      shown.value = true;
+      await tester.pump();
+      await tester.pump();
+      expect(
+        find.byKey(const Key('polar-move-to-start-stop')),
+        findsOneWidget,
+        reason: 'the mount still moves: its progress and Stop come back',
+      );
+
+      await tester.tap(find.byKey(const Key('polar-move-to-start-stop')));
+      await tester.pumpAndSettle();
+      expect(rig.stops, 1);
+      expect(find.byKey(const Key('polar-move-to-start-progress')), findsNothing);
     },
   );
 

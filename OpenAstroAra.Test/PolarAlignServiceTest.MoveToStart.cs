@@ -497,6 +497,184 @@ namespace OpenAstroAra.Test {
             });
         }
 
+        [Test]
+        public async Task A_Dec_probe_that_barely_moves_fails_as_turn_mismatch_and_no_second_move_runs() {
+            var mount = PolledGemNearThePole();
+            var shifted = false;
+            mount.OnFullRead = () => {
+                // Once the probe's motor stopped, the Dec reading comes back 0.25° toward the pole: it moved 0.05° in all.
+                if (!shifted && DecMoves(mount) is { Length: 1 } dec && dec[0].End != MotionEnd.Running) {
+                    shifted = true;
+                    mount.ReportedDecOffsetDeg = 0.25;
+                }
+            };
+            using var svc = NewGemService(mount, new WsRecorder());
+
+            var result = await svc.MoveToStartAsync(CancellationToken.None).ConfigureAwait(false);
+
+            Assert.Multiple(() => {
+                Assert.That(result.Outcome, Is.EqualTo(PolarAlignMoveToStartOutcomes.Failed), mount.Describe());
+                Assert.That(result.Reason, Is.EqualTo(PolarAlignService.TurnMismatch), result.Message);
+                Assert.That(result.Message, Does.Contain("direction is not known"));
+                Assert.That(DecMoves(mount), Has.Length.EqualTo(1), "no move after the probe. " + mount.Describe());
+                Assert.That(mount.IsMoving, Is.False);
+            });
+        }
+
+        [Test]
+        public async Task A_move_that_ends_over_the_pole_fails_as_pier_changed() {
+            var mount = PolledGemNearThePole();
+            var step = 0;
+            mount.OnFullRead = () => {
+                if (DecMoves(mount) is not { Length: 2 } dec || dec[1].End == MotionEnd.Running) {
+                    return;
+                }
+                // Once the second move's motor stopped: the Dec reading jumps to 0.5° from the pole, then the RA reading flips
+                // by 12 h and the pier side with it, as a Dec axis gone over the pole reads.
+                if (step == 0) {
+                    step = 1;
+                    mount.ReportedDecOffsetDeg = 3.5;
+                } else if (step == 1) {
+                    step = 2;
+                    mount.RaJumpHours = 12.0;
+                    mount.ReportedSideOverride = mount.InitialTrueSide == PierSide.pierEast ? PierSide.pierWest : PierSide.pierEast;
+                }
+            };
+            using var svc = NewGemService(mount, new WsRecorder());
+
+            var result = await svc.MoveToStartAsync(CancellationToken.None).ConfigureAwait(false);
+
+            Assert.Multiple(() => {
+                Assert.That(result.Outcome, Is.EqualTo(PolarAlignMoveToStartOutcomes.Failed), mount.Describe());
+                Assert.That(result.Reason, Is.EqualTo(PolarAlignService.PierChanged), result.Message);
+                Assert.That(result.Message, Does.Contain("ended over the pole"));
+                Assert.That(mount.IsMoving, Is.False);
+            });
+        }
+
+        // ── the mount busy, the app gone, a mount that does not stop ─────────────────────────
+
+        [Test]
+        public async Task Move_to_start_is_refused_while_the_mount_slews_and_starts_no_Dec_move() {
+            var mount = PolledGemNearThePole();
+            using var svc = NewGemService(mount, new WsRecorder());
+            // The pre-flight list's reads, counted: the slew starts (the hand controller) on the move's own fresh reading,
+            // after its pre-flight list passed.
+            var reads = 0;
+            mount.OnFreshRead = _ => reads++;
+            await svc.GetPreflightAsync(null, CancellationToken.None).ConfigureAwait(false);
+            var preflightReads = reads;
+            reads = 0;
+            var slewed = false;
+            mount.OnFreshRead = _ => {
+                if (++reads == preflightReads + 1) {
+                    slewed = mount.GoToByOtherMeans(mount.TrueSky.RaDeg, 89.0);
+                }
+            };
+
+            var refusal = await Assert.ThrowsAsync<RefusalException>(() => svc.MoveToStartAsync(CancellationToken.None));
+
+            Assert.Multiple(() => {
+                Assert.That(slewed, Is.True, "the slew started after the pre-flight list");
+                Assert.That(refusal!.Cause, Is.EqualTo(RefusalCatalog.PolarAlignMountBusy), refusal.Message);
+                Assert.That(refusal.Message, Does.Contain("slewing"));
+                Assert.That(DecMoves(mount), Is.Empty, mount.Describe());
+            });
+        }
+
+        [Test]
+        public async Task An_app_that_goes_away_during_the_move_to_start_stops_the_mount() {
+            var mount = PolledGemNearThePole();
+            using var svc = NewGemService(mount, new WsRecorder());
+            using var client = new CancellationTokenSource();
+            var reads = 0;
+            mount.OnPoseRead = () => {
+                if (++reads == 6) {
+                    client.Cancel();
+                }
+            };
+
+            var result = await svc.MoveToStartAsync(client.Token).ConfigureAwait(false);
+
+            Assert.Multiple(() => {
+                Assert.That(result.Outcome, Is.EqualTo(PolarAlignMoveToStartOutcomes.Stopped), result.Message + " " + mount.Describe());
+                Assert.That(OffPoleDeg(mount), Is.LessThan(3.9), "stopped part way");
+                Assert.That(mount.IsMoving, Is.False);
+                Assert.That(mount.MotionOwner, Is.Null);
+            });
+        }
+
+        [Test]
+        public async Task A_mount_that_does_not_stop_after_the_move_to_start_ends_fails_as_mount_did_not_stop() {
+            var mount = PolledGemNearThePole();
+            using var svc = NewGemService(mount, new WsRecorder());
+            using var client = new CancellationTokenSource();
+            var reads = 0;
+            mount.OnPoseRead = () => {
+                if (++reads == 6) {
+                    mount.MoveAxisStopIgnored = int.MaxValue;
+                    mount.AbortIgnored = int.MaxValue;
+                    mount.RunawayDegPerSec = 0.5;
+                    client.Cancel();
+                }
+            };
+
+            var result = await svc.MoveToStartAsync(client.Token).ConfigureAwait(false);
+
+            Assert.Multiple(() => {
+                Assert.That(result.Outcome, Is.EqualTo(PolarAlignMoveToStartOutcomes.Failed), mount.Describe());
+                Assert.That(result.Reason, Is.EqualTo(PolarAlignService.MountDidNotStop), result.Message);
+                Assert.That(result.Message, Does.Contain("Cut the mount's power"));
+            });
+        }
+
+        [Test]
+        public async Task A_mount_too_slow_to_move_to_the_start_inside_its_budget_fails_before_anything_moves() {
+            var mount = PolledGemNearThePole();
+            mount.AxisRateBands = [(0.0, 0.01)]; // 0.01°/s at most: the probe and the move could take over 15 min
+            using var svc = NewGemService(mount, new WsRecorder());
+
+            var result = await svc.MoveToStartAsync(CancellationToken.None).ConfigureAwait(false);
+
+            Assert.Multiple(() => {
+                Assert.That(result.Outcome, Is.EqualTo(PolarAlignMoveToStartOutcomes.Failed), mount.Describe());
+                Assert.That(result.Reason, Is.EqualTo("slew_failed"), result.Message);
+                Assert.That(result.Message, Does.Contain("nothing moved"));
+                Assert.That(DecMoves(mount), Is.Empty, mount.Describe());
+            });
+        }
+
+        // ── tracking after the move ──────────────────────────────────────────────────────────
+
+        [Test]
+        public async Task A_move_to_start_from_a_mount_that_did_not_track_hands_back_tracking_off() {
+            var mount = PolledGemNearThePole();
+            mount.SetTrackingEnabled(false);
+            using var svc = NewGemService(mount, new WsRecorder());
+
+            var result = await svc.MoveToStartAsync(CancellationToken.None).ConfigureAwait(false);
+
+            Assert.Multiple(() => {
+                Assert.That(result.Outcome, Is.EqualTo(PolarAlignMoveToStartOutcomes.Arrived), result.Message);
+                Assert.That(mount.Tracking, Is.False, "the tracking the mount had (off) is handed back. " + mount.Describe());
+            });
+        }
+
+        [Test]
+        public async Task A_move_to_start_that_fails_leaves_tracking_off() {
+            var mount = PolledGemNearThePole();
+            mount.ReadingFrozen = true;
+            using var svc = NewGemService(mount, new WsRecorder());
+            Assert.That(mount.Tracking, Is.True, "the mount tracks before the move");
+
+            var result = await svc.MoveToStartAsync(CancellationToken.None).ConfigureAwait(false);
+
+            Assert.Multiple(() => {
+                Assert.That(result.Outcome, Is.EqualTo(PolarAlignMoveToStartOutcomes.Failed), result.Message);
+                Assert.That(mount.Tracking, Is.False, "a failed move turns tracking off. " + mount.Describe());
+            });
+        }
+
         // ── more refusals ────────────────────────────────────────────────────────────────────
 
         [Test]

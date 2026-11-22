@@ -2036,7 +2036,7 @@
   "polarMoveToStartBlockedParked": "Destrave a montagem do estacionamento primeiro: o alinhamento polar nunca faz isso.",
   "polarMoveToStartBlockedSite": "Defina primeiro a latitude do local, para o alinhamento polar saber de qual polo se afastar.",
   "polarMoveToStartBlockedPose": "Confirme primeiro a posição Home da montagem: a posição dela não é confiável.",
-  "polarMoveToStartBlockedClearance": "Confirme a folga primeiro: o movimento gira o eixo de Dec até {deg}°.",
+  "polarMoveToStartBlockedClearance": "Confirme a folga primeiro: o Polar align não move nada até lá. O movimento gira só o eixo de Dec, até {deg}°.",
   "polarMoveToStartBlockedAltAz": "Esta montagem diz que é altazimutal: o alinhamento polar precisa de uma montagem equatorial.",
   "polarMoveToStartBlockedDec": "Esta montagem não consegue girar o eixo de Dec por velocidade do motor. Aponte-a 2–5° do polo com os próprios controles.",
   "polarMoveToStartBlockedOther": "Corrija primeiro a verificação que falhou acima.",

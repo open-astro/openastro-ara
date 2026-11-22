@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../l10n/l10n.dart';
 import '../../models/polar_align.dart';
+import '../../state/polar_align/polar_align_move_to_start_state.dart';
 import '../../state/polar_align/polar_align_preflight_state.dart';
 import '../../state/polar_align/polar_align_routine_state.dart';
 import '../../state/polar_align/polar_align_state.dart';
@@ -28,7 +29,8 @@ import 'polar_start_confirm.dart';
 /// [PolarAlignPreflight.moveToStart]): off with the reason while the rig says
 /// it is blocked, else a tap opens the motion confirm and only then asks the
 /// rig to move; the move shows its progress and Stop above the list until the
-/// rig answers, whatever the list reads meanwhile. The row stays, so pointing
+/// rig answers, whatever the list reads meanwhile, and after a tab or mode
+/// switch ([polarMoveToStartProvider]). The row stays, so pointing
 /// the scope yourself works as before.
 /// Renders the rig's list as data, loading and error; shows nothing for a rig
 /// that predates the list.
@@ -44,13 +46,11 @@ class _PolarPreflightChecklistState
     extends ConsumerState<PolarPreflightChecklist> {
   bool _all = false;
 
-  /// #2166 the move to the start position is under way.
-  bool _moving = false;
-
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
     final preflight = ref.watch(polarAlignPreflightProvider);
+    final moving = ref.watch(polarMoveToStartProvider);
     void refresh() => ref.read(polarAlignPreflightProvider.notifier).refresh();
     final list = switch (preflight) {
       AsyncData(:final value) =>
@@ -101,7 +101,7 @@ class _PolarPreflightChecklistState
     // #2166 while the mount moves, its progress and Stop stay whatever the
     // list reads meanwhile: a re-read mid-move sees a busy mount, or a start
     // pointing that passes, and makes no offer.
-    if (!_moving) return list;
+    if (!moving) return list;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
@@ -111,6 +111,7 @@ class _PolarPreflightChecklistState
 
   Widget _list(PolarAlignPreflight preflight, VoidCallback refresh) {
     final l10n = context.l10n;
+    final moving = ref.watch(polarMoveToStartProvider);
     final shown = [
       for (final c in preflight.checks)
         if (_all ||
@@ -166,7 +167,7 @@ class _PolarPreflightChecklistState
           ),
         for (final c in shown) ...[
           _row(c),
-          if (!_moving &&
+          if (!moving &&
               c.id == PolarAlignPreflightChecks.startPointing &&
               c.fails &&
               preflight.moveToStart != null)
@@ -282,23 +283,15 @@ class _PolarPreflightChecklistState
     );
     if (confirmed != true || !mounted) return;
     final l10n = context.l10n;
-    final action = ref.read(polarAlignActionProvider.notifier);
-    setState(() => _moving = true);
-    try {
-      final result = await api.moveToStart();
-      if (result.outcome == PolarMoveToStartOutcomes.failed) {
-        action.fail(
-          l10n.polarMoveToStartFailed(result.message ?? result.reason ?? ''),
+    await ref
+        .read(polarMoveToStartProvider.notifier)
+        .move(
+          failed: (result) => l10n.polarMoveToStartFailed(
+            result.message ?? result.reason ?? '',
+          ),
+          describe: (e) =>
+              friendlyError(l10n, e, action: l10n.polarActionMoveToStart),
         );
-      }
-    } catch (e) {
-      action.fail(friendlyError(l10n, e, action: l10n.polarActionMoveToStart));
-    } finally {
-      if (mounted) {
-        setState(() => _moving = false);
-        await ref.read(polarAlignPreflightProvider.notifier).refresh();
-      }
-    }
   }
 
   /// #2166 Stop during the move: the rig's Polar Align stop, which stops the

@@ -12332,10 +12332,10 @@ abstract class AppLocalizations {
   /// **'Confirm the mount\'s Home first: its position is not trusted.'**
   String get polarMoveToStartBlockedPose;
 
-  /// Polar align (#2166): why Move to start position is off: the mount's clearance is not confirmed for the move; {deg} is how far the move turns Dec, in degrees
+  /// Polar align (#2166): why Move to start position is off: the mount's clearance (the Confirm clearance… dialog, which asks about the RA turns) is not confirmed; {deg} is how far the move turns Dec, in degrees
   ///
   /// In en, this message translates to:
-  /// **'Confirm the clearance first: the move turns the Dec axis up to {deg}°.'**
+  /// **'Confirm clearance first: Polar align moves nothing until you do. The move turns the Dec axis alone, up to {deg}°.'**
   String polarMoveToStartBlockedClearance(String deg);
 
   /// Polar align (#2166): why Move to start position is off: an alt-az mount

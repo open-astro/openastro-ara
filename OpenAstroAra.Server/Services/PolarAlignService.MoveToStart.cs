@@ -228,6 +228,7 @@ namespace OpenAstroAra.Server.Services {
         /// the move the other way comes back over the pole first.</summary>
         private async Task MoveDecToStartAsync(double poleSign, int gen, CancellationToken ct) {
             ThrowIfStoppedFromOutside(gen);
+            ThrowIfMoveToStartTooSlow();
             await EnsureTrackingOnAsync(gen, ct).ConfigureAwait(false);
             var track = new DecMoveTrack(poleSign);
             var (from, probed) = await MoveDecAxisUntilAsync(1.0, MoveToStartProbeDeg, track,
@@ -259,6 +260,21 @@ namespace OpenAstroAra.Server.Services {
                     $"the move ended with the scope {offPole:F1}° from the pole, not 2–5° — check the mount, then point it with its own controls"));
             }
             LogMoveToStartArrived(offPole);
+        }
+
+        /// <summary>The longest the probe and the move may take together by their own time bounds (twice the planned time
+        /// at the Dec rates the mount offers, plus slack). The app waits a fixed time for the move's answer
+        /// (<c>moveToStartTimeout</c>, 10 min) and going away stops the move, so a mount too slow to finish inside this
+        /// fails before anything moves, never part way.</summary>
+        internal TimeSpan MoveToStartMotorBudget { get; set; } = TimeSpan.FromMinutes(5);
+
+        private void ThrowIfMoveToStartTooSlow() {
+            var (fastRate, slowRate) = MatchTurnRates(TelescopeAxes.Secondary);
+            var worst = TurnTimeBound(MoveToStartProbeDeg, fastRate, slowRate) + TurnTimeBound(MoveToStartOffPoleDeg, fastRate, slowRate);
+            if (worst > MoveToStartMotorBudget) {
+                throw new RoutineFailedException("slew_failed", string.Create(CultureInfo.InvariantCulture,
+                    $"the mount turns its Dec axis at most {fastRate:0.###}°/s, so the move could take {worst.TotalSeconds:F0} s, more than the {MoveToStartMotorBudget.TotalSeconds:F0} s Polar Align allows — nothing moved; point it 2–5° from the pole with its own controls"));
+            }
         }
 
         /// <summary>
