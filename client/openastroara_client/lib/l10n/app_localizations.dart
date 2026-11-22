@@ -3015,7 +3015,7 @@ abstract class AppLocalizations {
   /// **'Rises {time}'**
   String planRisesAtCap(String time);
 
-  /// Plan square: the run is pausing after the current frame
+  /// Plan square and pill: a Pause is on its way (the frame in hand stops; a flat set or meridian flip finishes first)
   ///
   /// In en, this message translates to:
   /// **'Pausing…'**
@@ -3069,11 +3069,17 @@ abstract class AppLocalizations {
   /// **'Start imaging'**
   String get planStartImaging;
 
-  /// Shutter screen-reader label while imaging
+  /// Progress panel button while imaging: the frame in hand finishes and is saved, then the run pauses (#2172)
   ///
   /// In en, this message translates to:
   /// **'Pause after this frame'**
   String get planPauseAfterFrame;
+
+  /// Shutter screen-reader label while imaging: pauses now, the frame in hand stops and is taken again on Resume (#2172)
+  ///
+  /// In en, this message translates to:
+  /// **'Pause'**
+  String get planPauseNow;
 
   /// Shutter screen-reader label while pausing
   ///
@@ -3081,7 +3087,7 @@ abstract class AppLocalizations {
   /// **'Pausing'**
   String get planPausingLabel;
 
-  /// Plan pill and the greyed shutter's tap while a pause waits for the frame in hand to finish
+  /// Plan pill and run tracker while a Pause after this frame waits for the frame in hand to finish (the shutter stays live; a tap pauses now)
   ///
   /// In en, this message translates to:
   /// **'Pausing after this frame'**
@@ -3396,7 +3402,7 @@ abstract class AppLocalizations {
   /// Progress panel hint while imaging
   ///
   /// In en, this message translates to:
-  /// **'Tap the shutter to pause after this frame.'**
+  /// **'Tap the shutter to pause now.'**
   String get planHintPause;
 
   /// Plan's panel button while a plan runs: asks in place before it stops the plan (the shutter pauses; a 2 s hold is Emergency Stop)

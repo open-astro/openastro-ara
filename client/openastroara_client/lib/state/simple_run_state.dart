@@ -431,6 +431,7 @@ class SimpleRun {
     this.started = false,
     this.busy = false,
     this.pausing = false,
+    this.pausingAfterFrame = false,
     this.error,
     this.noStorage = false,
     this.startAt,
@@ -442,8 +443,13 @@ class SimpleRun {
   final bool started;
   final bool busy;
 
-  /// Pause asked for: the daemon finishes the frame in hand first.
+  /// Pause asked for, not reached yet (#2172: a plain Pause stops the frame
+  /// in hand at once; a flat set or a meridian flip still finishes first).
   final bool pausing;
+
+  /// The pause asked for is "Pause after this frame": the daemon files the
+  /// frame in hand first. Only meaningful with [pausing].
+  final bool pausingAfterFrame;
   final String? error;
 
   /// The daemon refused for want of a storage disk: [error] offers Storage.
@@ -472,6 +478,7 @@ class SimpleRun {
     bool? started,
     bool? busy,
     bool? pausing,
+    bool? pausingAfterFrame,
     String? error,
     bool noStorage = false,
     DateTime? startAt,
@@ -485,6 +492,7 @@ class SimpleRun {
     started: started ?? this.started,
     busy: busy ?? this.busy,
     pausing: pausing ?? this.pausing,
+    pausingAfterFrame: pausingAfterFrame ?? this.pausingAfterFrame,
     error: error,
     noStorage: noStorage,
     startAt: startNow ? null : startAt ?? this.startAt,
@@ -522,10 +530,10 @@ SimpleRunPhase simpleRunPhase(SimpleRun run, SequenceRunStateInfo? info) {
 class SimpleRunNotifier extends Notifier<SimpleRun> {
   @override
   SimpleRun build() {
-    // The pause lands once the frame in hand is filed.
+    // The pause lands once the run has stopped (or, after the frame, filed) the frame in hand.
     ref.listen(sequenceRunStateProvider, (_, next) {
       if (state.pausing && simpleRunPaused(next.value?.state)) {
-        state = state.copyWith(pausing: false);
+        state = state.copyWith(pausing: false, pausingAfterFrame: false);
       }
     });
     return const SimpleRun();
@@ -1200,10 +1208,19 @@ class SimpleRunNotifier extends Notifier<SimpleRun> {
       return false;
     }
   }
+  /// The shutter's Pause: the frame in hand stops now and is taken again on
+  /// Resume (#2172).
   Future<void> pause() => _op(
     (api, id) => api.pause(id),
     (l) => l.planActionPause,
-    before: state.copyWith(pausing: true),
+    before: state.copyWith(pausing: true, pausingAfterFrame: false),
+  );
+
+  /// "Pause after this frame": the frame in hand is filed, then the run holds.
+  Future<void> pauseAfterFrame() => _op(
+    (api, id) => api.pauseAfterFrame(id),
+    (l) => l.planActionPause,
+    before: state.copyWith(pausing: true, pausingAfterFrame: true),
   );
   // The shutter's resume re-centers (pointing may have drifted while
   // paused); the progress panel offers the other two.

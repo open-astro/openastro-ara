@@ -80,7 +80,14 @@ abstract interface class SequenceClient {
   Future<SequenceRunStateInfo?> getRunState(String id);
 
   Future<String> start(String id);
+  /// #2172 — Pause now: the exposure in progress stops, is not saved or
+  /// counted, and is taken again on Resume.
   Future<String> pause(String id);
+
+  /// #2172 — "Pause after this frame": the exposure in progress finishes and
+  /// is filed, then the run pauses. An older daemon ignores the body and
+  /// pauses after the frame anyway.
+  Future<String> pauseAfterFrame(String id);
 
   /// §38.10 resume with options: [recenter] plate-solves + re-centers the
   /// paused target before imaging continues (daemon skips it when the run
@@ -402,6 +409,10 @@ class SequenceApi implements SequenceClient {
 
   @override
   Future<String> pause(String id) => _lifecycle(id, 'pause');
+
+  @override
+  Future<String> pauseAfterFrame(String id) =>
+      _lifecycle(id, 'pause', body: {'after_frame': true});
 
   @override
   Future<String> resume(String id,

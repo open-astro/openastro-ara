@@ -1774,7 +1774,10 @@ class _SimpleStatusPillState extends ConsumerState<SimpleStatusPill>
         ? l10n.previewWaitingForFlip(simpleCountdown(run!.meridianWaitLeft!))
         : run?.reasonText ?? run?.currentInstructionDescription;
     final flipWait = run?.meridianWaitLeft != null;
-    // A pause asked here, until the frame in hand lands (user, 2026-11-11).
+    // A pause asked here, until the run reports Paused (user, 2026-11-11).
+    final pausingAfterFrame = ref.watch(
+      simpleRunProvider.select((r) => r.pausingAfterFrame),
+    );
     final pausing =
         ref.watch(simpleRunProvider.select((r) => r.pausing)) &&
         (run?.state?.isActive ?? false) &&
@@ -1989,7 +1992,7 @@ class _SimpleStatusPillState extends ConsumerState<SimpleStatusPill>
           SimpleStatusOrigin.plan,
           paused ? l10n.previewPlanPaused : l10n.previewPlan,
           pausing
-              ? l10n.planPausingAfterFrame
+              ? (pausingAfterFrame ? l10n.planPausingAfterFrame : l10n.planPausing)
               // The Guider's calibration inside a plan: its leg on this pill,
               // and no Guider pill of its own (#1875 slice 3).
               : planCalibrating

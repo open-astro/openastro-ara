@@ -3204,6 +3204,13 @@ paths:
           in: header
           schema:
             type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - type: 'null'
+                - $ref: '#/components/schemas/SequencePauseRequestDto'
       responses:
         '202':
           description: Accepted
@@ -16506,6 +16513,15 @@ components:
           type:
             - 'null'
             - string
+    SequencePauseRequestDto:
+      required:
+        - after_frame
+      type: object
+      properties:
+        after_frame:
+          type:
+            - 'null'
+            - boolean
     SequencePlanDto:
       required:
         - sequence_id

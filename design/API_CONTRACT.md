@@ -179,13 +179,29 @@ This file captures the *reasoning* behind each contract decision — DTO shapes,
 
 ---
 
+## 2026-11-22 — #2172 Pause stops the exposure in progress; "Pause after this frame" is a body flag
+
+**Endpoint(s) or area:** `POST /api/v1/sequences/{id}/pause` gains an optional body `SequencePauseRequestDto { after_frame }`.
+
+**Decision:** with no body (or `after_frame` null or false) Pause stops the exposure in progress at once, whatever its type (light, dark, bias, or a one-off flat or dark from an exposure item). The camera exposure is aborted, the frame is not saved or counted, and on Resume the run takes it again from the same place in the plan (the §38.10 re-center rules are unchanged). `{"after_frame": true}` keeps the old behaviour: the exposure in progress finishes and is filed, then the run pauses. A flat set (`FlatPanelFlats`, `SkyFlats`) and a meridian flip still finish first either way. Stop after frame (#1557) still files its frame. A Pause now sent while a Stop after frame is waiting replaces it: the run holds Paused instead of ending. Pause never touches the guider, so guiding keeps running while paused. The daemon's own pauses are unchanged: the safety pause lets every frame finish, and the guiding-lost pauses (#2169) stop only a light. No new routes (ADR 0009 rule 1); the body copies `/resume`'s optional body.
+
+**Reasoning:** on the rig (2026-11-21) Pause during a 299 s light left the camera imaging for up to 5 minutes, which reads as a Pause that did nothing. NINA's stop-now (sequencer Stop) aborts the exposure in progress of any type, saves nothing and starts again at that item; Pause now follows it. Compatibility: an older daemon ignores the body and pauses after the frame, so "Pause after this frame" still keeps its frame there, and a plain Pause on an older daemon also waits for the frame until the daemon is updated. An older client on a newer daemon pauses at once.
+
+This replaces the "A frame in progress (an exposure item) ... still finish first" part of the 2026-11-11 entry below for a person's Pause.
+
+**Spec ref:** `OpenAstroAra.Server/openapi.yaml#/paths/~1api~1v1~1sequences~1{id}~1pause`; `OpenAstroAra.Sequencer/Utility/PauseGate.cs` (`FrameInterrupt`, `ExposureInterruptToken`), `Container/ExecutionStrategy/SequentialStrategy.cs`, `Services/SequencerService.cs` (`PauseAsync`, `StopAfterFrameAsync`), `Contracts/SequenceDtos.cs` (`SequencePauseRequestDto`).
+
+**Related:** #2172, #2169, #1557; tests `SequencerServiceTest` (`A_user_pause_stops_the_frame_in_progress_and_resume_takes_it_again`, `Pause_after_frame_lets_the_frame_finish_then_pauses`, `A_pause_now_overrides_a_pending_stop_after_frame_and_holds_the_run`), `PauseInterruptsPlanWorkTest`, `SequencePauseEndpointTest`.
+
+---
+
 ## 2026-11-11 — A pause stops the plan's work in progress
 
 **Endpoint(s) or area:** `POST /api/v1/sequences/{id}/pause`, and the daemon's own safety pause.
 
 **Decision:** a pause now stops what the plan has in progress, not only what comes next: an instruction (a wait, a slew, centring, cooling, an autofocus instruction) or a trigger (autofocus, dither) in progress is cancelled, the run suspends, and on Resume that instruction runs again and the triggers are asked again. A frame in progress (an exposure item), a flat set (`FlatPanelFlats`, `SkyFlats`, which take their frames inside one instruction) and a meridian flip still finish first. An instruction's own wait for the user (a prompt) does not interrupt anything. The response and the `sequence.paused` event are unchanged; `Paused` is still reported only once the run has suspended.
 
-**Reasoning:** with NINA's semantics (the current instruction always finishes) a paused plan kept focusing for minutes, which reads as a pause that did nothing (user, 2026-11-11). A frame keeps "Pause after this frame"; a flip is never cut short with the mount mid-move.
+**Reasoning:** with NINA's semantics (the current instruction always finishes) a paused plan kept focusing for minutes, which reads as a pause that did nothing (user, 2026-11-11). A frame keeps "Pause after this frame"; a flip is never cut short with the mount mid-move. (A person's Pause stops the frame since #2172, 2026-11-22, above.)
 
 **Spec ref:** `OpenAstroAra.Sequencer/Utility/PauseGate.cs` (`InterruptToken`), `Container/ExecutionStrategy/SequentialStrategy.cs`, `Trigger/SequenceTrigger.cs` (`RunsThroughPause`), `Trigger/MeridianFlip/MeridianFlipTrigger.cs`.
 
