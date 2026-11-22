@@ -58,6 +58,10 @@ namespace OpenAstroAra.Test {
             });
         }
 
+        /// <summary>The confirmation the app sends after its confirm: the offer's numbers.</summary>
+        private static readonly PolarAlignMoveToStartConfirmation MoveConfirmed =
+            new(PolarAlignService.MoveToStartOffPoleDeg, PolarAlignService.MoveToStartReachDeg);
+
         private static MotionEntry[] DecMoves(FakeGemMount mount) =>
             mount.Motions.Where(m => m.Kind == MotionKind.DecMotor && !m.Refused).ToArray();
 
@@ -91,12 +95,46 @@ namespace OpenAstroAra.Test {
             using var svc = NewGemService(mount, new WsRecorder());
 
             var preflight = await svc.GetPreflightAsync(null, CancellationToken.None).ConfigureAwait(false);
-            var refusal = await Assert.ThrowsAsync<RefusalException>(() => svc.MoveToStartAsync(CancellationToken.None));
+            var refusal = await Assert.ThrowsAsync<RefusalException>(() => svc.MoveToStartAsync(MoveConfirmed, CancellationToken.None));
 
             Assert.Multiple(() => {
                 Assert.That(preflight.MoveToStart, Is.Null);
                 Assert.That(refusal!.Cause, Is.EqualTo(RefusalCatalog.PolarAlignMoveToStartNotNeeded));
                 Assert.That(mount.Motions, Is.Empty, mount.Describe());
+            });
+        }
+
+        // ── the user's confirmation (ADR 0024 rule 1) ─────────────────────────────────────────
+
+        [Test]
+        public async Task Move_to_start_without_a_confirmation_is_refused_and_nothing_moves() {
+            var mount = PolledGemNearThePole();
+            using var svc = NewGemService(mount, new WsRecorder());
+
+            var refusal = await Assert.ThrowsAsync<RefusalException>(() => svc.MoveToStartAsync(null, CancellationToken.None));
+
+            Assert.Multiple(() => {
+                Assert.That(refusal!.Cause, Is.EqualTo(RefusalCatalog.PolarAlignMoveNotConfirmed));
+                Assert.That(mount.Motions, Is.Empty, "no MoveAxis call. " + mount.Describe());
+                Assert.That(mount.Commands.Where(c => c.IsMotion), Is.Empty);
+                Assert.That(mount.MotionOwner, Is.Null, "the motion owner is given back");
+            });
+        }
+
+        [TestCase(4.0, 4.0)]
+        [TestCase(3.0, 4.3)]
+        public async Task Move_to_start_with_stale_numbers_is_refused_and_nothing_moves(double targetDeg, double reachDeg) {
+            var mount = PolledGemNearThePole();
+            using var svc = NewGemService(mount, new WsRecorder());
+
+            var refusal = await Assert.ThrowsAsync<RefusalException>(
+                () => svc.MoveToStartAsync(new PolarAlignMoveToStartConfirmation(targetDeg, reachDeg), CancellationToken.None));
+
+            Assert.Multiple(() => {
+                Assert.That(refusal!.Cause, Is.EqualTo(RefusalCatalog.PolarAlignMoveNotConfirmed));
+                Assert.That(mount.Motions, Is.Empty, "no MoveAxis call. " + mount.Describe());
+                Assert.That(mount.Commands.Where(c => c.IsMotion), Is.Empty);
+                Assert.That(mount.MotionOwner, Is.Null);
             });
         }
 
@@ -108,7 +146,7 @@ namespace OpenAstroAra.Test {
             var phiBefore = mount.TruePhiDeg;
             using var svc = NewGemService(mount, new WsRecorder());
 
-            var result = await svc.MoveToStartAsync(CancellationToken.None).ConfigureAwait(false);
+            var result = await svc.MoveToStartAsync(MoveConfirmed, CancellationToken.None).ConfigureAwait(false);
 
             var dec = DecMoves(mount);
             Assert.Multiple(() => {
@@ -134,7 +172,7 @@ namespace OpenAstroAra.Test {
             mount.DecMotorSign = -1.0; // a positive rate raises the Dec axis: toward the pole
             using var svc = NewGemService(mount, new WsRecorder());
 
-            var result = await svc.MoveToStartAsync(CancellationToken.None).ConfigureAwait(false);
+            var result = await svc.MoveToStartAsync(MoveConfirmed, CancellationToken.None).ConfigureAwait(false);
 
             var dec = DecMoves(mount);
             Assert.Multiple(() => {
@@ -161,7 +199,7 @@ namespace OpenAstroAra.Test {
             using var svc = NewGemService(mount, new WsRecorder(), store);
 
             var preflight = await svc.GetPreflightAsync(null, CancellationToken.None).ConfigureAwait(false);
-            var refusal = await Assert.ThrowsAsync<RefusalException>(() => svc.MoveToStartAsync(CancellationToken.None));
+            var refusal = await Assert.ThrowsAsync<RefusalException>(() => svc.MoveToStartAsync(MoveConfirmed, CancellationToken.None));
 
             Assert.Multiple(() => {
                 Assert.That(preflight.MoveToStart!.BlockedBy, Is.EqualTo(PolarAlignMoveToStartBlocks.ClearanceNotConfirmed));
@@ -178,7 +216,7 @@ namespace OpenAstroAra.Test {
             using var svc = NewGemService(mount, new WsRecorder());
 
             var preflight = await svc.GetPreflightAsync(null, CancellationToken.None).ConfigureAwait(false);
-            var refusal = await Assert.ThrowsAsync<RefusalException>(() => svc.MoveToStartAsync(CancellationToken.None));
+            var refusal = await Assert.ThrowsAsync<RefusalException>(() => svc.MoveToStartAsync(MoveConfirmed, CancellationToken.None));
 
             Assert.Multiple(() => {
                 Assert.That(preflight.MoveToStart!.BlockedBy, Is.EqualTo(PolarAlignMoveToStartBlocks.PoseUnverified));
@@ -195,7 +233,7 @@ namespace OpenAstroAra.Test {
             using var svc = NewService(NewFake(), new ScriptedSolver(), mount);
 
             var preflight = await svc.GetPreflightAsync(null, CancellationToken.None).ConfigureAwait(false);
-            var refusal = await Assert.ThrowsAsync<RefusalException>(() => svc.MoveToStartAsync(CancellationToken.None));
+            var refusal = await Assert.ThrowsAsync<RefusalException>(() => svc.MoveToStartAsync(MoveConfirmed, CancellationToken.None));
 
             Assert.Multiple(() => {
                 Assert.That(preflight.MoveToStart!.BlockedBy, Is.EqualTo(PolarAlignMoveToStartBlocks.MountParked));
@@ -211,7 +249,7 @@ namespace OpenAstroAra.Test {
             using var svc = NewGemService(mount, new WsRecorder());
 
             var preflight = await svc.GetPreflightAsync(null, CancellationToken.None).ConfigureAwait(false);
-            var refusal = await Assert.ThrowsAsync<RefusalException>(() => svc.MoveToStartAsync(CancellationToken.None));
+            var refusal = await Assert.ThrowsAsync<RefusalException>(() => svc.MoveToStartAsync(MoveConfirmed, CancellationToken.None));
 
             Assert.Multiple(() => {
                 Assert.That(preflight.MoveToStart!.BlockedBy, Is.EqualTo(PolarAlignMoveToStartBlocks.CannotMoveDec));
@@ -226,7 +264,7 @@ namespace OpenAstroAra.Test {
             using var svc = NewGemService(mount, new WsRecorder());
             using var other = mount.AcquireMotion("center");
 
-            var refusal = await Assert.ThrowsAsync<RefusalException>(() => svc.MoveToStartAsync(CancellationToken.None));
+            var refusal = await Assert.ThrowsAsync<RefusalException>(() => svc.MoveToStartAsync(MoveConfirmed, CancellationToken.None));
 
             Assert.Multiple(() => {
                 Assert.That(refusal!.Cause, Is.EqualTo(RefusalCatalog.PolarAlignMountBusy));
@@ -241,7 +279,7 @@ namespace OpenAstroAra.Test {
             using var svc = NewGemService(mount, new WsRecorder());
             await FineRunToAdjustingAsync(svc).ConfigureAwait(false);
 
-            var refusal = await Assert.ThrowsAsync<RefusalException>(() => svc.MoveToStartAsync(CancellationToken.None));
+            var refusal = await Assert.ThrowsAsync<RefusalException>(() => svc.MoveToStartAsync(MoveConfirmed, CancellationToken.None));
             await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
 
             Assert.Multiple(() => {
@@ -258,7 +296,7 @@ namespace OpenAstroAra.Test {
             mount.ReadingFrozen = true;
             using var svc = NewGemService(mount, new WsRecorder());
 
-            var result = await svc.MoveToStartAsync(CancellationToken.None).ConfigureAwait(false);
+            var result = await svc.MoveToStartAsync(MoveConfirmed, CancellationToken.None).ConfigureAwait(false);
 
             Assert.Multiple(() => {
                 Assert.That(result.Outcome, Is.EqualTo(PolarAlignMoveToStartOutcomes.Failed));
@@ -277,7 +315,7 @@ namespace OpenAstroAra.Test {
             svc.AxisMoveBoundSlack = TimeSpan.Zero;
             svc.AxisMoveStall = TimeSpan.FromHours(1);
 
-            var result = await svc.MoveToStartAsync(CancellationToken.None).ConfigureAwait(false);
+            var result = await svc.MoveToStartAsync(MoveConfirmed, CancellationToken.None).ConfigureAwait(false);
 
             Assert.Multiple(() => {
                 Assert.That(result.Outcome, Is.EqualTo(PolarAlignMoveToStartOutcomes.Failed));
@@ -298,7 +336,7 @@ namespace OpenAstroAra.Test {
             };
             using var svc = NewGemService(mount, new WsRecorder());
 
-            var result = await svc.MoveToStartAsync(CancellationToken.None).ConfigureAwait(false);
+            var result = await svc.MoveToStartAsync(MoveConfirmed, CancellationToken.None).ConfigureAwait(false);
 
             Assert.Multiple(() => {
                 Assert.That(result.Outcome, Is.EqualTo(PolarAlignMoveToStartOutcomes.Failed));
@@ -319,7 +357,7 @@ namespace OpenAstroAra.Test {
             };
             using var svc = NewGemService(mount, new WsRecorder());
 
-            var result = await svc.MoveToStartAsync(CancellationToken.None).ConfigureAwait(false);
+            var result = await svc.MoveToStartAsync(MoveConfirmed, CancellationToken.None).ConfigureAwait(false);
 
             Assert.Multiple(() => {
                 Assert.That(result.Outcome, Is.EqualTo(PolarAlignMoveToStartOutcomes.Failed));
@@ -341,7 +379,7 @@ namespace OpenAstroAra.Test {
                 }
             };
 
-            var result = await svc.MoveToStartAsync(CancellationToken.None).ConfigureAwait(false);
+            var result = await svc.MoveToStartAsync(MoveConfirmed, CancellationToken.None).ConfigureAwait(false);
             await stopping!.WaitAsync(SignalTimeout).ConfigureAwait(false);
 
             var abort = mount.Stops.First(s => s.Kind == StopKind.Abort);
@@ -365,7 +403,7 @@ namespace OpenAstroAra.Test {
                 }
             };
 
-            var result = await svc.MoveToStartAsync(CancellationToken.None).ConfigureAwait(false);
+            var result = await svc.MoveToStartAsync(MoveConfirmed, CancellationToken.None).ConfigureAwait(false);
 
             var emergency = mount.Stops.First(s => s.Kind == StopKind.Abort);
             Assert.Multiple(() => {
@@ -391,7 +429,7 @@ namespace OpenAstroAra.Test {
             var phiBefore = mount.TruePhiDeg;
             using var svc = NewGemService(mount, new WsRecorder());
 
-            var result = await svc.MoveToStartAsync(CancellationToken.None).ConfigureAwait(false);
+            var result = await svc.MoveToStartAsync(MoveConfirmed, CancellationToken.None).ConfigureAwait(false);
 
             AssertArrivedOnItsSide(result, mount, phiBefore);
             mount.AssertEndedStopped(tracking: true);
@@ -405,7 +443,7 @@ namespace OpenAstroAra.Test {
             var phiBefore = mount.TruePhiDeg;
             using var svc = NewGemService(mount, new WsRecorder());
 
-            var result = await svc.MoveToStartAsync(CancellationToken.None).ConfigureAwait(false);
+            var result = await svc.MoveToStartAsync(MoveConfirmed, CancellationToken.None).ConfigureAwait(false);
 
             AssertArrivedOnItsSide(result, mount, phiBefore);
             Assert.That(DecMoves(mount)[0].TrueTo.DecAxisDeg, Is.GreaterThan(90.0), "the probe went over the pole. " + mount.Describe());
@@ -420,7 +458,7 @@ namespace OpenAstroAra.Test {
             var phiBefore = mount.TruePhiDeg;
             using var svc = NewGemService(mount, new WsRecorder());
 
-            var result = await svc.MoveToStartAsync(CancellationToken.None).ConfigureAwait(false);
+            var result = await svc.MoveToStartAsync(MoveConfirmed, CancellationToken.None).ConfigureAwait(false);
 
             // The JNOW pole is about 0.15° off the J2000 one: the move ends 4° from the JNOW pole.
             AssertArrivedOnItsSide(result, mount, phiBefore, nearDeg: 3.7, farDeg: 4.5);
@@ -439,7 +477,7 @@ namespace OpenAstroAra.Test {
             using var svc = NewGemService(mount, new WsRecorder(), store);
 
             var preflight = await svc.GetPreflightAsync(null, CancellationToken.None).ConfigureAwait(false);
-            var result = await svc.MoveToStartAsync(CancellationToken.None).ConfigureAwait(false);
+            var result = await svc.MoveToStartAsync(MoveConfirmed, CancellationToken.None).ConfigureAwait(false);
 
             Assert.That(preflight.MoveToStart, Is.Not.Null, "within 3° of the south pole: the move is offered");
             AssertArrivedOnItsSide(result, mount, phiBefore);
@@ -461,7 +499,7 @@ namespace OpenAstroAra.Test {
             };
             using var svc = NewGemService(mount, new WsRecorder());
 
-            var result = await svc.MoveToStartAsync(CancellationToken.None).ConfigureAwait(false);
+            var result = await svc.MoveToStartAsync(MoveConfirmed, CancellationToken.None).ConfigureAwait(false);
 
             var dec = DecMoves(mount);
             Assert.Multiple(() => {
@@ -487,7 +525,7 @@ namespace OpenAstroAra.Test {
             };
             using var svc = NewGemService(mount, new WsRecorder());
 
-            var result = await svc.MoveToStartAsync(CancellationToken.None).ConfigureAwait(false);
+            var result = await svc.MoveToStartAsync(MoveConfirmed, CancellationToken.None).ConfigureAwait(false);
 
             Assert.Multiple(() => {
                 Assert.That(result.Outcome, Is.EqualTo(PolarAlignMoveToStartOutcomes.Failed), mount.Describe());
@@ -510,7 +548,7 @@ namespace OpenAstroAra.Test {
             };
             using var svc = NewGemService(mount, new WsRecorder());
 
-            var result = await svc.MoveToStartAsync(CancellationToken.None).ConfigureAwait(false);
+            var result = await svc.MoveToStartAsync(MoveConfirmed, CancellationToken.None).ConfigureAwait(false);
 
             Assert.Multiple(() => {
                 Assert.That(result.Outcome, Is.EqualTo(PolarAlignMoveToStartOutcomes.Failed), mount.Describe());
@@ -542,7 +580,7 @@ namespace OpenAstroAra.Test {
             };
             using var svc = NewGemService(mount, new WsRecorder());
 
-            var result = await svc.MoveToStartAsync(CancellationToken.None).ConfigureAwait(false);
+            var result = await svc.MoveToStartAsync(MoveConfirmed, CancellationToken.None).ConfigureAwait(false);
 
             Assert.Multiple(() => {
                 Assert.That(result.Outcome, Is.EqualTo(PolarAlignMoveToStartOutcomes.Failed), mount.Describe());
@@ -572,7 +610,7 @@ namespace OpenAstroAra.Test {
                 }
             };
 
-            var refusal = await Assert.ThrowsAsync<RefusalException>(() => svc.MoveToStartAsync(CancellationToken.None));
+            var refusal = await Assert.ThrowsAsync<RefusalException>(() => svc.MoveToStartAsync(MoveConfirmed, CancellationToken.None));
 
             Assert.Multiple(() => {
                 Assert.That(slewed, Is.True, "the slew started after the pre-flight list");
@@ -594,7 +632,7 @@ namespace OpenAstroAra.Test {
                 }
             };
 
-            var result = await svc.MoveToStartAsync(client.Token).ConfigureAwait(false);
+            var result = await svc.MoveToStartAsync(MoveConfirmed, client.Token).ConfigureAwait(false);
 
             Assert.Multiple(() => {
                 Assert.That(result.Outcome, Is.EqualTo(PolarAlignMoveToStartOutcomes.Stopped), result.Message + " " + mount.Describe());
@@ -619,7 +657,7 @@ namespace OpenAstroAra.Test {
                 }
             };
 
-            var result = await svc.MoveToStartAsync(client.Token).ConfigureAwait(false);
+            var result = await svc.MoveToStartAsync(MoveConfirmed, client.Token).ConfigureAwait(false);
 
             Assert.Multiple(() => {
                 Assert.That(result.Outcome, Is.EqualTo(PolarAlignMoveToStartOutcomes.Failed), mount.Describe());
@@ -634,7 +672,7 @@ namespace OpenAstroAra.Test {
             mount.AxisRateBands = [(0.0, 0.01)]; // 0.01°/s at most: the probe and the move could take over 15 min
             using var svc = NewGemService(mount, new WsRecorder());
 
-            var result = await svc.MoveToStartAsync(CancellationToken.None).ConfigureAwait(false);
+            var result = await svc.MoveToStartAsync(MoveConfirmed, CancellationToken.None).ConfigureAwait(false);
 
             Assert.Multiple(() => {
                 Assert.That(result.Outcome, Is.EqualTo(PolarAlignMoveToStartOutcomes.Failed), mount.Describe());
@@ -652,7 +690,7 @@ namespace OpenAstroAra.Test {
             mount.SetTrackingEnabled(false);
             using var svc = NewGemService(mount, new WsRecorder());
 
-            var result = await svc.MoveToStartAsync(CancellationToken.None).ConfigureAwait(false);
+            var result = await svc.MoveToStartAsync(MoveConfirmed, CancellationToken.None).ConfigureAwait(false);
 
             Assert.Multiple(() => {
                 Assert.That(result.Outcome, Is.EqualTo(PolarAlignMoveToStartOutcomes.Arrived), result.Message);
@@ -667,7 +705,7 @@ namespace OpenAstroAra.Test {
             using var svc = NewGemService(mount, new WsRecorder());
             Assert.That(mount.Tracking, Is.True, "the mount tracks before the move");
 
-            var result = await svc.MoveToStartAsync(CancellationToken.None).ConfigureAwait(false);
+            var result = await svc.MoveToStartAsync(MoveConfirmed, CancellationToken.None).ConfigureAwait(false);
 
             Assert.Multiple(() => {
                 Assert.That(result.Outcome, Is.EqualTo(PolarAlignMoveToStartOutcomes.Failed), result.Message);
@@ -686,7 +724,7 @@ namespace OpenAstroAra.Test {
             using var svc = NewService(NewFake(), new ScriptedSolver(), mount);
 
             var preflight = await svc.GetPreflightAsync(null, CancellationToken.None).ConfigureAwait(false);
-            var refusal = await Assert.ThrowsAsync<RefusalException>(() => svc.MoveToStartAsync(CancellationToken.None));
+            var refusal = await Assert.ThrowsAsync<RefusalException>(() => svc.MoveToStartAsync(MoveConfirmed, CancellationToken.None));
 
             Assert.Multiple(() => {
                 Assert.That(preflight.MoveToStart!.BlockedBy, Is.EqualTo(PolarAlignMoveToStartBlocks.AltAzMount));
@@ -704,7 +742,7 @@ namespace OpenAstroAra.Test {
             using var svc = NewGemService(mount, new WsRecorder(), store);
 
             var preflight = await svc.GetPreflightAsync(null, CancellationToken.None).ConfigureAwait(false);
-            var refusal = await Assert.ThrowsAsync<RefusalException>(() => svc.MoveToStartAsync(CancellationToken.None));
+            var refusal = await Assert.ThrowsAsync<RefusalException>(() => svc.MoveToStartAsync(MoveConfirmed, CancellationToken.None));
 
             Assert.Multiple(() => {
                 Assert.That(preflight.MoveToStart?.BlockedBy, Is.EqualTo(PolarAlignMoveToStartBlocks.SiteLatitude));

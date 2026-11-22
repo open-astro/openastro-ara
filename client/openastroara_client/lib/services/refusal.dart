@@ -36,7 +36,8 @@ enum RefusalCause {
   polarAlignCannotMoveAxis('polar-align-cannot-move-axis'),
   polarAlignRunActive('polar-align-run-active'),
   polarAlignCannotMoveDec('polar-align-cannot-move-dec'),
-  polarAlignMoveToStartNotNeeded('polar-align-move-to-start-not-needed');
+  polarAlignMoveToStartNotNeeded('polar-align-move-to-start-not-needed'),
+  polarAlignMoveNotConfirmed('polar-align-move-not-confirmed');
 
   const RefusalCause(this.token);
 

@@ -2031,6 +2031,7 @@
   "refusalPolarAlignRunActive": "Um alinhamento polar está em andamento. Pare-o primeiro e depois mova para a posição inicial.",
   "refusalPolarAlignCannotMoveDec": "Esta montagem não consegue girar o eixo de Dec por velocidade do motor, então o alinhamento polar não consegue movê-la para a posição inicial. Aponte-a 2–5° do polo com os próprios controles.",
   "refusalPolarAlignMoveToStartNotNeeded": "O telescópio não aponta a menos de 3° do polo, então não precisa ser movido. Inicie o alinhamento polar.",
+  "refusalPolarAlignMoveNotConfirmed": "O alinhamento polar só move o telescópio para a posição inicial depois que você confirmar. Toque em Mover para a posição inicial de novo e confirme.",
   "polarMoveToStartButton": "Mover para a posição inicial",
   "polarMoveToStartMoving": "Movendo o telescópio para a posição inicial…",
   "polarMoveToStartStop": "Parar",

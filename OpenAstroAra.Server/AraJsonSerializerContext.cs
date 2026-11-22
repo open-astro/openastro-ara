@@ -227,6 +227,7 @@ namespace OpenAstroAra.Server;
 [JsonSerializable(typeof(PolarAlignStateDto))]
 [JsonSerializable(typeof(PolarAlignStartPlanDto))]
 [JsonSerializable(typeof(PolarAlignPreflightDto))]
+[JsonSerializable(typeof(PolarAlignMoveToStartRequestDto))]
 [JsonSerializable(typeof(PolarAlignMoveToStartResultDto))]
 [JsonSerializable(typeof(PolarAlignLastFrameDto))]
 [JsonSerializable(typeof(ProfileShareDto))]

@@ -16,10 +16,12 @@ class PolarMoveToStartNotifier extends Notifier<bool> {
     return false;
   }
 
-  /// Ask the rig to move (the caller has shown the motion confirm). [failed]
+  /// Ask the rig to move by [offer], which the user confirmed (the caller has
+  /// shown the motion confirm). [failed]
   /// words a move the rig ran and failed, [describe] a call that threw; either
   /// goes to the panel's error line. The list is read again at the end.
-  Future<void> move({
+  Future<void> move(
+    PolarAlignMoveToStartOffer offer, {
     required String Function(PolarAlignMoveToStartResult result) failed,
     required String Function(Object error) describe,
   }) async {
@@ -28,7 +30,7 @@ class PolarMoveToStartNotifier extends Notifier<bool> {
     state = true;
     String? failure;
     try {
-      final result = await api.moveToStart();
+      final result = await api.moveToStart(offer);
       if (result.outcome == PolarMoveToStartOutcomes.failed) {
         failure = failed(result);
       }

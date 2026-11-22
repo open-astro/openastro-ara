@@ -74,7 +74,7 @@ namespace OpenAstroAra.Server.Services {
         private bool _movingToStart;
 
         /// <inheritdoc />
-        public async Task<PolarAlignMoveToStartResultDto> MoveToStartAsync(CancellationToken ct) {
+        public async Task<PolarAlignMoveToStartResultDto> MoveToStartAsync(PolarAlignMoveToStartConfirmation? confirmation, CancellationToken ct) {
             // #2066 — the stop count at the call, as a start reads it: a Stop Mount from here on ends the move before it moves.
             var abortEpochAtCall = _motionControl.AbortEpoch;
             var ownAbortsAtCall = Interlocked.Read(ref _ownAborts);
@@ -101,6 +101,7 @@ namespace OpenAstroAra.Server.Services {
                 if (holdRefusal is not null) {
                     throw holdRefusal;
                 }
+                ThrowIfMoveNotConfirmed(confirmation, preflight.Result.Dto.MoveToStart);
                 var poleSign = _profileStore.GetSiteSettings().LatitudeDeg < 0 ? -1.0 : 1.0;
                 // A fresh reading: within 3° of the site's own pole (the plan refuses either pole), steady, not slewing.
                 var (_, decDeg, session, _, slewing) = await StartPointingJnowAsync(ct).ConfigureAwait(false);
@@ -116,6 +117,20 @@ namespace OpenAstroAra.Server.Services {
             } finally {
                 _opLock.Release();
             }
+        }
+
+        /// <summary>ADR 0024 rule 1 — nothing moves without the user's confirmation of this move: the offer's target and
+        /// reach the app's confirm showed, equal to the offer now (a changed offer is asked again).</summary>
+        private void ThrowIfMoveNotConfirmed(PolarAlignMoveToStartConfirmation? confirmation, PolarAlignMoveToStartOfferDto? offer) {
+            if (confirmation is not null && offer is not null && Math.Abs(confirmation.TargetOffPoleDeg - offer.TargetOffPoleDeg) < 1e-6
+                    && Math.Abs(confirmation.ReachDeg - offer.ReachDeg) < 1e-6) {
+                return;
+            }
+            LogMoveToStartNotConfirmed(confirmation is null ? "none" : "stale");
+            throw new RefusalException(RefusalCatalog.PolarAlignMoveNotConfirmed,
+                confirmation is null
+                    ? "confirm the move first: Polar Align turns the Dec axis alone, up to " + MoveToStartReachDeg.ToString("0.#", CultureInfo.InvariantCulture) + "°, to the start position"
+                    : "the move to the start position changed since you confirmed it — confirm it again");
         }
 
         /// <summary>The move itself, under <c>_opLock</c>, from the guards' fresh reading: a run of its own generation (so
@@ -486,6 +501,9 @@ namespace OpenAstroAra.Server.Services {
             track.OverThePole = over;
             (track.LastRawRaDeg, track.LastJnowRaDeg, track.LastOffPoleDeg) = (r.RawRaDeg, r.RaDeg, offPole);
         }
+
+        [LoggerMessage(Level = LogLevel.Warning, Message = "§45 polar-align: the move to the start position refused: not confirmed ({Confirmation} confirmation)")]
+        private partial void LogMoveToStartNotConfirmed(string confirmation);
 
         [LoggerMessage(Level = LogLevel.Information, Message = "§45 polar-align: moving the scope to the start position, {OffPoleDeg:F1}° from the {Pole} pole, with the Dec motor alone")]
         private partial void LogMoveToStartBegins(double offPoleDeg, string pole);

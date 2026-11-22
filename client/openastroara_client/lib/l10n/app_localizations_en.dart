@@ -7412,6 +7412,10 @@ class AppLocalizationsEn extends AppLocalizations {
       'The scope does not point within 3° of the pole, so it needs no move. Start Polar align.';
 
   @override
+  String get refusalPolarAlignMoveNotConfirmed =>
+      'Polar align moves the scope to the start position only after you confirm it. Tap Move to start position again and confirm.';
+
+  @override
   String get polarMoveToStartButton => 'Move to start position';
 
   @override

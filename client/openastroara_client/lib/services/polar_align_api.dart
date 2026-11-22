@@ -28,8 +28,12 @@ abstract interface class PolarAlignClient {
   /// #2166 "Move to start position": the rig moves the scope's Dec axis alone
   /// from within 3° of the pole to its start position, and answers once the
   /// move ended, with its outcome and the fresh pre-flight list. A refusal
-  /// before anything moved is a [Refusal]. [stop] ends the move.
-  Future<PolarAlignMoveToStartResult> moveToStart();
+  /// before anything moved is a [Refusal]. [stop] ends the move. Sent only
+  /// after the motion confirm: it carries the user's confirmation of [offer]'s
+  /// numbers, which the rig checks against its offer now (ADR 0024 rule 1).
+  Future<PolarAlignMoveToStartResult> moveToStart(
+    PolarAlignMoveToStartOffer offer,
+  );
   Future<void> stop();
   Future<void> complete();
   Future<void> requestCapture();
@@ -152,11 +156,18 @@ class PolarAlignApi implements PolarAlignClient {
   /// again: the probe and the move (each bounded by twice its planned time),
   /// two settles and the confirmed stop fit well inside [moveToStartTimeout].
   @override
-  Future<PolarAlignMoveToStartResult> moveToStart() async {
+  Future<PolarAlignMoveToStartResult> moveToStart(
+    PolarAlignMoveToStartOffer offer,
+  ) async {
     final Response<dynamic> res;
     try {
       res = await _dio.post<dynamic>(
         '/api/v1/equipment/polaralign/move-to-start',
+        data: {
+          'confirmed': true,
+          'target_off_pole_deg': offer.targetOffPoleDeg,
+          'reach_deg': offer.reachDeg,
+        },
         options: Options(receiveTimeout: moveToStartTimeout),
       );
     } on DioException catch (e) {

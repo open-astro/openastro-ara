@@ -9218,6 +9218,8 @@
   "@refusalPolarAlignCannotMoveDec": {"description": "Refusal (polar-align-cannot-move-dec, #2166): the mount reports CanMoveAxis false for its Dec axis"},
   "refusalPolarAlignMoveToStartNotNeeded": "The scope does not point within 3° of the pole, so it needs no move. Start Polar align.",
   "@refusalPolarAlignMoveToStartNotNeeded": {"description": "Refusal (polar-align-move-to-start-not-needed, #2166): Move to start position when the scope already points far enough from the pole"},
+  "refusalPolarAlignMoveNotConfirmed": "Polar align moves the scope to the start position only after you confirm it. Tap Move to start position again and confirm.",
+  "@refusalPolarAlignMoveNotConfirmed": {"description": "Refusal (polar-align-move-not-confirmed, #2166): Move to start position reached the rig without the motion confirm, or the offer changed since the user confirmed it"},
   "polarMoveToStartButton": "Move to start position",
   "@polarMoveToStartButton": {"description": "Polar align pre-flight list (#2166, both modes): button on the failing 'Where the scope points' row; Polar align moves the Dec axis alone off the pole"},
   "polarMoveToStartMoving": "Moving the scope to the start position…",

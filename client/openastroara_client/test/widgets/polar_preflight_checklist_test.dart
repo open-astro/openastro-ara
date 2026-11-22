@@ -41,6 +41,9 @@ class _Rig implements PolarAlignClient {
   bool onAxis = false;
   PolarAlignMoveToStartOffer? offer;
   int moveCalls = 0;
+
+  /// #2166 the offer each move confirmed.
+  final movedOffers = <PolarAlignMoveToStartOffer>[];
   int stops = 0;
 
   /// Holds the move open until completed (the move's progress and Stop).
@@ -69,8 +72,11 @@ class _Rig implements PolarAlignClient {
 
   // As the rig: the move ends with the scope off the pole and the fresh list.
   @override
-  Future<PolarAlignMoveToStartResult> moveToStart() async {
+  Future<PolarAlignMoveToStartResult> moveToStart(
+    PolarAlignMoveToStartOffer offer,
+  ) async {
     moveCalls++;
+    movedOffers.add(offer);
     await moveGate?.future;
     onAxis = false;
     return PolarAlignMoveToStartResult(
@@ -932,6 +938,29 @@ void main() {
         find.byKey(const Key('polar-move-to-start-button')),
         findsNothing,
         reason: 'the list read again: the scope is off the pole now',
+      );
+    },
+  );
+
+  testWidgets(
+    'Move to start position sends the offer it confirmed, and Cancel sends nothing',
+    (tester) async {
+      final rig = await _pumpMoveToStart(tester);
+
+      await tester.tap(find.byKey(const Key('polar-move-to-start-button')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('polar-move-to-start-confirm-cancel')));
+      await tester.pumpAndSettle();
+      expect(rig.movedOffers, isEmpty, reason: 'Cancel sends no confirmation');
+
+      await tester.tap(find.byKey(const Key('polar-move-to-start-button')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('polar-move-to-start-confirm-go')));
+      await tester.pumpAndSettle();
+      expect(
+        rig.movedOffers.map((o) => (o.targetOffPoleDeg, o.reachDeg)),
+        [(4.0, 4.3)],
+        reason: 'the confirmation names the numbers the dialog showed',
       );
     },
   );

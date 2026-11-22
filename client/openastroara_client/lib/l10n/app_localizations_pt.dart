@@ -7412,6 +7412,10 @@ class AppLocalizationsPt extends AppLocalizations {
       'The scope does not point within 3° of the pole, so it needs no move. Start Polar align.';
 
   @override
+  String get refusalPolarAlignMoveNotConfirmed =>
+      'Polar align moves the scope to the start position only after you confirm it. Tap Move to start position again and confirm.';
+
+  @override
   String get polarMoveToStartButton => 'Move to start position';
 
   @override
@@ -14928,6 +14932,10 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String get refusalPolarAlignMoveToStartNotNeeded =>
       'O telescópio não aponta a menos de 3° do polo, então não precisa ser movido. Inicie o alinhamento polar.';
+
+  @override
+  String get refusalPolarAlignMoveNotConfirmed =>
+      'O alinhamento polar só move o telescópio para a posição inicial depois que você confirmar. Toque em Mover para a posição inicial de novo e confirme.';
 
   @override
   String get polarMoveToStartButton => 'Mover para a posição inicial';

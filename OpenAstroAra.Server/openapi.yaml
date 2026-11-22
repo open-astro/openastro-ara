@@ -2405,6 +2405,13 @@ paths:
         - Equipment
       summary: 'Move the scope''s Dec axis alone from within 3° of the pole to 4° from it (the Polar Align start position), then answer with the outcome and the fresh pre-flight list.'
       operationId: PolarAlignMoveToStart
+      requestBody:
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - type: 'null'
+                - $ref: '#/components/schemas/PolarAlignMoveToStartRequestDto'
       responses:
         '200':
           description: OK
@@ -14877,6 +14884,26 @@ components:
             - number
             - string
           format: double
+    PolarAlignMoveToStartRequestDto:
+      type: object
+      properties:
+        confirmed:
+          type: boolean
+          default: false
+        target_off_pole_deg:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
+        reach_deg:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
     PolarAlignMoveToStartResultDto:
       required:
         - outcome
@@ -15729,6 +15756,7 @@ components:
         - polar-align-run-active
         - polar-align-cannot-move-dec
         - polar-align-move-to-start-not-needed
+        - polar-align-move-not-confirmed
       type: string
       description: 'The cause of a refusal: the `reason` extension of a 409 or 422 problem. See ADR 0022.'
     ReleaseNotesDto:

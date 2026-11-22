@@ -20,7 +20,9 @@ import '../support/polar_align_section.dart';
 /// settings are a profile section (ADR 0015): [section], with no HTTP.
 class _FakePolarAlignClient implements PolarAlignClient {
   @override
-  Future<PolarAlignMoveToStartResult> moveToStart() =>
+  Future<PolarAlignMoveToStartResult> moveToStart(
+    PolarAlignMoveToStartOffer offer,
+  ) =>
       throw UnimplementedError();
   @override
   Future<PolarAlignPreflight?> preflight({String? stage}) async => null;

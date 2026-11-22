@@ -12298,6 +12298,12 @@ abstract class AppLocalizations {
   /// **'The scope does not point within 3° of the pole, so it needs no move. Start Polar align.'**
   String get refusalPolarAlignMoveToStartNotNeeded;
 
+  /// Refusal (polar-align-move-not-confirmed, #2166): Move to start position reached the rig without the motion confirm, or the offer changed since the user confirmed it
+  ///
+  /// In en, this message translates to:
+  /// **'Polar align moves the scope to the start position only after you confirm it. Tap Move to start position again and confirm.'**
+  String get refusalPolarAlignMoveNotConfirmed;
+
   /// Polar align pre-flight list (#2166, both modes): button on the failing 'Where the scope points' row; Polar align moves the Dec axis alone off the pole
   ///
   /// In en, this message translates to:

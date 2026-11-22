@@ -1096,6 +1096,15 @@ public static class PolarAlignPreflightChecks {
 /// motor-direction test.</summary>
 public sealed record PolarAlignStartConfirmation(string Direction, bool NewOrigin = false, bool DirectionTest = false);
 
+/// <summary>#2166 — <c>POST /polaralign/move-to-start</c> body: the user's confirmation of the move (the app's motion
+/// confirm). The mount moves only with <c>Confirmed</c> true and <c>TargetOffPoleDeg</c> and <c>ReachDeg</c> equal to the
+/// pre-flight list's <see cref="PolarAlignMoveToStartOfferDto"/> the confirm showed; no body, <c>confirmed: false</c> or
+/// other numbers is the <c>polar-align-move-not-confirmed</c> Refusal, with nothing moved.</summary>
+public sealed record PolarAlignMoveToStartRequestDto(bool Confirmed = false, double? TargetOffPoleDeg = null, double? ReachDeg = null);
+
+/// <summary>#2166 — the move's confirmation as the service reads it: the offer's numbers the user confirmed.</summary>
+public sealed record PolarAlignMoveToStartConfirmation(double TargetOffPoleDeg, double ReachDeg);
+
 /// <summary>The RA turn directions of <see cref="PolarAlignStartPlanDto.Direction"/>.</summary>
 public static class PolarAlignDirections {
     /// <summary>The mount's RA reading increases: the tube turns toward the east.</summary>

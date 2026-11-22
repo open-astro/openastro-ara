@@ -115,6 +115,9 @@ public static class RefusalCatalog {
     public static readonly RefusalCause PolarAlignCannotMoveDec = new("polar-align-cannot-move-dec", 409, "The mount cannot turn its Dec axis by rate");
     // #2166 — Move to start position when the scope does not point within 3° of the pole: there is nothing to move.
     public static readonly RefusalCause PolarAlignMoveToStartNotNeeded = new("polar-align-move-to-start-not-needed", 409, "The scope is not within 3° of the pole");
+    // #2166 — Move to start position without the user's confirmation of the offer it moves by (no body, confirmed false,
+    // or numbers that are not the offer's now): confirm the move again.
+    public static readonly RefusalCause PolarAlignMoveNotConfirmed = new("polar-align-move-not-confirmed", 409, "Polar Align needs your confirmation before it moves the scope to the start position");
 
     public static readonly IReadOnlyList<RefusalCause> All = [
         NoCamera, CameraBusy, GateStuck, CenterInProgress, OpticsNotSet, SolverNotSet, CaptureSettingsUnsupported, StorageUnavailable,
@@ -125,5 +128,6 @@ public static class RefusalCatalog {
         PolarAlignClearanceNotConfirmed,
         AboveClearanceLimit, PolarAlignSiteNotSet, PolarAlignAltAzMount, PolarAlignCannotMoveAxis,
         PolarAlignRunActive, PolarAlignCannotMoveDec, PolarAlignMoveToStartNotNeeded,
+        PolarAlignMoveNotConfirmed,
     ];
 }

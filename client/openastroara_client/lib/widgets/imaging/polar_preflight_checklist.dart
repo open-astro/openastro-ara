@@ -286,6 +286,7 @@ class _PolarPreflightChecklistState
     await ref
         .read(polarMoveToStartProvider.notifier)
         .move(
+          offer,
           failed: (result) => l10n.polarMoveToStartFailed(
             result.message ?? result.reason ?? '',
           ),

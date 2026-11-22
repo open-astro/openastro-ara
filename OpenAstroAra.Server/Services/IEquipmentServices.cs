@@ -475,8 +475,10 @@ public interface IPolarAlignService {
     /// (<c>polar-align-run-active</c>), another motion owner (<c>polar-align-mount-busy</c>), a parked mount, an unverified
     /// position, a clearance not confirmed for the move's reach, an alt-az mount, CanMoveAxis(Secondary) false
     /// (<c>polar-align-cannot-move-dec</c>), or a scope not within 3° of the pole (<c>polar-align-move-to-start-not-needed</c>).
-    /// Once it moved, answers with the outcome and the fresh list; Stop (<see cref="StopAsync"/>) ends it.</summary>
-    Task<PolarAlignMoveToStartResultDto> MoveToStartAsync(CancellationToken ct) =>
+    /// Once it moved, answers with the outcome and the fresh list; Stop (<see cref="StopAsync"/>) ends it. Nothing moves
+    /// without the user's <paramref name="confirmation"/> of the offer's numbers as they are now (else
+    /// <c>polar-align-move-not-confirmed</c>).</summary>
+    Task<PolarAlignMoveToStartResultDto> MoveToStartAsync(PolarAlignMoveToStartConfirmation? confirmation, CancellationToken ct) =>
         throw new InvalidOperationException("this daemon cannot move the mount to the polar-align start position");
     /// <summary>Begin ONE measurement (#2082) at <paramref name="stage"/> (<see cref="PolarAlignStages"/>; null =
     /// fine), from where the mount points now: no stage sends the mount Home or slews it (#2048), and none leads into
