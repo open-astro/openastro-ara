@@ -117,6 +117,39 @@ void main() {
     },
   );
 
+  test('Dec pulses the star did not answer read as backlash, in English and pt-BR, with no disagreement (#2072)', () {
+    final r = PaResidual.fromJson({
+      ...done,
+      'pa_error_min_arcmin': 45.6,
+      'uncertainty_arcmin': 1.0,
+      'reliable': false,
+      'above_align': null,
+      'dec_pulses_unanswered': true,
+    })!;
+    expect(r.backlash, isTrue);
+    expect(r.aboveAlign, isFalse, reason: 'far above the 0.68′ Polar Align, but the figure is the pulses');
+    final text = paResidualDetail(_en, r);
+    expect(text, contains("Dec backlash ate the guide pulses, so this window can't measure polar alignment."));
+    expect(text, isNot(contains('too noisy')));
+    expect(text, isNot(contains('disagree')));
+    expect(paResidualDetail(_pt, r), contains('A folga em Dec engoliu os pulsos de guiagem'));
+  });
+
+  test('an unreliable residual with dec_pulses_unanswered false keeps the noisy wording (#2072)', () {
+    final r = PaResidual.fromJson({...done, 'reliable': false, 'dec_pulses_unanswered': false})!;
+    expect(r.backlash, isFalse);
+    expect(paResidualDetail(_en, r), contains('too noisy'));
+    expect(paResidualDetail(_en, r), isNot(contains('backlash ate')));
+  });
+
+  test('a payload without dec_pulses_unanswered (an older daemon) parses and shows the noisy wording (#2072)', () {
+    final r = PaResidual.fromJson({...done, 'reliable': false});
+    expect(r, isNotNull, reason: 'the key is a display hint: its absence must not drop the residual');
+    expect(r!.decPulsesUnanswered, isNull);
+    expect(r.paErrorMinArcmin, 0.8);
+    expect(paResidualDetail(_en, r), contains('too noisy'));
+  });
+
   test('a residual far above Polar Align says so, not that guiding was noisy (#1731)', () {
     final far = PaResidual.fromJson({
       ...done,

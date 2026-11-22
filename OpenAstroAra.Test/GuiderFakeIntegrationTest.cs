@@ -486,6 +486,56 @@ namespace OpenAstroAra.Test {
             Assert.That(rig.Fake.ReceivedMethods, Does.Contain("get_calibration_data"));
         }
 
+        // #2072 — a settle's recovery: the star pulled onto the lock position, every Dec pulse South.
+        private static async Task SettleRecoveryAsync(PaRig rig, int firstFrame, int frames) {
+            for (var frame = firstFrame; frame < firstFrame + frames; frame++) {
+                await rig.Fake.BroadcastAsync(PhdEvents.GuideStep(0, 4.0, frame: frame, decDurationMs: 2000, decDirection: "South"))
+                    .ConfigureAwait(false);
+            }
+        }
+
+        private static async Task AssertMeasuredTheCleanDriftOnlyAsync(PaRig rig) {
+            Assert.That(await WaitUntilAsync(() => rig.Statuses.Contains("done")).ConfigureAwait(false), Is.True,
+                "the run's residual was published");
+            var done = rig.Events.Single(e => e.GetProperty("status").GetString() == "done");
+            Assert.That(done.GetProperty("drift_arcsec_per_min").GetDouble(), Is.EqualTo(4.5).Within(1e-6),
+                "the settle's one-sided Dec pulses are not drift");
+        }
+
+        [Test]
+        public async Task A_start_settle_recovery_through_the_guider_is_left_out_of_the_pa_residual() {
+            // #2072 — PHD2 order for a guide with settle: StartGuiding, SettleBegin, then the settle's frames, SettleDone.
+            await using var rig = await StartPaRigAsync().ConfigureAwait(false);
+
+            await rig.Fake.BroadcastAsync(PhdEvents.StartGuiding()).ConfigureAwait(false);
+            await rig.Fake.BroadcastAsync(PhdEvents.SettleBegin()).ConfigureAwait(false);
+            await SettleRecoveryAsync(rig, firstFrame: 1, frames: 10).ConfigureAwait(false);
+            await rig.Fake.BroadcastAsync(PhdEvents.SettleDone()).ConfigureAwait(false);
+            await rig.GuideAsync(firstFrame: 11, frames: 20).ConfigureAwait(false);
+
+            await AssertMeasuredTheCleanDriftOnlyAsync(rig).ConfigureAwait(false);
+        }
+
+        [Test]
+        public async Task The_rig_order_guiding_restart_then_dither_measures_only_the_settled_frames() {
+            // Rig night 2026-11-22: a re-center slew stopped guiding; the Dither restarted it (its settle), then dithered.
+            await using var rig = await StartPaRigAsync().ConfigureAwait(false);
+
+            await rig.Fake.BroadcastAsync(PhdEvents.GuidingStopped()).ConfigureAwait(false);
+            await rig.Fake.BroadcastAsync(PhdEvents.StartGuiding()).ConfigureAwait(false);
+            await rig.Fake.BroadcastAsync(PhdEvents.SettleBegin()).ConfigureAwait(false);
+            await SettleRecoveryAsync(rig, firstFrame: 1, frames: 10).ConfigureAwait(false);
+            await rig.Fake.BroadcastAsync(PhdEvents.SettleDone()).ConfigureAwait(false);
+            await rig.GuideAsync(firstFrame: 11, frames: 8).ConfigureAwait(false);
+            await rig.Fake.BroadcastAsync(PhdEvents.GuidingDithered(2.5, -1.0)).ConfigureAwait(false);
+            await rig.Fake.BroadcastAsync(PhdEvents.SettleBegin()).ConfigureAwait(false);
+            await SettleRecoveryAsync(rig, firstFrame: 19, frames: 5).ConfigureAwait(false);
+            await rig.Fake.BroadcastAsync(PhdEvents.SettleDone()).ConfigureAwait(false);
+            await rig.GuideAsync(firstFrame: 24, frames: 20).ConfigureAwait(false);
+
+            await AssertMeasuredTheCleanDriftOnlyAsync(rig).ConfigureAwait(false);
+        }
+
         [Test]
         public async Task A_run_whose_RA_runs_away_is_not_a_polar_alignment_measurement() {
             // The mount is not tracking: RA walks off 0.25 px a frame and every RA pulse sits at the 2500 ms
@@ -3182,6 +3232,46 @@ namespace OpenAstroAra.Test {
             Assert.That(done.GetProperty("above_align").GetBoolean(), Is.True, "#2072 the daemon says the two disagree");
             Assert.That(await WaitUntilAsync(() => rig.Log.Rows.Count == 1).ConfigureAwait(false), Is.True);
             Assert.That(rig.Log.Rows[0].Reliable, Is.False, "history matches the strip");
+        }
+
+        [Test]
+        public async Task Dec_pulses_the_star_does_not_answer_publish_an_unreliable_residual_with_no_verdict_against_polar_align() {
+            // #2072 — every Dec pulse South while the star creeps North of the lock position: the figure is the pulses
+            // (backlash), so it is not reliable and says nothing about the alignment.
+            await using var rig = await StartPaRigAsync().ConfigureAwait(false);
+            rig.Svc.PolarAlignmentLog = new FixedAlignLog(0.9);
+            await rig.Fake.BroadcastAsync(PhdEvents.StartGuiding()).ConfigureAwait(false);
+            for (var frame = 1; frame <= 20; frame++) {
+                await rig.Fake.BroadcastAsync(PhdEvents.GuideStep(0, 0.02 * frame, frame: frame, decDurationMs: 30, decDirection: "South"))
+                    .ConfigureAwait(false);
+            }
+
+            var done = await DoneAsync(rig).ConfigureAwait(false);
+            Assert.That(done.GetProperty("reliable").GetBoolean(), Is.False);
+            Assert.That(done.TryGetProperty("above_align", out var above) ? above.ValueKind : System.Text.Json.JsonValueKind.Null,
+                Is.EqualTo(System.Text.Json.JsonValueKind.Null), "no disagrees verdict");
+        }
+
+        [Test]
+        public async Task The_published_residual_carries_dec_pulses_unanswered_exactly_when_the_fit_says_so() {
+            // #2072 — the client words the backlash case from this field, so it must follow the fit both ways.
+            await using (var honest = await StartPaRigAsync().ConfigureAwait(false)) {
+                await honest.Fake.BroadcastAsync(PhdEvents.StartGuiding()).ConfigureAwait(false);
+                await honest.GuideAsync(firstFrame: 1, frames: 20).ConfigureAwait(false);
+                var done = await DoneAsync(honest).ConfigureAwait(false);
+                Assert.That(done.GetProperty("dec_pulses_unanswered").GetBoolean(), Is.False, "real drift held by the guider");
+                Assert.That(honest.Events[0].GetProperty("dec_pulses_unanswered").GetBoolean(), Is.False, "always sent, measuring too");
+            }
+            await using var backlash = await StartPaRigAsync().ConfigureAwait(false);
+            await backlash.Fake.BroadcastAsync(PhdEvents.StartGuiding()).ConfigureAwait(false);
+            for (var frame = 1; frame <= 20; frame++) {
+                await backlash.Fake.BroadcastAsync(PhdEvents.GuideStep(0, 0.02 * frame, frame: frame, decDurationMs: 30, decDirection: "South"))
+                    .ConfigureAwait(false);
+            }
+            var unanswered = await DoneAsync(backlash).ConfigureAwait(false);
+            Assert.That(unanswered.GetProperty("dec_pulses_unanswered").GetBoolean(), Is.True);
+            Assert.That(await WaitUntilAsync(() => backlash.Log.Rows.Count == 1).ConfigureAwait(false), Is.True);
+            Assert.That(backlash.Log.Rows[0].DecPulsesUnanswered, Is.True, "the logged row says so too");
         }
 
         [Test]

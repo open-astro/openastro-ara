@@ -105,6 +105,7 @@ namespace OpenAstroAra.Test {
         [TestCase("CalibrationComplete", "calibration_complete")]
         [TestCase("GuidingStopped", "guiding_stopped")]
         [TestCase("StartGuiding", "guiding_started")]
+        [TestCase("SettleBegin", "settle_begin")]
         [TestCase("LockPositionLost", "lock_position_lost")]
         public async Task A_session_transition_maps_to_its_kind_token(string phdEvent, string kind) {
             var marker = await PushAndReceive(Event(phdEvent)).ConfigureAwait(false);

@@ -266,8 +266,9 @@ framing/focus loop when you need to point or focus by eye.
 - **Polar Align keeps RA near where it first started.** The first start after the mount connects is
   Polar Align's start for the session. Every later run (**Adjust again**, **Check**, or a new Start) turns back
   toward it, and the confirm step says how far RA is from it ("RA is 20° east of where Polar Align
-  started"). A run that would take RA more than 30° from it is refused: slew the mount back near the
-  pole, counterweights down, and start again. When you move the mount some other way (a slew, the hand
+  started"). A run that would take RA more than 30° from it is refused (or more than twice the turn
+  plus 2°, when your turns are over 14° each): slew the mount back near the pole, counterweights down,
+  and start again. When you move the mount some other way (a slew, the hand
   pad, by hand) or reconnect it, the confirm step says the pose is a new start, and it becomes the start.
   Tracking that stays on (or stays off) does not count as moving it: after a long time tracking
   (guiding, say) RA may have turned far enough that the next run is refused until you slew back.
@@ -283,7 +284,7 @@ framing/focus loop when you need to point or focus by eye.
   loop, so it says how good the alignment really is and how far it disagrees with the last run's
   readout. Check says how far it turns the mount ("Check turns the mount 2 × 10°") and goes through
   the same confirm step; from the adjust screen it ends the live loop first. Every Check counts toward
-  the 30° Polar Align keeps RA within, so repeated Checks are refused once RA is too far from where
+  the limit Polar Align keeps RA within (30°, or twice the turn plus 2° for big turns), so repeated Checks are refused once RA is too far from where
   Polar Align started. **Rough first (main camera)**: offered when the guide camera could not solve
   the pole field; the same measurement on the main camera, whose frames take a few seconds each, and
   the card says how far from the pole you are and on which side, for the big moves. Like Check, it
@@ -376,6 +377,27 @@ framing/focus loop when you need to point or focus by eye.
   before, the mount flipped to the other side of the pier; the run ends with tracking off. If the
   mount's Dec reading moved more than 2″ across the three points, the readout (or the Check's verdict)
   warns that the measurement may be off: check the Dec clutch is tight and measure again.
+- **Polar Align's pre-flight checks.** The Start card lists what Polar Align checks before it moves
+  the mount: the mount is connected and not parked, its position is trusted, its clock is set, and
+  where the scope points. A check that fails turns Start off and says why; the rig checks the same
+  list again when you tap Start, so an older app cannot skip it. The mount's clock check passes once
+  Ara has set the mount's clock from a synced rig clock: just after you connect, Start waits a few
+  seconds for that. The first time you use the motor on a mount, **Confirm clearance…** asks you to
+  turn RA with the hand controller from counterweight-down, see how far it can go before anything
+  touches the pier, the tripod or a cable, and set that limit. Until you confirm, **Move the mount**
+  stays off. The confirmation is kept for
+  that mount in this profile, for that limit: change the limit and you confirm again. **Take back**
+  (in the dialog, or Settings › Imaging › Polar align) removes it. No setting or app option skips a
+  failing check.
+- **A Polar Aligner's motors stop when Ara says stop.** With a motorised Polar Aligner that Ara can
+  drive, Ara turns its bolts for you. Every Stop is checked: Ara sends Stop and watches for up to 3 s
+  until neither motor moves, sending Stop at most three times in all. If the device never confirms it,
+  the card says so (cut its power if it still moves), **Stop** sends it again, and **Resume** and
+  **Home** stay off until a Stop is confirmed; then Ara waits for you to tap **Resume**. Each move
+  must change the device's reported position by about the amount sent, in the right direction, or
+  the motors stop ("went the wrong way", "didn't go the distance asked"). A run moves each axis no
+  further than three times its first error plus 30′ (at least 10′) and makes at most 40 moves; a
+  device that cannot stop on command gets moves of at most 10′.
 - **Starting guiding ends Polar Align.** Polar Align holds the guide camera while it runs. If guiding
   is started while it is still open (a run's Start Guiding after the Polar Align step was left
   without **Done**, a re-guide after a meridian flip, or Guide pressed by hand in the guider panel), Ara stops the
@@ -390,7 +412,11 @@ framing/focus loop when you need to point or focus by eye.
   can't see: refraction, flexure and the mount's own slop. It is a lower bound ("≥"): Dec drift at
   one hour angle shows only part of the error. The tooltip has the drift, the hour angle and
   tonight's Polar Align result to compare. "noisy" means the guiding was too rough for a firm
-  figure; "disagrees with Polar Align" means it came out well above tonight's Polar Align result,
+  figure. "backlash" means the star did not answer the Dec pulses: the guider kept pushing one way
+  and the star kept moving away, which is Dec backlash, not drift, so that window can't measure
+  polar alignment. Both are marked unreliable. When the Dec pulses change direction, Ara also waits
+  until the star answers the new pulses, at most 60 s, before it measures again, so the gear's
+  slack is taken up first. "disagrees with Polar Align" means it came out well above tonight's Polar Align result,
   which a lower bound can't be: either Dec backlash ate guide pulses (the guiding figure is too
   high), or the mount shifted since the alignment or its reference was wrong (the Polar Align figure
   is too low). Run Polar Align again: about the same figure again points at backlash, a much larger

@@ -8954,6 +8954,13 @@
       "value": {"type": "String"}
     }
   },
+  "paResidualChipBacklash": "PA ≥ {value} · backlash",
+  "@paResidualChipBacklash": {
+    "description": "Guiding strip chip: the star did not answer the Dec guide pulses (Dec backlash), so the figure is not a polar-alignment measurement (#2072)",
+    "placeholders": {
+      "value": {"type": "String"}
+    }
+  },
   "paResidualChipNoisy": "PA ≥ {value} · noisy",
   "@paResidualChipNoisy": {
     "description": "Guiding strip chip: the residual is too uncertain for a firm figure",
@@ -9043,6 +9050,10 @@
       "align": {"type": "String"},
       "guiding": {"type": "String"}
     }
+  },
+  "paResidualDetailBacklash": "Dec backlash ate the guide pulses, so this window can't measure polar alignment.",
+  "@paResidualDetailBacklash": {
+    "description": "Guiding residual tooltip: the star did not answer the Dec guide pulses (#2072)"
   },
   "paResidualDetailNoisy": "Guiding was too noisy for a firm figure.",
   "@paResidualDetailNoisy": {

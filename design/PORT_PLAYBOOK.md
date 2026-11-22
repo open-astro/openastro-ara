@@ -6450,7 +6450,7 @@ Failure events:
 | The scope points within 3° of the pole at Start (#2082) | Refused before anything moves (`polar-align-on-axis`: "point it 2–5° from the pole, counterweights down, then start again"); no Dec motor tilts it off any more. A mount moved there after the confirmed start fails the run as `on_axis` before any turn |
 | No fresh reading of the mount, or a reading past the pole (#2066, ARA-5) | Every pointing Polar Align plans or moves from is read through the `IMountMotionControl` seam (`ReadNowAsync`: RA, Dec, Slewing, pier side, the time the read began and the mount session), never the daemon's refresh cache. A start whose reading is missing, the (0, 0) placeholder or older than 2 s is refused before anything moves (`polar-align-pointing-unknown`); one whose Dec is past ±90° is refused as `polar-align-pose-ambiguous` (the #1536 fold is gone; it stays only in the turn arithmetic). In a run the same readings, or one from another mount session than the run's, fail it with `pointing_unknown` (`pose_ambiguous` past the pole) before the next motor command: the motor is stopped and the exit confirms it. The run-wide watch fails the run with `pointing_unknown` when the mount session changes (a reconnect), adjusting included. The stop's confirmation does not count a missing, placeholder or stale reading as still |
 | Start without the user's confirmation, or with a direction that changed since (#2048) | Refused before anything moves (`polar-align-unconfirmed`, with the direction the run would turn now) |
-| A start whose turns would take the RA axis more than 30° from the session's sweep origin (#2089) | Refused before anything moves (`polar-align-sweep-limit`, with `offset_deg` and `limit_deg`): "slew it back near the pole (counterweights down) and confirm again". The origin is the first confirmed start after the mount connects; later starts turn back toward it; it is reset on reconnect, daemon restart, or a mount moved by other means since Polar Align last turned it (the start plan then says `new_origin`, which the start must confirm) |
+| A start whose turns would take the RA axis more than max(30°, 2 × step + 2°) from the session's sweep origin (#2089) | Refused before anything moves (`polar-align-sweep-limit`, with `offset_deg` and `limit_deg`): "slew it back near the pole (counterweights down) and confirm again". The origin is the first confirmed start after the mount connects; later starts turn back toward it; it is reset on reconnect, daemon restart, or a mount moved by other means since Polar Align last turned it (the start plan then says `new_origin`, which the start must confirm) |
 | Mount reads tracking on in the live loop (#2072) | Tracking off (and not slewing) is confirmed, on a connected mount, before the first live frame and checked every frame; a mount that keeps or resumes tracking, or slews, ends the run `failed` with `tracking_not_off` (its sentence names which), before the readout can mistake the mount's turn for a knob move |
 | A stop Polar Align did not raise (#2066, #2067, #2107): Stop Mount, Emergency Stop, the meridian-flip watchdog, a park, a Find Home, a pad stop (a rate-0 `/moveaxis`) during a turn, or the fault or safety reaction stopping the mount when its park is refused (`fault_reaction`, `pose_unverified`) | The run reads the mount's stop count once, when Start is called, and checks it before every motor move, Polar Aligner move and tracking switch-on, after every seed frame and each live frame, between the stages and on every poll of a move. Any count it did not raise fails the run with `slew_aborted_externally`, worded by what stopped it (Stop Mount, Emergency Stop, the watchdog, a park, a Find Home, the direction pad, the fault reaction, the safety reaction); the event's `stopped_by` names it, and the app words it in its own language (en, pt-BR): no further turn, no tracking on. Only the counts tagged `polar_align` are Polar Align's own: a Stop Mount that lands while one of its AbortSlew sends is refused stays a stop from outside. A pad stop is counted (`pad_stop`) before the axis stops, so the routine's next lease renewal is refused and the motor is not started again. After Stop Mount, the watchdog or a pad stop the exit stops the mount and confirms it as on any end. After Emergency Stop, a park or a Find Home the mount is the sender's: the exit sends no stop of its own (it would abort the park) and writes no tracking |
 | A GoTo, Center, Home or Park while Polar Align runs; a pad move while it turns the mount (#2066, ARA-2) | Polar Align holds the mount's single motion owner (`IMountMotionControl.AcquireMotion`) for its whole run, its solves and the adjust loop included (Joey, 2026-11-20 on #2048), and gives it back once the run's exit has stopped the mount. Meanwhile the REST GoTo, sync, Park, Home and `/plate-solve/center` are refused (`polar-align-moving-mount`, 409), a sync too because it shifts the RA reading a turn steers by; every mediator GoTo (the sequencer's, Center's, the flip's) fails before anything reaches the mount, the mediator sync (Center's) is a clean "not synced", and a REST sync accepted before the run took the owner is dropped when it would go out. A pad move is refused only while a motor move runs or its stop is not confirmed yet. A pad stop (rate 0), Stop Mount, Emergency Stop, AbortSlew, tracking off and the safety, fault and shutdown parks are never refused. The safety park and the equipment-fault park stop Polar Align (handing them the mount, as Emergency Stop does) and the Polar Aligner first, each bounded at 10 s. Polar Align answers a takeover within 9 s: past that it fences the run, and no stop of that run (a stuck run's, an earlier Stop's still confirming) goes out after the park has started. An end that abandons a run stuck past its 15 s grace fences it the same way, so the run's exit sends nothing whenever it unwinds |
@@ -6609,7 +6609,7 @@ measurements (coarse → fine → check), each with its own turns, a Next tap ap
 per Start. Now a Start runs one: `fine` by default (the guide camera), `coarse` only as "Rough first
 (main camera)" after the guide camera could not solve the pole field, or `check`. Next answers 409.
 The in-run turn-back (`PlanStageTurns`) is gone: every Start, a Check included, goes through the
-session's sweep plan (`PlanSweep`, #2089) and its confirm step, so the 30° limit holds across repeated
+session's sweep plan (`PlanSweep`, #2089) and its confirm step, so the sweep limit (max(30°, 2 × step + 2°)) holds across repeated
 Checks. Check on the adjust screen ends the live loop like Stop, then starts the confirmed check; the
 check compares with the last run's readout. The Dec tilt is gone too: a start within 3° of the pole is
 refused before anything moves, and the user points the tube 2–5° off it, as NINA's start does.
@@ -6635,6 +6635,55 @@ driver name or version changes, turns 0.5° through the guarded move (rates matc
 and pier checks, arrival), confirmed and inside the sweep limit, and saves the sign per profile and
 driver. A turn that then reads more than 0.5° the wrong way fails as `turn_wrong_way`. Merge gate: the
 rig check P0-6 (+rate primary MoveAxis direction from Home, AB #2424) posted on #2048.
+
+### 45.17 Motion safety: NINA parity plus the guards that landed (2026-11-21, #2048, ADR 0024)
+
+ADR 0024 is the rule; this section is the map. Polar Align moves the mount the way NINA's Three Point
+Polar Alignment does (`isbeorn/nina.plugin.polaralignment` at `e5afbf54`, `PolarAlignment.cs`
+`MoveToNextPoint`, 985-1042): one East/West setting, `MoveAxis(Primary, ±rate)` at the fastest rate at
+or below the request, RA polled until the distance is turned, a failsafe of 2 × distance / rate, then
+`MoveAxis 0`, a wait while `Slewing`, the settle and tracking on; `MoveAxis 0` on any error. Ara keeps
+that and adds only the guards below, each merged on `stable/1.0`.
+
+| Guard | Where | Pull request |
+|---|---|---|
+| No Find Home, GoTo or unpark; a parked mount refused; a daemon-checked confirm step; the sweep bound from a session origin, max(30°, 2 × step + 2°) | `PolarAlignService.cs`, `PolarAlignService.SweepOrigin.cs` | #2089 |
+| Emergency Stop latches first; any stop Polar Align did not raise ends the run (`slew_aborted_externally`) | `EmergencyStopService.cs`, `PolarAlignService.MountStop.cs` | #2097 |
+| Stop-contract holes: a lost mount gets its stop on reconnect, a pad stop ends the run, a takeover fences a stuck run, a GoTo raced by a stop is aborted again | `PolarAlignService.MountStop.cs`, `TelescopeService.cs` | #2112 (plan PR 1) |
+| Named stop reasons; an unconfirmed stop leaves the position unverified (`stop_unconfirmed`) | `PolarAlignService.cs`, `TelescopeService.PoseTrust.cs` | #2118 (PR 2) |
+| One measurement per Start; Check is its own confirmed Start; no Dec tilt, a start within 3° of the pole refused; the camera and frames per point | `PolarAlignService.cs`, `PolarAlignService.Stages.cs` | #2116, #2124 (PR 3, 5) |
+| The settings section loads before it saves | client `polar_align_settings_state.dart` | #2114 (PR 4) |
+| Fresh, timestamped mount reads only (`pointing_unknown`, `pose_ambiguous`) | `PolarAlignService.FreshReads.cs`, `TelescopeService.FreshReads.cs` | #2119 (PR 6) |
+| One motion owner for the whole run (`polar-align-moving-mount`, `mount_busy`); stops and safety parks always get through | `TelescopeService.MotionOwner.cs`, `PolarAlignService.MotionOwner.cs` | #2123 (PR 7) |
+| Move guards: matched rates never rounded up, `slew_timeout`, `slew_stalled`, `dec_moved`, `pier_changed`, the arrival check, ARA-13's field-rotation check (`pier_flip`), the 2″ Dec-spread warning | `PolarAlignService.MoveGuards.cs`, `PolarAlignService.Stages.cs` | #2128 (PR 8) |
+| East/West setting and a saved RA motor direction (`turn_wrong_way`, never reversed) | `PolarAlignService.SweepOrigin.cs`, `PolarAlignService.MotorDirection.cs` | #2157 (PR 9) |
+| The mount clock gate (`mount-clock-not-verified`) | `TelescopeService.MountClock.cs` | #2087, #2120 (PR 10) |
+| The pre-flight list; Start refuses on its first fail; the per-mount clearance confirm (`polar-align-clearance-not-confirmed`) | `PolarAlignPreflightEvaluator.cs`, `PolarAlignService.Preflight.cs` | #2129 (PR 11) |
+| Site, alt-az and CanMoveAxis refusals (`polar-align-site-not-set`, `polar-align-alt-az-mount`, `polar-align-cannot-move-axis`) | `PolarAlignPreflightEvaluator.cs` | #2159 (PR 13) |
+| The Polar Aligner's verified stop, follow check and caps | `PolarAligner.cs`, `PolarAlignerService.cs`, `PolarAlignService.Aligner.cs` | #2115 (PR 14) |
+| Each fit's 1σ; "aligned" and the Check's verdict rate error + 2σ | `PolarAlignService.Uncertainty.cs` | #2131 (PR 15) |
+
+**Dropped on 2026-11-21 as beyond NINA parity:** plan PR 12 (the counterweight limit and the start
+band, #2065) and the rest of the old PR 13 (the pose envelope, the motion budget, the fork-mount
+opt-in, the pier-side checks, the `motionsafety` marker). Their five placeholder pre-flight rows were
+removed by #2159.
+
+**No flag lifts a guard.** `force` on `POST /equipment/telescope/slew` lifts only `run_in_progress`;
+`polar-align-moving-mount`, `below-horizon-limit` and `counterweight-limit` (the GoTo refusal of #2073,
+not the dropped #2065 limit) are checked before it. A
+Polar Align start has no `force`. There is no manual (hand-turn) mode: #2174 (#2170) removed #2121's, and a
+mount that cannot move its RA axis is refused.
+
+**Deviations, on purpose.** From the #2048 ARA spec (Joey's re-spec, 2026-11-20): Stop answers after
+the stop is verified; AbortSlew goes before `MoveAxis 0`; `MoveAxis 0` is sent while adjusting too;
+Polar Align turns tracking on while it measures, as NINA; Guiding taking the camera hands tracking back; an unconfirmed stop
+is `failed` with `mount_did_not_stop`. From NINA: the 2× failsafe fails the run (NINA stops the turn
+and goes on); every reading comes from the driver, never the cache (#2070's false zero); the motor's
+sign is learned once per driver version (ASCOM leaves it to the driver, AlpacaBridge #2424).
+
+**Rig checks** (posted on #2048 before the issue closes): the stop traces P0-3/4/5 tune
+`PolarAlignService.MountStop.cs`'s timings; P0-6 (+rate direction) gated #2157 and passed on the rig 2026-11-21; staged runs at 5°, 10°
+and 30° steps.
 
 ---
 

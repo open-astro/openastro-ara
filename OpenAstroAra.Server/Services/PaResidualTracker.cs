@@ -38,15 +38,25 @@ internal enum PaResidualAction {
 /// </summary>
 internal sealed class PaResidualTracker {
 
-    public PaResidualTracker(double targetSeconds = 300, double minSeconds = 120, double progressEverySeconds = 30) {
+    public PaResidualTracker(double targetSeconds = 300, double minSeconds = 120, double progressEverySeconds = 30,
+            double backlashHoldSeconds = 60) {
         TargetSeconds = targetSeconds;
         MinSeconds = minSeconds;
         ProgressEverySeconds = progressEverySeconds;
+        BacklashHoldSeconds = backlashHoldSeconds;
     }
 
     public double TargetSeconds { get; }
     public double MinSeconds { get; }
     public double ProgressEverySeconds { get; }
+
+    /// <summary>#2072 — the longest a Dec reversal holds sampling back while the star has not answered the new pulses.
+    /// On the 2026-11-22 rig both settles (20 s and 40 s) had the star back on the lock position within 60 s.</summary>
+    public double BacklashHoldSeconds { get; }
+
+    /// <summary>#2072 — this many Dec pulses in a row, against the direction the Dec pulses went before, are a reversal.
+    /// One opposite pulse is noise around the lock position; three in a row are the guider turning the Dec gear.</summary>
+    internal const int ReversalPulses = 3;
 
     public PaResidualEstimator Estimator { get; } = new();
 
@@ -55,10 +65,16 @@ internal sealed class PaResidualTracker {
 
     // This guided run already produced (or dropped) its measurement: ignore frames until the next start.
     private bool _runDone;
-    // Inside a dither / settle or a guider pause: frames are not samples.
+    // Inside a dither / settle or a guider pause: frames are not samples. A settle is the guider's, not the run's:
+    // a guiding start keeps one already open (#2072), and only settle_done, guiding_stopped or Reset ends it.
     private bool _settling;
     private bool _paused;
     private double _nextProgressAt;
+    // #2072 — Dec backlash. The Dec pulses' direction (+1 North, −1 South, 0 not yet known), fed from every frame of the
+    // run, settles included (the gear turns either way); the run of pulses against it; and, after a reversal, the new
+    // direction the star must answer before frames are samples again, with the time the hold gives up.
+    private int _decDirection, _runDirection, _runLength, _holdDirection;
+    private double _holdUntil;
 
     // A runaway on either axis (the rule is GuideAxisRunaway's, shared with the Dec runaway watch, #1589).
     internal const int RunawaySteps = GuideAxisRunaway.Steps;
@@ -70,7 +86,8 @@ internal sealed class PaResidualTracker {
         }
         // The daemon can connect to a guider that is already guiding: start on its first frame.
         var action = Measuring ? PaResidualAction.None : Begin();
-        if (_settling || _paused) {
+        NoteDecPulse(timeSec, decDurationMs);
+        if (_settling || _paused || HoldingForBacklash(timeSec, decRawPx)) {
             return action;
         }
         // Both axes are fed on every step (no short-circuit): each keeps its own streak.
@@ -92,11 +109,49 @@ internal sealed class PaResidualTracker {
         return action;
     }
 
+    // A reversal: ReversalPulses Dec pulses in a row against the direction before. The gear's backlash eats the first
+    // pulses of the new direction (the star does not move), and the fit would read them as drift: hold the frames back.
+    private void NoteDecPulse(double timeSec, double decDurationMs) {
+        var direction = decDurationMs > 0 ? 1 : decDurationMs < 0 ? -1 : 0;
+        if (direction == 0) {
+            return;
+        }
+        _runLength = direction == _runDirection ? _runLength + 1 : 1;
+        _runDirection = direction;
+        if (_runLength < ReversalPulses || direction == _decDirection) {
+            return;
+        }
+        if (_decDirection != 0 && BacklashHoldSeconds > 0) {
+            _holdDirection = direction;
+            _holdUntil = timeSec + BacklashHoldSeconds;
+            Estimator.Break();
+        }
+        _decDirection = direction;
+    }
+
+    // The star answers the new pulses once it reaches the side they push it to (DECRaw has their sign, or is 0): the
+    // backlash is taken up. A star that never answers is let through after BacklashHoldSeconds (strong drift can keep
+    // the star off the lock position on the far side); the fit's unanswered-pulses check judges those frames.
+    private bool HoldingForBacklash(double timeSec, double decRawPx) {
+        if (_holdDirection == 0) {
+            return false;
+        }
+        if (decRawPx * _holdDirection < 0 && timeSec < _holdUntil) {
+            return true;
+        }
+        _holdDirection = 0;
+        return false;
+    }
+
     /// <summary>One <c>guider.event</c> kind (see <see cref="Contracts.WsEvents.WsEventCatalog.GuiderEvent"/>).</summary>
     public PaResidualAction OnMarker(string? kind) {
         switch (kind) {
             case "guiding_started":
                 return Begin();
+            // #2072: the guider reports a guiding start's settle (settle_begin) straight after guiding_started and
+            // before that run's first frame, so the start-guiding settle (the star pulled onto the lock position)
+            // is never sampled. A start with no settle_begin before its first frame runs no settle: it samples.
+            case "settle_begin":
             case "dithered":
             case "settling":
                 _settling = true;
@@ -118,8 +173,10 @@ internal sealed class PaResidualTracker {
             case "lock_position_lost":
                 Estimator.Break();
                 return PaResidualAction.None;
-            case "calibration_started":
             case "guiding_stopped":
+                _settling = false; // a stop ends any settle (the guider aborts it)
+                return End();
+            case "calibration_started":
                 return End();
             default:
                 return PaResidualAction.None;
@@ -145,6 +202,7 @@ internal sealed class PaResidualTracker {
         _runDone = false;
         _settling = false;
         _paused = false;
+        ClearDecDirection();
         Estimator.Clear();
         return wasMeasuring ? PaResidualAction.Cancelled : PaResidualAction.None;
     }
@@ -153,12 +211,17 @@ internal sealed class PaResidualTracker {
         Estimator.Clear();
         Measuring = true;
         _runDone = false;
-        _settling = false;
+        // _settling is kept: a settle the guider reported before this start still holds its frames back (#2072).
         _paused = false;
         _nextProgressAt = ProgressEverySeconds;
+        ClearDecDirection();
         _ra.Clear();
         _dec.Clear();
         return PaResidualAction.Started;
+    }
+
+    private void ClearDecDirection() {
+        _decDirection = _runDirection = _runLength = _holdDirection = 0;
     }
 
     private PaResidualAction Finish() {

@@ -109,6 +109,7 @@ public static class WsEventCatalog {
     public static readonly WsEvent GuiderStep = new("guider.step");
     // §63.18 — PHD2's non-step session events, one per PHD2 message, so the client can draw the
     // markers PHD2's own graph draws: payload { kind, ... } with kind = dithered {dx_px, dy_px} |
+    // settle_begin (#2072: a guide or dither settle starts; a start's follows guiding_started) |
     // settling {distance_px, time_sec, settle_time_sec} | settle_done {status, error?} |
     // star_lost {frame?, star_mass?, snr?, distance_px?, status?, error?} | calibration_started |
     // calibrating {direction, frame = step, distance_px, dx_px, dy_px} (one per calibration step) |
