@@ -40,6 +40,7 @@ namespace OpenAstroAra.Test {
         private const string RestoredTitle = "Guiding restored — sequence resumed";
         private const string NotRestartedTitle = "Guiding did not restart — sequence stays paused";
         private static readonly string[] RestartThenResume = ["restart", "resume"];
+        private static readonly string[] RestartRestartResume = ["restart", "restart", "resume"];
 
         private sealed class Rig : IDisposable {
             public readonly Mock<ISequencerService> Sequencer = new();
@@ -50,6 +51,7 @@ namespace OpenAstroAra.Test {
             public readonly FaultReactionService Reaction;
             public bool RestartSucceeds = true;
             public Func<Task>? OnRestart; // the fake's side of a restart: app state Guiding, a settled guide step
+            public Func<int, bool> Settles = _ => true; // whether restart n (from 1) brings guiding back and settled
             public GuiderService Service = null!;
 
             public Rig() {
@@ -91,8 +93,9 @@ namespace OpenAstroAra.Test {
                     GuidingRestoreReconcileWait = TimeSpan.FromSeconds(5),
                 };
                 Service.RestartGuidingOverride = async _ => {
-                    lock (Steps) { Steps.Add("restart"); }
-                    if (RestartSucceeds && OnRestart is { } hook) {
+                    int n;
+                    lock (Steps) { Steps.Add("restart"); n = Steps.Count(s => s == "restart"); }
+                    if (RestartSucceeds && Settles(n) && OnRestart is { } hook) {
                         await hook().ConfigureAwait(false);
                     }
                     return RestartSucceeds;
@@ -236,6 +239,24 @@ namespace OpenAstroAra.Test {
             await fake.BroadcastAsync(PhdEvents.GuideStep(0.02, 0.02)).ConfigureAwait(false);
             Assert.That(await WaitUntilAsync(() => rig.Resumed() == 1).ConfigureAwait(false), Is.True, "the relock never resumed the run");
             Assert.That(rig.Restarts(), Is.Zero, "the guider is guiding already: nothing to restart");
+        }
+
+        [Test]
+        public async Task A_second_link_loss_during_the_guiding_restart_is_waited_out_and_its_reconnect_restarts_guiding_again() {
+            // #2169 review — the link drops again while the first restart waits to settle (PHD2 never got
+            // going): that loss is not dropped, its reconnect restarts guiding again, and only then the run resumes.
+            using var rig = new Rig { Settles = n => n >= 2 };
+            await using var fake = await ConnectedFakeAsync(rig, guiding: true).ConfigureAwait(false);
+
+            await DropAndReconnectStoppedAsync(rig, fake).ConfigureAwait(false);
+            Assert.That(await WaitUntilAsync(() => rig.Restarts() == 1).ConfigureAwait(false), Is.True, "the first restart never ran");
+            await DropAndReconnectStoppedAsync(rig, fake).ConfigureAwait(false);
+
+            Assert.That(await WaitUntilAsync(() => rig.Resumed() == 1).ConfigureAwait(false), Is.True, "the run never resumed after the second reconnect");
+            lock (rig.Steps) {
+                Assert.That(rig.Steps, Is.EqualTo(RestartRestartResume), "the second reconnect restarts guiding before the run resumes");
+            }
+            Assert.That(rig.Titled(NotRestartedTitle), Is.Zero, "the first restart was cut short by the loss, not given up on");
         }
     }
 }

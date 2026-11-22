@@ -28,7 +28,8 @@ namespace OpenAstroAra.Server.Services;
 /// so no unguided frame is saved or counted. Once the §63.3 auto-reconnect (or any connect) brings the link
 /// back, PHD2 is up with guiding stopped: guiding is started again and must settle before the runs resume
 /// (<see cref="IGuiderEpisodeListener.RestoreGuidingAsync"/>), and the stopped light is taken again. One
-/// attempt: a start that fails or never settles leaves the runs paused for the user.
+/// attempt per recovery: a start that fails or never settles leaves the runs paused for the user. A guider
+/// loss during the restore cuts it short; the reaction waits for that loss's recovery and restores again.
 /// </summary>
 public sealed partial class GuiderService {
 
@@ -40,7 +41,9 @@ public sealed partial class GuiderService {
     /// finish before it starts guiding anyway.</summary>
     internal TimeSpan GuidingRestoreReconcileWait { get; set; } = TimeSpan.FromSeconds(30);
 
-    private EquipmentFaultEvent? _guidedLinkFault; // the open link-down fault, when guiding was on at the loss (under _gate)
+    // The last link-down fault published while guiding was on (under _gate). Only compared by reference, so a
+    // stale one never matches a later fault.
+    private EquipmentFaultEvent? _guidedLinkFault;
     private int _reconcileStartsAtLinkLoss;        // ReconcileStarts when the link went down (under _gate)
 
     // Caller holds _gate. A guide step or guiding_started since the last stop, or PHD2 still reading a
@@ -55,13 +58,9 @@ public sealed partial class GuiderService {
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "A guiding start that throws (out of step, custody, RPC) is a failed restore: the runs stay paused. Logged.")]
-    async Task<bool> IGuiderEpisodeListener.RestoreGuidingAsync(EquipmentFaultEvent fault, IReadOnlyList<Guid> runIds, CancellationToken ct) {
+    async Task<bool> IGuiderEpisodeListener.RestoreGuidingAsync(IReadOnlyList<Guid> runIds, CancellationToken ct) {
         int reconcileStartsAtLoss;
         lock (_gate) {
-            if (_guidedLinkFault is null || !ReferenceEquals(fault, _guidedLinkFault)) {
-                return true; // not a guided link loss: nothing to bring back
-            }
-            _guidedLinkFault = null; // one attempt per loss
             reconcileStartsAtLoss = _reconcileStartsAtLinkLoss;
         }
         var sequencer = _sequencerResolver?.Invoke();

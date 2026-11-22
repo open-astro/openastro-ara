@@ -118,10 +118,6 @@ public sealed partial class GuiderService {
     // it. That is safe only because _gate is a Monitor, which is re-entrant.
     void IGuiderEpisodeListener.Released(EquipmentFaultEvent fault) {
         lock (_gate) {
-            if (ReferenceEquals(fault, _guidedLinkFault)) {
-                _guidedLinkFault = null; // #2169 — no episode will restore guiding for this link loss
-                return;
-            }
             if (ReferenceEquals(fault, _decRunawayFault)) {
                 _decRunawayHeld = false;
                 _decRunawayPausedRuns = [];

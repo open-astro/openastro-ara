@@ -692,7 +692,6 @@ public sealed partial class GuiderService : IGuiderService, IGuideCameraPort, IG
     // Recovered: the user disconnect bumps UserDisconnects, and the shared reaction releases its episode by user.
     private void DropOpenFaultsLocked() {
         _linkFault = null;
-        _guidedLinkFault = null;
         _cameraFault = null;
         _starLostReacted = false;
         _starLostFault = null;
