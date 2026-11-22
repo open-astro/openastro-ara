@@ -72,16 +72,6 @@ void main() {
     expect((await older.startPlan(stage: PolarAlignStages.fine)).camera, PolarAlignCameras.guide);
   });
 
-  test('an older rig does not take a hand turn; a hand-turn start sends hand_turn, a motor start never does (#2083)', () async {
-    final d = _PlanDaemon();
-    final api = PolarAlignApi(const AraServer(hostname: 'x', port: 80), dio: Dio()..httpClientAdapter = d);
-    final plan = await api.startPlan(stage: PolarAlignStages.fine);
-    expect(plan.handTurnAvailable, isFalse, reason: 'the stub plan has no hand_turn_available: an older rig');
-    await api.start(plan.byHand());
-    expect(d.startBody, {'stage': 'fine', 'confirmed': true, 'direction': 'west', 'new_origin': false, 'hand_turn': true});
-    expect(PolarAlignStartPlan.fromJson({'direction': 'east', 'hand_turn_available': true}).handTurnAvailable, isTrue);
-  });
-
   test('Stop and Done wait for the daemon to confirm the mount stopped, past the 5 s default (#2048)', () async {
     final d = _Daemon();
     final api = PolarAlignApi(const AraServer(hostname: 'x', port: 80), dio: Dio()..httpClientAdapter = d);
@@ -127,15 +117,13 @@ void main() {
     expect(PolarAlignApi.endTimeout - worstCase, greaterThanOrEqualTo(const Duration(seconds: 10)));
   });
 
-  test('a plan with the motor-direction test sends direction_test back; a hand-turn start never does (#2081)', () async {
+  test('a plan with the motor-direction test sends direction_test back (#2081)', () async {
     final d = _PlanDaemon(directionTestDeg: 0.5);
     final api = PolarAlignApi(const AraServer(hostname: 'x', port: 80), dio: Dio()..httpClientAdapter = d);
     final plan = await api.startPlan(stage: PolarAlignStages.fine);
     expect(plan.directionTestDeg, 0.5);
     await api.start(plan);
     expect(d.startBody, {'stage': 'fine', 'confirmed': true, 'direction': 'west', 'new_origin': false, 'direction_test': true});
-    await api.start(plan.byHand());
-    expect((d.startBody! as Map).containsKey('direction_test'), isFalse, reason: 'a hand-turn run makes no test');
     final saved = await PolarAlignApi(const AraServer(hostname: 'x', port: 80), dio: Dio()..httpClientAdapter = _PlanDaemon())
         .startPlan(stage: PolarAlignStages.fine);
     expect(saved.directionTestDeg, 0.0, reason: 'no key: no test (a saved direction, or an older rig)');

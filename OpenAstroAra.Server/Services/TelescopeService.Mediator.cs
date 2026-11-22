@@ -933,7 +933,6 @@ public sealed partial class TelescopeService : ITelescopeMediator {
                 }
                 TryEnableTracking(client); // some mounts require tracking engaged to accept a sync
                 client.SyncToCoordinates(syncRa, syncDec);
-                Interlocked.Increment(ref _syncEpoch); // #2083
                 RefreshCacheOnce(); // reflect the recalibrated pointing into the §32.4 cache
                 return true;
             }, CancellationToken.None);

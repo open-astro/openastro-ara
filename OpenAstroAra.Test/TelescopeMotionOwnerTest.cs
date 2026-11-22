@@ -296,18 +296,15 @@ namespace OpenAstroAra.Test {
             using var svc = await ConnectAsync(box, log);
             var here = new Coordinates(6.0, 45.0, Epoch.J2000, Coordinates.RAType.Hours);
 
-            var syncsBefore = svc.SyncEpoch;
             using (svc.AcquireMotion(MotionOwners.PolarAlign)) {
                 Assert.That(await ((ITelescopeMediator)svc).Sync(here, CancellationToken.None), Is.False, "Center's sync is not sent");
                 await svc.SlewAsync(new SlewRequestDto(6.0, 45.0, Sync: true), idempotencyKey: null, CancellationToken.None);
                 await WaitForAsync(() => log.Messages.Any(m => m.Contains("dropped", StringComparison.Ordinal)), "the REST sync was not dropped");
                 Assert.That(Put(box, "synctocoordinates"), Is.False, "no sync reached the mount");
-                Assert.That(svc.SyncEpoch, Is.EqualTo(syncsBefore), "#2083 — no sync counted: a clutch turn's refusal stands");
             }
 
             Assert.That(await ((ITelescopeMediator)svc).Sync(here, CancellationToken.None), Is.True, "sent once the run gave the mount back");
             Assert.That(Put(box, "synctocoordinates"), Is.True);
-            Assert.That(svc.SyncEpoch, Is.EqualTo(syncsBefore + 1), "#2083 — the sync after counts: it clears a clutch turn");
         }
 
         // Joey, 2026-11-20 on #2048: Park and Home are refused for Polar Align's whole run, the sequencer's too (its Park

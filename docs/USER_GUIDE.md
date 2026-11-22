@@ -220,8 +220,8 @@ framing/focus loop when you need to point or focus by eye.
   refused too ("point it 2–5° from the pole"): the camera would look along the RA axis, and Polar
   Align no longer tilts it off with the Dec motor. Polar Align also refuses, like NINA, a site with
   no longitude or one still at latitude 0° and longitude 0° (set your site first: it steers by the
-  sidereal time), an alt-az mount (turning it would turn azimuth, not RA), and, for a motor start, a
-  mount that cannot turn its RA axis by motor speed (use **Turn RA by hand**). Before anything moves,
+  sidereal time), an alt-az mount (turning it would turn azimuth, not RA), and a mount that cannot
+  turn its RA axis by motor speed: Polar Align always turns RA with the motor. Before anything moves,
   a confirm step shows which way RA will turn (east or west: on the first start the **Turn
   direction** setting, later back toward Polar Align's start) and how far (about 10° twice); the
   mount moves only when you tap **Move the mount**. Keep a hand on the mount's power switch.
@@ -240,23 +240,6 @@ framing/focus loop when you need to point or focus by eye.
   high toward the pole for your hemisphere, at least about 15° above the horizon when you can, and a
   start whose turns do not cross the meridian, so the tube cannot swing into the pier. Keep a hand on
   the mount's power switch the first time you run this on a mount.
-- **Turning RA by hand.** The confirm step also offers **Turn RA by hand**, like NINA's manual mode:
-  you turn RA yourself (the hand pad, or the clutch open) and Ara moves nothing. No motor move, no
-  GoTo, no Find Home, no Polar Aligner motor (you turn its bolts), and tracking is never switched on
-  while it measures. It is still switched off for the knob loop, which needs the camera still; at the
-  end it is off, or given back as it was if *Stop tracking when polar align ends* is off, like any
-  run. The card asks for each turn ("Turn RA by hand about 10° toward the east, then let go") and
-  takes the next frame once the mount is still; then the readout works as usual. With the hand pad it
-  shows how far the mount says you have turned. With the clutch open it shows no number: the mount
-  does not see the turn, and the frames alone cannot measure it while the mount is off the pole, so
-  it waits until the view has moved far enough and has stayed still for a few frames (at least 5 s
-  after it asked). A turn far past the two asked for ends the run. After
-  a turn with the clutch open the mount no longer knows where it points: **Move the mount** is
-  refused until you sync it (Center does) or reconnect it once it is homed; **Turn RA by hand** still
-  works. Each Start is one measurement, its two turns the way the confirm step
-  says. A **Check** can be turned by hand the same way: pick **Turn RA by hand** on its confirm step.
-  A tube within 3° of the pole is refused, as for the motor. The mount still has to be connected. An
-  older rig does not offer it.
 - **The azimuth number is a true arc.** Ara shows the azimuth error as an arc on the sky (cos alt
   applied, "true arc" next to the number). NINA shows the angle itself, which is larger by about
   1/cos(latitude) (1.5× at 48°); the Full UI shows NINA's figure beside Ara's so the two compare.
@@ -310,8 +293,7 @@ framing/focus loop when you need to point or focus by eye.
   measurement is noisy, under the readout or under the Check. Check focus and seeing, or take more
   frames per point. The mount tracks while the frames are taken: with many long frames per point,
   a run can end before a turn that would take the mount past its sweep limit. Slew back near the
-  pole and start again, or take fewer or shorter frames. When you turn RA by hand, the frames of
-  each point are taken once your turn is in and the mount is still.
+  pole and start again, or take fewer or shorter frames.
 - **How sure the readout is (#2072).** The total error shows with its uncertainty, for example
   **0.2′ ± 1.1′** (one sigma), in the full UI and Simple Mode. The uncertainty comes from how much
   each point's frames scattered. A point is never counted surer than the solver can measure: about
@@ -384,9 +366,7 @@ framing/focus loop when you need to point or focus by eye.
   mount stands still. A mount that runs on more than 2° past the turn is stopped again at once (if
   that stop cannot be confirmed either, cut the mount's power). The turn must end within 2° (or 10%)
   of its size. The plate solves check the mount too: if one frame is turned about 180° from the one
-  before, the mount flipped to the other side of the pier; the run ends with tracking off. A run where
-  you turn RA by hand gets this frame check too (Ara moves nothing in it, so the turn checks above do
-  not apply). If the
+  before, the mount flipped to the other side of the pier; the run ends with tracking off. If the
   mount's Dec reading moved more than 2″ across the three points, the readout (or the Check's verdict)
   warns that the measurement may be off: check the Dec clutch is tight and measure again.
 - **Polar Align's pre-flight checks.** The Start card lists what Polar Align checks before it moves
