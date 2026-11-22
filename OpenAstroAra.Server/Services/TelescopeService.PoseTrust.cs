@@ -254,7 +254,7 @@ public sealed partial class TelescopeService {
     }
 
     /// <summary>#2173 — the Alpaca action AlpacaBridge lists in <c>SupportedActions</c> (only while connected) when the
-    /// driver can say whether its FindHome is a real home-sensor search (AlpacaBridge #2545). The one place the name lives.</summary>
+    /// driver can say whether its FindHome is a real home-sensor search (AlpacaBridge #2550). The one place the name lives.</summary>
     internal const string HomeIsSensorSearchAction = "findhomeissensorsearch";
 
     /// <summary>#2173 — read once per connect with the capabilities (never kept across a reconnect: the capabilities are
