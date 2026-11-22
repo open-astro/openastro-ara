@@ -219,6 +219,9 @@ public sealed partial class GuiderService : IGuiderService, IGuideCameraPort, IG
     Task<GuideCameraCustody.Claim> IGuideCapture.TakeCameraAsync(CameraUse use, Func<CameraUse, Task> stop, CancellationToken ct) =>
         Custody.TakeAsync(use, this, stop, ct);
 
+    Task<GuideCameraCustody.Claim> IGuideCapture.TakeCameraIfFreeAsync(CameraUse use, Func<CameraUse, Task> stop, CancellationToken ct) =>
+        Custody.TakeIfFreeAsync(use, this, stop, ct);
+
     // #1362 — records the guide camera's identity per connect and posts the gear-change notice on a swap.
     // Null in benches/tests → the pin is still re-read and corrected, nobody is told.
     private readonly IEquipmentIdentityReconciler? _identity;

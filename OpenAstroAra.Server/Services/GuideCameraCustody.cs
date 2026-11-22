@@ -129,6 +129,43 @@ public sealed partial class GuideCameraCustody {
     }
 
     /// <summary>
+    /// #2173 — a setup activity that must never stop another (the plate-solve check) asks for the camera: refused
+    /// (<see cref="InvalidOperationException"/>) while the Guider is busy or any activity holds it. The "nobody holds it"
+    /// check and the hold are one step under the module lock, so an activity that takes the camera a moment earlier is
+    /// never stopped; one that takes it after this claim stops this claim, as with <see cref="TakeAsync"/>. A failure
+    /// taking the lease leaves nobody holding.
+    /// </summary>
+    internal async Task<Claim> TakeIfFreeAsync(CameraUse use, IGuideCameraPort port, Func<CameraUse, Task> stop, CancellationToken ct) {
+        ArgumentNullException.ThrowIfNull(port);
+        ArgumentNullException.ThrowIfNull(stop);
+        if (use is CameraUse.Guiding or CameraUse.LiveView) {
+            throw new ArgumentOutOfRangeException(nameof(use), use, "only a leased setup activity takes the camera only when it is free");
+        }
+        var claim = new Claim(this, use, port, stop);
+        lock (_gate) {
+            var state = port.AppState;
+            if (IsBusy(state)) {
+                throw new InvalidOperationException($"the guider is {state!.ToLowerInvariant()} — stop guiding before {Purpose(use)}");
+            }
+            if (_holder is { } holder) {
+                throw new InvalidOperationException($"the guide camera is held by {Purpose(holder.Use)} — try again once it ends");
+            }
+            _holder = claim;
+        }
+        try {
+            await port.SetLeaseAsync(active: true, LeaseTimeoutSeconds, ct).ConfigureAwait(false);
+        } catch {
+            lock (_gate) {
+                if (ReferenceEquals(_holder, claim)) {
+                    _holder = null;
+                }
+            }
+            throw;
+        }
+        return claim;
+    }
+
+    /// <summary>
     /// Starting Guiding takes the camera from any holder: the setup holder is stopped (not completed), then
     /// the lease is released; a lease the guider reports while nobody here holds it is stale and released
     /// too. Best-effort: a fault is logged and never stops the guide attempt (2026-10-03, 2026-10-16).

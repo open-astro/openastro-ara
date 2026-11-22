@@ -47,8 +47,11 @@ public interface IPoseSolveCheckService {
 /// out): (a) the mount's SideOfPier against the side the solved hour angle gives
 /// (<see cref="MeridianFlip.ExpectedPierSide"/>, as the #2128 guards use it), and (b) the solved position angle against
 /// the last trusted solve's for this mount, camera and rotator angle (<see cref="IPoseSolvePaStore"/>): about 180° off is
-/// the other pier side. With no stored angle, (a) decides alone. A German mount whose side no check could tell (no
-/// SideOfPier, too near the pole, no site, and no stored angle) is not trusted either.</para>
+/// the other pier side. Check (a) gives no answer near the pole, and near the meridian (within the profile's
+/// past-meridian limit plus <see cref="MeridianMarginHours"/>, and as far from the hour angle 12 h): a mount tracked past
+/// the meridian on a model a flip off works its SideOfPier out from that model and reports the side the hour angle gives.
+/// With no stored angle, (a) decides alone; a German mount whose side no check could tell (no SideOfPier, near the pole or
+/// the meridian, no site, and no stored angle) is not trusted. An angle is stored only from a trust (a) answered.</para>
 /// <para>Within max(<see cref="MinToleranceDeg"/>, 2 × the solve's uncertainty) with the pier side agreeing, the position
 /// is trusted again for every reason (no eye check, no brand: ADR 0003), logged, persisted and pushed. Further off, the
 /// result says where the mount reads and where the sky is, and offers one Sync (<see cref="PoseSolveCheckResultDto.CheckId"/>,
@@ -70,6 +73,10 @@ public sealed partial class PoseSolveCheckService : IPoseSolveCheckService, IDis
     /// error spans hours of RA there), so check (a) gives no answer.</summary>
     public const double PoleBandDeg = 5.0;
 
+    /// <summary>Beyond the profile's past-meridian limit, how near the meridian (in hour angle, either side) check (a) still
+    /// gives no answer: a mount may track past the meridian by its own limit, not Ara's.</summary>
+    public const double MeridianMarginHours = 1.0;
+
     /// <summary>How far the mount's two readings around the exposure may differ, beyond the sky's sidereal drift.</summary>
     public const double MovedDeg = 0.1;
 
@@ -85,17 +92,19 @@ public sealed partial class PoseSolveCheckService : IPoseSolveCheckService, IDis
     private readonly IPoseSolvePaStore _angles;
     private readonly ILogger _logger;
     private readonly TimeProvider _clock;
+    private readonly Func<double> _minutesAfterMeridian;
     private readonly SemaphoreSlim _gate = new(1, 1);
     private (string Id, long Session, string? Device, DateTimeOffset At)? _offer;
 
     public PoseSolveCheckService(ITelescopeService mount, IPoseSolveCamera camera, IProfileStore? profiles, IPoseSolvePaStore angles,
-            ILogger<PoseSolveCheckService>? logger = null, TimeProvider? clock = null) {
+            ILogger<PoseSolveCheckService>? logger = null, TimeProvider? clock = null, Func<double>? maxMinutesAfterMeridian = null) {
         _mount = mount ?? throw new ArgumentNullException(nameof(mount));
         _camera = camera ?? throw new ArgumentNullException(nameof(camera));
         _profiles = profiles;
         _angles = angles ?? throw new ArgumentNullException(nameof(angles));
         _logger = logger ?? NullLogger<PoseSolveCheckService>.Instance;
         _clock = clock ?? TimeProvider.System;
+        _minutesAfterMeridian = maxMinutesAfterMeridian ?? (() => 0.0);
     }
 
     public async Task<PoseSolveAvailabilityDto> AvailabilityAsync(CancellationToken ct) {
@@ -214,9 +223,16 @@ public sealed partial class PoseSolveCheckService : IPoseSolveCheckService, IDis
         if (before.Slewing != false) {
             return new(null, Empty(camera, "mount_moved", "The mount is moving (or does not say whether it is), so nothing was compared."));
         }
+        if (before.Frame is not (Epoch.J2000 or Epoch.JNOW)) {
+            // The sky cannot be put in a B1950 or J2050 frame (Coordinates.Transform supports J2000 and JNOW only).
+            return new(null, Empty(camera, "solve_failed", $"The mount reports its position in the {before.Frame} system, which the check cannot compare with the sky. The position stays unverified; Home and Confirm Home are the ways out."));
+        }
         var hint = new Coordinates(b.RaHours, b.DecDeg, before.Frame, Coordinates.RAType.Hours);
-        var frame = await _camera.CaptureAndSolveAsync(camera, hint, ct).ConfigureAwait(false);
-        var after = await _mount.ReadNowAsync(ct).ConfigureAwait(false);
+        // The second read comes when the frame is read out, not after a solve that may take minutes: the drift allowance
+        // then covers the exposure only.
+        Task<MountReading?>? afterExposure = null;
+        var frame = await _camera.CaptureAndSolveAsync(camera, hint, () => afterExposure ??= _mount.ReadNowAsync(ct), ct).ConfigureAwait(false);
+        var after = await (afterExposure ?? _mount.ReadNowAsync(ct)).ConfigureAwait(false);
         if (after is null || FoldPose(after.RaHours, after.DecDegrees) is not { } a || after.SessionEpoch != session
                 || _mount.SessionEpoch != session || _mount.PoseCommandCount != commands || after.Slewing == true
                 || SeparationDeg(a.RaHours, a.DecDeg, b.RaHours, b.DecDeg) > MovedDeg + Drift(before, after)) {
@@ -261,7 +277,7 @@ public sealed partial class PoseSolveCheckService : IPoseSolveCheckService, IDis
         } else if (german && (reported == PierSide.pierUnknown || expected is null) && paSide is null) {
             // No check could tell the side (no SideOfPier, too near the pole, no site; no stored angle): fail safe.
             outcome = "pier_side_unknown";
-            detail = "The pier side could not be checked (the mount does not report it, the scope is too near the pole, or the site is not set, and no earlier solve's angle is stored), so the position is not trusted. Home is the way out.";
+            detail = "The pier side could not be checked (the mount does not report it, the scope is too near the pole or the meridian, or the site is not set, and no earlier solve's angle is stored), so the position is not trusted. Home is the way out.";
         } else if (separation <= tolerance) {
             outcome = "trusted";
             detail = string.Create(CultureInfo.InvariantCulture,
@@ -289,17 +305,20 @@ public sealed partial class PoseSolveCheckService : IPoseSolveCheckService, IDis
             };
         }
         _offer = null;
-        var side = m.Before.SideOfPier != PierSide.pierUnknown ? m.Before.SideOfPier : ExpectedSide(m.Frame.Coordinates!, m.Before.ReadAtUtc);
-        if (m.Frame.PositionAngleDeg is double pa && side is PierSide s and not PierSide.pierUnknown) {
-            _angles.Store(AngleKey(device, camera), pa, s);
+        // Only a side check (a) answered (away from the pole and the meridian) is stored: one that (b) alone gave would
+        // carry an earlier mistake forward, and a SideOfPier read off a model a flip off would spoil every later check.
+        if (m.Frame.PositionAngleDeg is double pa && AngleKey(device, camera) is { } key
+                && ExpectedSide(m.Frame.Coordinates!, m.Before.ReadAtUtc) is PierSide s and not PierSide.pierUnknown) {
+            _angles.Store(key, pa, s);
         }
         return verdict with { ClearedReason = cleared.Length == 0 ? null : cleared };
     }
 
-    private static string AngleKey(string device, PoseSolveCameraChoice camera) => $"{device}|{camera.Key ?? camera.Camera}";
+    // Null when the camera has no identity to key the angle by (then no angle is stored or compared).
+    private static string? AngleKey(string device, PoseSolveCameraChoice camera) => camera.Key is { } key ? $"{device}|{key}" : null;
 
-    private (string Check, PierSide? Side) PositionAngleSide(string key, double? positionAngleDeg) {
-        if (positionAngleDeg is not double pa || _angles.Lookup(key) is not { } stored) {
+    private (string Check, PierSide? Side) PositionAngleSide(string? key, double? positionAngleDeg) {
+        if (positionAngleDeg is not double pa || key is null || _angles.Lookup(key) is not { } stored) {
             return ("none_stored", null);
         }
         var turned = Math.Abs(Wrap180(pa - stored.PositionAngleDeg));
@@ -324,10 +343,21 @@ public sealed partial class PoseSolveCheckService : IPoseSolveCheckService, IDis
                 return null;
             }
             var lstHours = SiteAstrometry.LocalSiderealTimeDeg(at, site.LongitudeDeg) / 15.0;
+            if (NearMeridian(solved, lstHours, _minutesAfterMeridian())) {
+                return null;
+            }
             return MeridianFlip.ExpectedPierSide(solved, Angle.ByHours(lstHours));
         } catch (Exception) {
             return null;
         }
+    }
+
+    // Within the band around the hour angles 0 h and 12 h, where the side the hour angle gives flips, a mount may stand
+    // on either side (tracked past its flip, or flipped early).
+    private static bool NearMeridian(Coordinates solved, double lstHours, double minutesAfterMeridian) {
+        var band = Math.Max(0.0, double.IsFinite(minutesAfterMeridian) ? minutesAfterMeridian : 0.0) / 60.0 + MeridianMarginHours;
+        var ha = ((lstHours - solved.Transform(Epoch.JNOW).RA) % 12.0 + 12.0) % 12.0; // the hour angle folded onto 0..12 h
+        return ha < band || ha > 12.0 - band;
     }
 
     /// <summary>A pose whose Dec reads past ±90° (the Dec axis over the pole) folded to the same pointing: Dec 180° − Dec,

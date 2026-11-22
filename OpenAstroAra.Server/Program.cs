@@ -304,7 +304,8 @@ public partial class Program {
                 sp.GetRequiredService<OpenAstroAra.Server.Services.IPoseSolveCamera>(),
                 sp.GetService<IProfileStore>(),
                 sp.GetRequiredService<IPoseSolvePaStore>(),
-                sp.GetService<ILogger<OpenAstroAra.Server.Services.PoseSolveCheckService>>()));
+                sp.GetService<ILogger<OpenAstroAra.Server.Services.PoseSolveCheckService>>(),
+                maxMinutesAfterMeridian: () => sp.GetService<OpenAstroAra.Profile.Interfaces.IProfileService>()?.ActiveProfile?.MeridianFlipSettings?.MaxMinutesAfterMeridian ?? 0.0));
         // §58.4 — the real meridian-flip orchestration (stop guiding → pass meridian → flip slew → recenter →
         // resume guiding), replacing the throwing placeholder. Handed into the sequencer factory below so the
         // MeridianFlipTrigger prototype runs it. Mount-gated to live-validate.

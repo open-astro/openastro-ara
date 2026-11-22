@@ -133,9 +133,10 @@ public sealed class MainCameraPointingSolver : IPolarAlignMainCameraSolver {
     }
 
     /// <summary>Capture one snapshot and solve it. <paramref name="purpose"/> prefixes the
-    /// configuration messages ("Cannot verify the position", "Cannot polar-align").</summary>
+    /// configuration messages ("Cannot verify the position", "Cannot polar-align"). <paramref name="exposed"/>
+    /// (#2173) runs once, synchronously, when the frame is read out and before it is solved.</summary>
     public async Task<PlateSolveResult> CaptureAndSolveRawAsync(
-            double exposureSeconds, Coordinates? hint, bool blindFailover, string purpose, CancellationToken ct) {
+            double exposureSeconds, Coordinates? hint, bool blindFailover, string purpose, CancellationToken ct, Action? exposed = null) {
         LegacyProfileBridge.SyncPlateSolve(_profileService, _profileStore);
         var profile = _profileService.ActiveProfile
             ?? throw new PlateSolverConfigurationException($"{purpose}: no active profile is loaded.");
@@ -173,7 +174,20 @@ public sealed class MainCameraPointingSolver : IPolarAlignMainCameraSolver {
             Attempts = 1,                    // one look; the caller decides what to do next
             ReattemptDelay = TimeSpan.Zero,
         };
-        return await captureSolver.Solve(sequence, parameter, null, null, ct).ConfigureAwait(false);
+        var solveProgress = exposed is null ? null : new ExposedOnce(exposed);
+        return await captureSolver.Solve(sequence, parameter, solveProgress, null, ct).ConfigureAwait(false);
+    }
+
+    // #2173 — CaptureSolver reports the frame's thumbnail once it is read out, before it solves: the caller's hook runs
+    // then, inline (a Progress<T> would post it later).
+    private sealed class ExposedOnce(Action exposed) : IProgress<PlateSolveProgress> {
+        private int _done;
+
+        public void Report(PlateSolveProgress value) {
+            if (value?.PlateSolveResult is null && Interlocked.Exchange(ref _done, 1) == 0) {
+                exposed();
+            }
+        }
     }
 
     /// <summary>Coarse-stage frame. A seed frame keeps the blind fallback (the mount at Home may be degrees

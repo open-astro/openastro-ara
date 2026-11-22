@@ -372,13 +372,17 @@ namespace OpenAstroAra.Test {
         public PointingState SideOfPier { get => Side; set => Interlocked.Increment(ref _pierSideWrites); }
         /// <summary>#2173 — the pier side the mount reports (Normal = pierEast unless a test turns it).</summary>
         public volatile PointingState Side = PointingState.Normal;
-        public EquatorialCoordinateType EquatorialSystem => EquatorialCoordinateType.Topocentric;
+        public EquatorialCoordinateType EquatorialSystem => CoordinateSystem;
+        /// <summary>#2173 — the coordinate system the mount reports (topocentric, JNOW, unless a test sets another before connect).</summary>
+        public volatile EquatorialCoordinateType CoordinateSystem = EquatorialCoordinateType.Topocentric;
         /// <summary>#2073 — the mount type; null makes the read throw, as a driver that does not implement it.</summary>
         public AlignmentMode? Alignment { get; set; } = AlignmentMode.GermanPolar;
         public AlignmentMode AlignmentMode => Alignment ?? throw new ASCOM.NotImplementedException("AlignmentMode");
         public bool CanSlewAsync => true;
         public bool CanSlew => true;
-        public bool CanSync => true;
+        public bool CanSync => SyncCapable;
+        /// <summary>#2173 — the mount's Alpaca CanSync (true unless a test turns it off).</summary>
+        public volatile bool SyncCapable = true;
         public bool CanPark => true;
         public bool CanUnpark => true;
         public bool CanSetTracking => true;
