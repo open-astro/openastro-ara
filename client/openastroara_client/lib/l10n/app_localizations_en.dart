@@ -6781,6 +6781,42 @@ class AppLocalizationsEn extends AppLocalizations {
       'Ara could not confirm that the mount stopped. Cut the mount\'s power now, and check the mount before you start again.';
 
   @override
+  String get polarAlignErrorSlewStalled =>
+      'The mount stopped turning partway through an RA turn. Check that it can turn freely and is still connected, then start again.';
+
+  @override
+  String get polarAlignErrorSlewTimeout =>
+      'The mount took more than twice as long as it should to make an RA turn, so Polar Align stopped it. Check the mount, then start again.';
+
+  @override
+  String get polarAlignErrorDecMoved =>
+      'The mount\'s Dec reading moved during an RA turn, which an RA turn never does. Check that the Dec clutch is tight, then start again.';
+
+  @override
+  String get polarAlignErrorPierChanged =>
+      'The mount reported a different side of the pier during an RA turn. Polar Align never flips the mount. Check where it points, then start again.';
+
+  @override
+  String get polarAlignErrorTurnMismatch =>
+      'The mount did not turn the way Polar Align asked. Check that it turns freely, only in RA, and stops when told, then start again.';
+
+  @override
+  String get polarAlignErrorPierFlip =>
+      'The mount flipped to the other side of the pier between two frames. Polar Align stopped it and turned tracking off. Check where it points, then start again.';
+
+  @override
+  String get polarAlignErrorTrackingOff =>
+      'The mount is not tracking and did not start tracking when Ara asked. Turn tracking on from the mount controls, then start again.';
+
+  @override
+  String get polarAlignErrorHandTurnTooFar =>
+      'RA was turned further than this measurement allows. Turn it back near where you started, then start again.';
+
+  @override
+  String get polarAlignErrorSweepLimit =>
+      'The next turn would take the RA axis past Polar Align\'s limit. Slew it back near the pole, counterweights down, or take fewer or shorter frames, then start again.';
+
+  @override
   String get refusalPolarAlignOnAxis =>
       'The scope points within 3° of the pole. Point it 2–5° from the pole, counterweights down, then start again.';
 
@@ -7255,24 +7291,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get polarPreflightCheckCanMoveAxis => 'RA motor control';
 
   @override
-  String get polarPreflightCheckMotionSafety => 'AlpacaBridge motion safety';
-
-  @override
-  String get polarPreflightCheckPierSide => 'Pier side';
-
-  @override
-  String get polarPreflightCheckPoseEnvelope =>
-      'Start near the pole and above the horizon';
-
-  @override
-  String get polarPreflightCheckStartCwAngle =>
-      'Counterweight angle at the start';
-
-  @override
-  String get polarPreflightCheckTurnStep =>
-      'Turn step within the counterweight limit';
-
-  @override
   String get polarPreflightCheckAligner => 'Polar Aligner';
 
   @override
@@ -7323,6 +7341,18 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get refusalPolarAlignSiteNotSet =>
+      'Polar align needs your site: set its latitude and longitude in the site settings (not 0° and 0°), so it knows the sidereal time.';
+
+  @override
+  String get refusalPolarAlignAltAzMount =>
+      'Polar align needs an equatorial mount. This mount says it is alt-az, so turning it would turn azimuth, not RA.';
+
+  @override
+  String get refusalPolarAlignCannotMoveAxis =>
+      'This mount cannot turn its RA axis by motor speed, so Polar align cannot turn it. Use Turn RA by hand.';
+
+  @override
   String get polarKnobClearance => 'Counterweight limit and clearance';
 
   @override
@@ -7342,4 +7372,65 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get polarKnobClearanceHint =>
       'Kept for each mount. Measure it with the hand controller.';
+
+  @override
+  String get polarKnobEastDirection => 'Turn direction';
+
+  @override
+  String get polarKnobEastDirectionAuto => 'Automatic';
+
+  @override
+  String get polarKnobEastDirectionEast => 'East';
+
+  @override
+  String get polarKnobEastDirectionWest => 'West';
+
+  @override
+  String get polarKnobEastDirectionHint =>
+      'Automatic is east in the north and west in the south. A new start turns this way; later starts turn back toward it';
+
+  @override
+  String get polarMotorDirection => 'RA motor direction';
+
+  @override
+  String polarMotorDirectionSaved(
+    String driver,
+    String version,
+    String direction,
+  ) {
+    return 'Tested on $driver $version: the motor\'s positive speed turns RA $direction.';
+  }
+
+  @override
+  String polarMotorDirectionOtherDriver(String driver, String version) {
+    return 'Tested on another driver ($driver $version): the next start tests it again with a 0.5° turn.';
+  }
+
+  @override
+  String get polarMotorDirectionUntested =>
+      'Not tested yet: the next start first turns the mount 0.5° to learn it.';
+
+  @override
+  String get polarMotorDirectionUnknown =>
+      'This rig does not save a motor direction.';
+
+  @override
+  String get polarMotorDirectionReadFailed =>
+      'Could not read the saved motor direction from the rig.';
+
+  @override
+  String get polarMotorDirectionRetest => 'Test direction again';
+
+  @override
+  String get polarMotorDirectionRetestDone =>
+      'The next start tests the motor direction again.';
+
+  @override
+  String polarConfirmDirectionTest(String deg) {
+    return 'First it turns the mount $deg° to learn the motor direction (not tested yet for this mount and driver).';
+  }
+
+  @override
+  String get polarAlignTurnWrongWay =>
+      'The mount turned the other way from its saved motor direction, so Polar align stopped it and never turned it back. Check the mount, then tap Test direction again in Settings › Imaging › Polar align, and start again.';
 }

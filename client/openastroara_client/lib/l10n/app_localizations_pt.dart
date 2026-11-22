@@ -6781,6 +6781,42 @@ class AppLocalizationsPt extends AppLocalizations {
       'Ara could not confirm that the mount stopped. Cut the mount\'s power now, and check the mount before you start again.';
 
   @override
+  String get polarAlignErrorSlewStalled =>
+      'The mount stopped turning partway through an RA turn. Check that it can turn freely and is still connected, then start again.';
+
+  @override
+  String get polarAlignErrorSlewTimeout =>
+      'The mount took more than twice as long as it should to make an RA turn, so Polar Align stopped it. Check the mount, then start again.';
+
+  @override
+  String get polarAlignErrorDecMoved =>
+      'The mount\'s Dec reading moved during an RA turn, which an RA turn never does. Check that the Dec clutch is tight, then start again.';
+
+  @override
+  String get polarAlignErrorPierChanged =>
+      'The mount reported a different side of the pier during an RA turn. Polar Align never flips the mount. Check where it points, then start again.';
+
+  @override
+  String get polarAlignErrorTurnMismatch =>
+      'The mount did not turn the way Polar Align asked. Check that it turns freely, only in RA, and stops when told, then start again.';
+
+  @override
+  String get polarAlignErrorPierFlip =>
+      'The mount flipped to the other side of the pier between two frames. Polar Align stopped it and turned tracking off. Check where it points, then start again.';
+
+  @override
+  String get polarAlignErrorTrackingOff =>
+      'The mount is not tracking and did not start tracking when Ara asked. Turn tracking on from the mount controls, then start again.';
+
+  @override
+  String get polarAlignErrorHandTurnTooFar =>
+      'RA was turned further than this measurement allows. Turn it back near where you started, then start again.';
+
+  @override
+  String get polarAlignErrorSweepLimit =>
+      'The next turn would take the RA axis past Polar Align\'s limit. Slew it back near the pole, counterweights down, or take fewer or shorter frames, then start again.';
+
+  @override
   String get refusalPolarAlignOnAxis =>
       'The scope points within 3° of the pole. Point it 2–5° from the pole, counterweights down, then start again.';
 
@@ -7255,24 +7291,6 @@ class AppLocalizationsPt extends AppLocalizations {
   String get polarPreflightCheckCanMoveAxis => 'RA motor control';
 
   @override
-  String get polarPreflightCheckMotionSafety => 'AlpacaBridge motion safety';
-
-  @override
-  String get polarPreflightCheckPierSide => 'Pier side';
-
-  @override
-  String get polarPreflightCheckPoseEnvelope =>
-      'Start near the pole and above the horizon';
-
-  @override
-  String get polarPreflightCheckStartCwAngle =>
-      'Counterweight angle at the start';
-
-  @override
-  String get polarPreflightCheckTurnStep =>
-      'Turn step within the counterweight limit';
-
-  @override
   String get polarPreflightCheckAligner => 'Polar Aligner';
 
   @override
@@ -7323,6 +7341,18 @@ class AppLocalizationsPt extends AppLocalizations {
   }
 
   @override
+  String get refusalPolarAlignSiteNotSet =>
+      'Polar align needs your site: set its latitude and longitude in the site settings (not 0° and 0°), so it knows the sidereal time.';
+
+  @override
+  String get refusalPolarAlignAltAzMount =>
+      'Polar align needs an equatorial mount. This mount says it is alt-az, so turning it would turn azimuth, not RA.';
+
+  @override
+  String get refusalPolarAlignCannotMoveAxis =>
+      'This mount cannot turn its RA axis by motor speed, so Polar align cannot turn it. Use Turn RA by hand.';
+
+  @override
   String get polarKnobClearance => 'Counterweight limit and clearance';
 
   @override
@@ -7342,6 +7372,67 @@ class AppLocalizationsPt extends AppLocalizations {
   @override
   String get polarKnobClearanceHint =>
       'Kept for each mount. Measure it with the hand controller.';
+
+  @override
+  String get polarKnobEastDirection => 'Turn direction';
+
+  @override
+  String get polarKnobEastDirectionAuto => 'Automatic';
+
+  @override
+  String get polarKnobEastDirectionEast => 'East';
+
+  @override
+  String get polarKnobEastDirectionWest => 'West';
+
+  @override
+  String get polarKnobEastDirectionHint =>
+      'Automatic is east in the north and west in the south. A new start turns this way; later starts turn back toward it';
+
+  @override
+  String get polarMotorDirection => 'RA motor direction';
+
+  @override
+  String polarMotorDirectionSaved(
+    String driver,
+    String version,
+    String direction,
+  ) {
+    return 'Tested on $driver $version: the motor\'s positive speed turns RA $direction.';
+  }
+
+  @override
+  String polarMotorDirectionOtherDriver(String driver, String version) {
+    return 'Tested on another driver ($driver $version): the next start tests it again with a 0.5° turn.';
+  }
+
+  @override
+  String get polarMotorDirectionUntested =>
+      'Not tested yet: the next start first turns the mount 0.5° to learn it.';
+
+  @override
+  String get polarMotorDirectionUnknown =>
+      'This rig does not save a motor direction.';
+
+  @override
+  String get polarMotorDirectionReadFailed =>
+      'Could not read the saved motor direction from the rig.';
+
+  @override
+  String get polarMotorDirectionRetest => 'Test direction again';
+
+  @override
+  String get polarMotorDirectionRetestDone =>
+      'The next start tests the motor direction again.';
+
+  @override
+  String polarConfirmDirectionTest(String deg) {
+    return 'First it turns the mount $deg° to learn the motor direction (not tested yet for this mount and driver).';
+  }
+
+  @override
+  String get polarAlignTurnWrongWay =>
+      'The mount turned the other way from its saved motor direction, so Polar align stopped it and never turned it back. Check the mount, then tap Test direction again in Settings › Imaging › Polar align, and start again.';
 }
 
 /// The translations for Portuguese, as used in Brazil (`pt_BR`).
@@ -14175,6 +14266,42 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
       'O Ara não conseguiu confirmar que a montagem parou. Corte a energia da montagem agora e confira a montagem antes de começar de novo.';
 
   @override
+  String get polarAlignErrorSlewStalled =>
+      'A montagem parou de girar no meio de um giro em AR. Verifique se ela gira livremente e se ainda está conectada, e comece de novo.';
+
+  @override
+  String get polarAlignErrorSlewTimeout =>
+      'A montagem levou mais que o dobro do tempo esperado para um giro em AR, então o alinhamento polar a parou. Verifique a montagem e comece de novo.';
+
+  @override
+  String get polarAlignErrorDecMoved =>
+      'A leitura de Dec da montagem mudou durante um giro em AR, o que um giro em AR nunca faz. Verifique se a trava de Dec está firme e comece de novo.';
+
+  @override
+  String get polarAlignErrorPierChanged =>
+      'A montagem informou outro lado do pilar durante um giro em AR. O alinhamento polar nunca troca a montagem de lado do pilar. Verifique para onde ela aponta e comece de novo.';
+
+  @override
+  String get polarAlignErrorTurnMismatch =>
+      'A montagem não girou como o alinhamento polar pediu. Verifique se ela gira livremente, só em AR, e se ela para quando recebe o comando; depois comece de novo.';
+
+  @override
+  String get polarAlignErrorPierFlip =>
+      'A montagem virou para o outro lado do pilar entre duas imagens. O alinhamento polar a parou e desligou o rastreamento. Verifique para onde ela aponta e comece de novo.';
+
+  @override
+  String get polarAlignErrorTrackingOff =>
+      'A montagem não está rastreando e não ligou o rastreamento quando o Ara pediu. Ligue o rastreamento pelos controles da montagem e comece de novo.';
+
+  @override
+  String get polarAlignErrorHandTurnTooFar =>
+      'A AR foi girada além do que esta medição permite. Gire-a de volta para perto de onde você começou e comece de novo.';
+
+  @override
+  String get polarAlignErrorSweepLimit =>
+      'O próximo giro levaria o eixo de AR além do limite do alinhamento polar. Leve a montagem de volta para perto do polo, com os contrapesos para baixo, ou faça menos imagens ou imagens mais curtas, e comece de novo.';
+
+  @override
   String get refusalPolarAlignOnAxis =>
       'A luneta aponta a menos de 3° do polo. Aponte-a de 2 a 5° do polo, com os contrapesos para baixo, e inicie de novo.';
 
@@ -14650,25 +14777,6 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String get polarPreflightCheckCanMoveAxis => 'Controle do motor de AR';
 
   @override
-  String get polarPreflightCheckMotionSafety =>
-      'Segurança de movimento do AlpacaBridge';
-
-  @override
-  String get polarPreflightCheckPierSide => 'Lado do pilar';
-
-  @override
-  String get polarPreflightCheckPoseEnvelope =>
-      'Início perto do polo e acima do horizonte';
-
-  @override
-  String get polarPreflightCheckStartCwAngle =>
-      'Ângulo do contrapeso no início';
-
-  @override
-  String get polarPreflightCheckTurnStep =>
-      'Passo de giro dentro do limite do contrapeso';
-
-  @override
   String get polarPreflightCheckAligner => 'Alinhador polar';
 
   @override
@@ -14719,6 +14827,18 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   }
 
   @override
+  String get refusalPolarAlignSiteNotSet =>
+      'O alinhamento polar precisa do seu local: defina a latitude e a longitude nas configurações do local (não 0° e 0°), para saber o tempo sideral.';
+
+  @override
+  String get refusalPolarAlignAltAzMount =>
+      'O alinhamento polar precisa de uma montagem equatorial. Esta montagem diz que é altazimutal, então girá-la giraria o azimute, não a AR.';
+
+  @override
+  String get refusalPolarAlignCannotMoveAxis =>
+      'Esta montagem não consegue girar o eixo de AR por velocidade do motor, então o alinhamento polar não consegue girá-la. Use Girar a AR à mão.';
+
+  @override
   String get polarKnobClearance => 'Limite do contrapeso e folga';
 
   @override
@@ -14738,4 +14858,65 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String get polarKnobClearanceHint =>
       'Guardado para cada montagem. Meça com o controle de mão.';
+
+  @override
+  String get polarKnobEastDirection => 'Direção do giro';
+
+  @override
+  String get polarKnobEastDirectionAuto => 'Automática';
+
+  @override
+  String get polarKnobEastDirectionEast => 'Leste';
+
+  @override
+  String get polarKnobEastDirectionWest => 'Oeste';
+
+  @override
+  String get polarKnobEastDirectionHint =>
+      'Automática é leste no norte e oeste no sul. Um novo início gira para este lado; os seguintes voltam em direção a ele';
+
+  @override
+  String get polarMotorDirection => 'Direção do motor de AR';
+
+  @override
+  String polarMotorDirectionSaved(
+    String driver,
+    String version,
+    String direction,
+  ) {
+    return 'Testada em $driver $version: a velocidade positiva do motor gira a AR para $direction.';
+  }
+
+  @override
+  String polarMotorDirectionOtherDriver(String driver, String version) {
+    return 'Testada em outro driver ($driver $version): o próximo início testa de novo com um giro de 0,5°.';
+  }
+
+  @override
+  String get polarMotorDirectionUntested =>
+      'Ainda não testada: o próximo início primeiro gira a montagem 0,5° para descobri-la.';
+
+  @override
+  String get polarMotorDirectionUnknown =>
+      'Este setup não salva uma direção do motor.';
+
+  @override
+  String get polarMotorDirectionReadFailed =>
+      'Não foi possível ler do setup a direção do motor salva.';
+
+  @override
+  String get polarMotorDirectionRetest => 'Testar a direção de novo';
+
+  @override
+  String get polarMotorDirectionRetestDone =>
+      'O próximo início testa a direção do motor de novo.';
+
+  @override
+  String polarConfirmDirectionTest(String deg) {
+    return 'Primeiro ela gira a montagem $deg° para descobrir a direção do motor (ainda não testada para esta montagem e driver).';
+  }
+
+  @override
+  String get polarAlignTurnWrongWay =>
+      'A montagem girou para o lado contrário da direção do motor salva, então o alinhamento polar a parou e nunca a girou de volta. Verifique a montagem, toque em Testar a direção de novo em Configurações › Imagem › Alinhamento polar e comece de novo.';
 }

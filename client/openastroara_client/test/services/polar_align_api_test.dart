@@ -23,10 +23,13 @@ class _Daemon implements HttpClientAdapter {
 
 /// #2089 — a stub daemon that answers the start plan and records the start's body.
 class _PlanDaemon implements HttpClientAdapter {
-  _PlanDaemon({this.camera});
+  _PlanDaemon({this.camera, this.directionTestDeg});
 
   /// The plan's `camera`; null = an older daemon's plan, with no key.
   final String? camera;
+
+  /// #2081 the plan's `direction_test_deg`; null = no key.
+  final double? directionTestDeg;
   Object? startBody;
 
   @override
@@ -38,7 +41,8 @@ class _PlanDaemon implements HttpClientAdapter {
       return ResponseBody.fromString(
         '{"stage":"fine","direction":"west","step_deg":10,"turns":2,"max_sweep_deg":20,'
         '"new_origin":false,"origin_offset_deg":20.3,"sweep_limit_deg":30'
-        '${camera == null ? '' : ',"camera":"$camera"'}}',
+        '${camera == null ? '' : ',"camera":"$camera"'}'
+        '${directionTestDeg == null ? '' : ',"direction_test_deg":$directionTestDeg'}}',
         200,
         headers: {
           Headers.contentTypeHeader: [Headers.jsonContentType],
@@ -122,4 +126,54 @@ void main() {
     // Ten seconds at least for tracking off, the session row and the camera release after the stop.
     expect(PolarAlignApi.endTimeout - worstCase, greaterThanOrEqualTo(const Duration(seconds: 10)));
   });
+
+  test('a plan with the motor-direction test sends direction_test back; a hand-turn start never does (#2081)', () async {
+    final d = _PlanDaemon(directionTestDeg: 0.5);
+    final api = PolarAlignApi(const AraServer(hostname: 'x', port: 80), dio: Dio()..httpClientAdapter = d);
+    final plan = await api.startPlan(stage: PolarAlignStages.fine);
+    expect(plan.directionTestDeg, 0.5);
+    await api.start(plan);
+    expect(d.startBody, {'stage': 'fine', 'confirmed': true, 'direction': 'west', 'new_origin': false, 'direction_test': true});
+    await api.start(plan.byHand());
+    expect((d.startBody! as Map).containsKey('direction_test'), isFalse, reason: 'a hand-turn run makes no test');
+    final saved = await PolarAlignApi(const AraServer(hostname: 'x', port: 80), dio: Dio()..httpClientAdapter = _PlanDaemon())
+        .startPlan(stage: PolarAlignStages.fine);
+    expect(saved.directionTestDeg, 0.0, reason: 'no key: no test (a saved direction, or an older rig)');
+  });
+
+  test('the motor direction reads the saved test and its match, and retest posts the forget (#2081)', () async {
+    final d = _DirectionDaemon();
+    final api = PolarAlignMotorDirectionApi(const AraServer(hostname: 'x', port: 80), dio: Dio()..httpClientAdapter = d);
+    final state = await api.get();
+    expect((state!.saved!.sign, state.saved!.driverInfo, state.saved!.driverVersion, state.matchesConnectedMount),
+        (-1, 'AlpacaBridge iOptron', '6.0.0', true));
+    expect(state.saved!.testedUtc, DateTime.utc(2026, 11, 21, 1, 2, 3));
+    await api.retest();
+    expect(d.posts, ['/api/v1/equipment/polaralign/motor-direction/retest']);
+    expect(PolarAlignMotorDirectionState.fromJson({'saved': null, 'matches_connected_mount': null}).saved, isNull);
+  });
+}
+
+/// #2081 a stub daemon with a saved motor direction.
+class _DirectionDaemon implements HttpClientAdapter {
+  final posts = <String>[];
+
+  @override
+  void close({bool force = false}) {}
+
+  @override
+  Future<ResponseBody> fetch(RequestOptions options, Stream<Uint8List>? requestStream, Future<void>? cancelFuture) async {
+    if (options.method == 'POST') {
+      posts.add(options.path);
+      return ResponseBody.fromString('', 204);
+    }
+    return ResponseBody.fromString(
+      '{"saved":{"sign":-1,"driver_info":"AlpacaBridge iOptron","driver_version":"6.0.0",'
+      '"tested_utc":"2026-11-21T01:02:03Z"},"matches_connected_mount":true}',
+      200,
+      headers: {
+        Headers.contentTypeHeader: [Headers.jsonContentType],
+      },
+    );
+  }
 }

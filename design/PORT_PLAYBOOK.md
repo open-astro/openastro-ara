@@ -6444,6 +6444,7 @@ Failure events:
 | Mount can't turn in RA for a seed step (10° by default) | The turn runs at the fastest rates the mount offers at or below 3°/s and 1°/s (`IMountMotionControl.MatchMoveAxisRate`, never rounded up, #2083; none at or below one of them: `slew_failed` before the motor starts). It stops after 2 s without 0.05° of progress (`slew_stalled`), or after twice its planned travel time at those rates plus 2 s (`slew_timeout`, NINA's factor 2; #2067), both timed from when the mount took the command; no partial-turn estimate. A refused motor command stays `slew_failed` |
 | The mount does something mid-turn it was not told to (#2067 ARA-11/12, #2081) | Each 250 ms poll reads the position and the pier side (`ReadPoseNowAsync`). An RA reading that changed by more than twice the fast rate times the time since its last change, plus 1°, is a jump (`turn_mismatch`, checked first, never reversed toward); a Dec reading more than 0.1° from the turn's start is `dec_moved`; a known pier side that differs from the start's is `pier_changed`. Each stops the motor and fails the run. After the reading reaches the step the motor is stopped and the turn waits for two still, not-slewing full readings 1.5 s apart, checking each like a poll; the motion stays marked until then (a Stop meanwhile sends AbortSlew). Running on more than 2° past the step, or not standing still within 8 s, sends the confirmed stop at once: `turn_mismatch` when it is confirmed, `mount_did_not_stop` (cut power) when not. The turn must arrive within max(2°, 10%) of its step with the Dec within 1° of the start, else `turn_mismatch` |
 | The field turns between two frames of a measurement (#2067 ARA-13) | `PolarAlignSolveOutcome` carries the solve's position angle; between consecutive seed or check frames it must stay within 10° of 0° (an RA turn keeps it, Joey on #2048 2026-11-20) or of the change the geometry predicts for the mount's turn (`PredictedFieldTurnDeg`: the camera turns about the mount's axis, not the pole, so a rough alignment near the pole swings it ~20°). Within 10° of 180° from either the pier flipped (`pier_flip`), any other change is `turn_mismatch`; checked before the next turn, and the failure's exit leaves tracking off. A solve with no angle skips the check |
+| The RA motor turns the other way from the saved direction (#2081 rows 4–5) | Never reversed mid-move. A run on a mount with no saved RA motor direction for its driver (`DriverInfo` + `DriverVersion`, profile section `polar_align_motor_direction`) first turns 0.5° at the slow rate through the same guarded move, shown in the confirm step (`direction_test_deg`, confirmed with `direction_test`) and counted toward the sweep limit, and saves the sign the reading shows. A later turn whose reading goes more than 0.5° the other way stops the motor and fails the run (`turn_wrong_way`, not the Polar Aligner's `wrong_direction`). Settings shows the saved direction with "Test direction again" (`POST /polaralign/motor-direction/retest`) |
 | The mount's Dec spread across the three points (#2081, NINA's TPPA) | Logged after every seed and check; over 2″ it is a warning, `dec_spread_arcsec` on the status and `polar_align.progress` (seed) or on the check result, shown by both UIs ("check the Dec clutch") |
 | Mount is parked at Start (#2048) | Refused before anything moves (`polar-align-mount-parked`: "Mount is parked — unpark it and point near the pole first"); the routine never unparks |
 | The scope points within 3° of the pole at Start (#2082) | Refused before anything moves (`polar-align-on-axis`: "point it 2–5° from the pole, counterweights down, then start again"); no Dec motor tilts it off any more. A mount moved there after the confirmed start fails the run as `on_axis` before any turn |
@@ -6621,6 +6622,20 @@ then the result is flagged noisy (`measurement_noisy`, the check's `noisy`); a r
 set, flagged noisy. The scatter feeds #2072's σ. Each turn first checks the axis's offset from the sweep origin
 (the tracking turn while the frames were taken included): past the run's limit plus 2° fails it as `sweep_limit`.
 
+**Revisited 2026-11-21 (#2081): East/West and a saved motor direction.** The first turn's direction no
+longer comes from Ara's hour-angle model (`AwayFromMeridianSign`, from LST − RA: arbitrary with a wrong
+mount clock, #2071, or a false zero, #2070, and always east with no longitude). It is
+`polar_align.east_direction` (NINA's EastDirection; null = east in the north, west in the south),
+and it picks the way only when a run starts a new sweep origin: later runs of the session turn back
+toward the origin (#2089), so repeated Starts never walk the mount one way (Joey, 2026-11-21). The
+confirm step names the direction and the turns before anything moves; that is the "shown before
+motion" (no Start-card line). The mid-move reversal is gone: ASCOM leaves the sign of a positive
+MoveAxis rate to the driver (AlpacaBridge #2424), so the first run on a mount, and the first after its
+driver name or version changes, turns 0.5° through the guarded move (rates matched, stall, bound, Dec
+and pier checks, arrival), confirmed and inside the sweep limit, and saves the sign per profile and
+driver. A turn that then reads more than 0.5° the wrong way fails as `turn_wrong_way`. Merge gate: the
+rig check P0-6 (+rate primary MoveAxis direction from Home, AB #2424) posted on #2048.
+
 ### 45.17 Motion safety: NINA parity plus the guards that landed (2026-11-21, #2048, ADR 0024)
 
 ADR 0024 is the rule; this section is the map. Polar Align moves the mount the way NINA's Three Point
@@ -6628,7 +6643,7 @@ Polar Alignment does (`isbeorn/nina.plugin.polaralignment` at `e5afbf54`, `Polar
 `MoveToNextPoint`, 985-1042): one East/West setting, `MoveAxis(Primary, ±rate)` at the fastest rate at
 or below the request, RA polled until the distance is turned, a failsafe of 2 × distance / rate, then
 `MoveAxis 0`, a wait while `Slewing`, the settle and tracking on; `MoveAxis 0` on any error. Ara keeps
-that and adds only the guards below, each on `stable/1.0` or in an open pull request there.
+that and adds only the guards below, each merged on `stable/1.0`.
 
 | Guard | Where | Pull request |
 |---|---|---|
@@ -6641,10 +6656,10 @@ that and adds only the guards below, each on `stable/1.0` or in an open pull req
 | Fresh, timestamped mount reads only (`pointing_unknown`, `pose_ambiguous`) | `PolarAlignService.FreshReads.cs`, `TelescopeService.FreshReads.cs` | #2119 (PR 6) |
 | One motion owner for the whole run (`polar-align-moving-mount`, `mount_busy`); stops and safety parks always get through | `TelescopeService.MotionOwner.cs`, `PolarAlignService.MotionOwner.cs` | #2123 (PR 7) |
 | Move guards: matched rates never rounded up, `slew_timeout`, `slew_stalled`, `dec_moved`, `pier_changed`, the arrival check, ARA-13's field-rotation check (`pier_flip`), the 2″ Dec-spread warning | `PolarAlignService.MoveGuards.cs`, `PolarAlignService.Stages.cs` | #2128 (PR 8) |
-| East/West setting and a saved RA motor direction (`turn_wrong_way`, never reversed) | `PolarAlignService.SweepOrigin.cs`, `PolarAlignService.MotorDirection.cs` | #2157 (PR 9, open) |
+| East/West setting and a saved RA motor direction (`turn_wrong_way`, never reversed) | `PolarAlignService.SweepOrigin.cs`, `PolarAlignService.MotorDirection.cs` | #2157 (PR 9) |
 | The mount clock gate (`mount-clock-not-verified`) | `TelescopeService.MountClock.cs` | #2087, #2120 (PR 10) |
 | The pre-flight list; Start refuses on its first fail; the per-mount clearance confirm (`polar-align-clearance-not-confirmed`) | `PolarAlignPreflightEvaluator.cs`, `PolarAlignService.Preflight.cs` | #2129 (PR 11) |
-| Site, alt-az and CanMoveAxis refusals (`polar-align-site-not-set`, `polar-align-alt-az-mount`, `polar-align-cannot-move-axis`) | `PolarAlignPreflightEvaluator.cs` | #2159 (PR 13, open) |
+| Site, alt-az and CanMoveAxis refusals (`polar-align-site-not-set`, `polar-align-alt-az-mount`, `polar-align-cannot-move-axis`) | `PolarAlignPreflightEvaluator.cs` | #2159 (PR 13) |
 | The Polar Aligner's verified stop, follow check and caps | `PolarAligner.cs`, `PolarAlignerService.cs`, `PolarAlignService.Aligner.cs` | #2115 (PR 14) |
 | Each fit's 1σ; "aligned" and the Check's verdict rate error + 2σ | `PolarAlignService.Uncertainty.cs` | #2131 (PR 15) |
 
@@ -6667,7 +6682,7 @@ and goes on); every reading comes from the driver, never the cache (#2070's fals
 sign is learned once per driver version (ASCOM leaves it to the driver, AlpacaBridge #2424).
 
 **Rig checks** (posted on #2048 before the issue closes): the stop traces P0-3/4/5 tune
-`PolarAlignService.MountStop.cs`'s timings; P0-6 (+rate direction) gates #2157; staged runs at 5°, 10°
+`PolarAlignService.MountStop.cs`'s timings; P0-6 (+rate direction) gated #2157 and passed on the rig 2026-11-21; staged runs at 5°, 10°
 and 30° steps.
 
 ---

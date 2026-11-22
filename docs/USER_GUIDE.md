@@ -218,10 +218,24 @@ framing/focus loop when you need to point or focus by eye.
   its Dec axis, as NINA's three-point alignment. A parked mount is refused ("Mount is parked — unpark
   it and point near the pole first"); Polar Align never unparks it. A tube within 3° of the pole is
   refused too ("point it 2–5° from the pole"): the camera would look along the RA axis, and Polar
-  Align no longer tilts it off with the Dec motor. Before anything moves, a confirm step shows which
-  way RA will turn (east or west: on the first start away from the meridian, later back toward Polar
-  Align's start) and how far (about 10° twice); the mount moves only when you tap **Move the mount**.
-  Keep a hand on the mount's power switch.
+  Align no longer tilts it off with the Dec motor. Polar Align also refuses, like NINA, a site with
+  no longitude or one still at latitude 0° and longitude 0° (set your site first: it steers by the
+  sidereal time), an alt-az mount (turning it would turn azimuth, not RA), and, for a motor start, a
+  mount that cannot turn its RA axis by motor speed (use **Turn RA by hand**). Before anything moves,
+  a confirm step shows which way RA will turn (east or west: on the first start the **Turn
+  direction** setting, later back toward Polar Align's start) and how far (about 10° twice); the
+  mount moves only when you tap **Move the mount**. Keep a hand on the mount's power switch.
+- **Turn direction and the motor test.** Settings › Imaging › Polar align › **Turn direction** picks
+  which way RA turns when Polar Align starts from a new pose: **Automatic** (east in the north, west
+  in the south, as NINA), **East** or **West**. Pick the one whose turns do not cross the meridian from
+  where you point. Later starts in the same session turn back toward the first one, whatever it says.
+  Mount drivers do not agree on which way a positive motor speed turns RA, so the first start on a
+  mount (and the first after its driver or driver version changes) first turns it 0.5° to learn
+  which way its motor runs; the confirm step says so. Ara saves that for the mount, and **RA motor
+  direction** in the same panel shows it. If a turn ever goes more than 0.5° the other way, Polar
+  Align stops the motor and ends the run ("the mount turned the other way from its saved motor
+  direction"); it never turns the mount back by itself. Check the mount, tap **Test direction
+  again**, and start again.
 - **Where to point for Polar Align** (NINA's advice, also on the confirm step). Pick a field fairly
   high toward the pole for your hemisphere, at least about 15° above the horizon when you can, and a
   start whose turns do not cross the meridian, so the tube cannot swing into the pier. Keep a hand on

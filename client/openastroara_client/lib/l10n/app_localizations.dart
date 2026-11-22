@@ -11310,6 +11310,60 @@ abstract class AppLocalizations {
   /// **'Ara could not confirm that the mount stopped. Cut the mount\'s power now, and check the mount before you start again.'**
   String get polarAlignStopNotConfirmed;
 
+  /// Polar Align card (both modes): why the run ended, polar_align.error slew_stalled: the RA turn's reading made no progress for a while (#2067)
+  ///
+  /// In en, this message translates to:
+  /// **'The mount stopped turning partway through an RA turn. Check that it can turn freely and is still connected, then start again.'**
+  String get polarAlignErrorSlewStalled;
+
+  /// Polar Align card (both modes): why the run ended, polar_align.error slew_timeout: the RA turn did not arrive within twice its planned time (#2067)
+  ///
+  /// In en, this message translates to:
+  /// **'The mount took more than twice as long as it should to make an RA turn, so Polar Align stopped it. Check the mount, then start again.'**
+  String get polarAlignErrorSlewTimeout;
+
+  /// Polar Align card (both modes): why the run ended, polar_align.error dec_moved: the Dec reading moved during an RA motor turn (#2067)
+  ///
+  /// In en, this message translates to:
+  /// **'The mount\'s Dec reading moved during an RA turn, which an RA turn never does. Check that the Dec clutch is tight, then start again.'**
+  String get polarAlignErrorDecMoved;
+
+  /// Polar Align card (both modes): why the run ended, polar_align.error pier_changed: the reported pier side changed during an RA turn (#2067)
+  ///
+  /// In en, this message translates to:
+  /// **'The mount reported a different side of the pier during an RA turn. Polar Align never flips the mount. Check where it points, then start again.'**
+  String get polarAlignErrorPierChanged;
+
+  /// Polar Align card (both modes): why the run ended, polar_align.error turn_mismatch: the turn ended off its step, ran past it, its reading jumped, or the field rotated between two frames (#2067)
+  ///
+  /// In en, this message translates to:
+  /// **'The mount did not turn the way Polar Align asked. Check that it turns freely, only in RA, and stops when told, then start again.'**
+  String get polarAlignErrorTurnMismatch;
+
+  /// Polar Align card (both modes): why the run ended, polar_align.error pier_flip: two frames are turned about 180° apart, so the pier flipped; the run stopped the mount and turned tracking off (#2067)
+  ///
+  /// In en, this message translates to:
+  /// **'The mount flipped to the other side of the pier between two frames. Polar Align stopped it and turned tracking off. Check where it points, then start again.'**
+  String get polarAlignErrorPierFlip;
+
+  /// Polar Align card (both modes): why the run ended, polar_align.error tracking_off: the mount was not tracking and refused to start before a turn (#2067)
+  ///
+  /// In en, this message translates to:
+  /// **'The mount is not tracking and did not start tracking when Ara asked. Turn tracking on from the mount controls, then start again.'**
+  String get polarAlignErrorTrackingOff;
+
+  /// Polar Align card (both modes): why the run ended, polar_align.error hand_turn_too_far: in Turn RA by hand, the user turned RA past this measurement's limit (#2067)
+  ///
+  /// In en, this message translates to:
+  /// **'RA was turned further than this measurement allows. Turn it back near where you started, then start again.'**
+  String get polarAlignErrorHandTurnTooFar;
+
+  /// Polar Align card (both modes): why the run ended, polar_align.error sweep_limit: the next RA turn would pass the sweep limit from where Polar Align started (#2067)
+  ///
+  /// In en, this message translates to:
+  /// **'The next turn would take the RA axis past Polar Align\'s limit. Slew it back near the pole, counterweights down, or take fewer or shorter frames, then start again.'**
+  String get polarAlignErrorSweepLimit;
+
   /// Refusal (polar-align-on-axis, #2082): polar alignment was started with the scope pointing within 3° of the celestial pole, where the camera looks along the RA axis; nothing tilts it off any more
   ///
   /// In en, this message translates to:
@@ -12052,36 +12106,6 @@ abstract class AppLocalizations {
   /// **'RA motor control'**
   String get polarPreflightCheckCanMoveAxis;
 
-  /// Polar align (#2068): pre-flight check name (the AlpacaBridge version with its motion-safety marker)
-  ///
-  /// In en, this message translates to:
-  /// **'AlpacaBridge motion safety'**
-  String get polarPreflightCheckMotionSafety;
-
-  /// Polar align (#2068): pre-flight check name
-  ///
-  /// In en, this message translates to:
-  /// **'Pier side'**
-  String get polarPreflightCheckPierSide;
-
-  /// Polar align (#2068): pre-flight check name
-  ///
-  /// In en, this message translates to:
-  /// **'Start near the pole and above the horizon'**
-  String get polarPreflightCheckPoseEnvelope;
-
-  /// Polar align (#2068): pre-flight check name
-  ///
-  /// In en, this message translates to:
-  /// **'Counterweight angle at the start'**
-  String get polarPreflightCheckStartCwAngle;
-
-  /// Polar align (#2068): pre-flight check name
-  ///
-  /// In en, this message translates to:
-  /// **'Turn step within the counterweight limit'**
-  String get polarPreflightCheckTurnStep;
-
   /// Polar align (#2068): pre-flight check name (the motorised alt/az adjuster)
   ///
   /// In en, this message translates to:
@@ -12166,6 +12190,24 @@ abstract class AppLocalizations {
   /// **'Confirm this mount\'s clearance first: check with the hand controller that the counterweight, tube and cables clear the pier and tripod up to {limit}° from counterweight-down, then tap Confirm clearance in Polar align.'**
   String refusalPolarAlignClearanceNotConfirmed(String limit);
 
+  /// Refusal (polar-align-site-not-set, #2083): the site has no longitude, sits at latitude 0 and longitude 0 (never set), or its sidereal time is unknown; polar alignment steers by the hour angle
+  ///
+  /// In en, this message translates to:
+  /// **'Polar align needs your site: set its latitude and longitude in the site settings (not 0° and 0°), so it knows the sidereal time.'**
+  String get refusalPolarAlignSiteNotSet;
+
+  /// Refusal (polar-align-alt-az-mount, #2083): the mount reports AlignmentMode alt-az; polar alignment turns the RA axis
+  ///
+  /// In en, this message translates to:
+  /// **'Polar align needs an equatorial mount. This mount says it is alt-az, so turning it would turn azimuth, not RA.'**
+  String get refusalPolarAlignAltAzMount;
+
+  /// Refusal (polar-align-cannot-move-axis, #2083): the mount reports CanMoveAxis false for its RA axis; a motor start is refused, a hand-turn start goes ahead; 'Turn RA by hand' is polarConfirmHandTurn
+  ///
+  /// In en, this message translates to:
+  /// **'This mount cannot turn its RA axis by motor speed, so Polar align cannot turn it. Use Turn RA by hand.'**
+  String get refusalPolarAlignCannotMoveAxis;
+
   /// Settings › Imaging › Polar align (#2068): the connected mount's counterweight limit and clearance confirmation
   ///
   /// In en, this message translates to:
@@ -12195,6 +12237,100 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Kept for each mount. Measure it with the hand controller.'**
   String get polarKnobClearanceHint;
+
+  /// Settings › Imaging › Polar align (#2081): the way the RA axis turns when a run starts a new start pose (NINA's East direction)
+  ///
+  /// In en, this message translates to:
+  /// **'Turn direction'**
+  String get polarKnobEastDirection;
+
+  /// Polar align turn direction choice (#2081): no setting, the site's hemisphere picks
+  ///
+  /// In en, this message translates to:
+  /// **'Automatic'**
+  String get polarKnobEastDirectionAuto;
+
+  /// Polar align turn direction choice (#2081): the RA reading rises
+  ///
+  /// In en, this message translates to:
+  /// **'East'**
+  String get polarKnobEastDirectionEast;
+
+  /// Polar align turn direction choice (#2081): the RA reading falls
+  ///
+  /// In en, this message translates to:
+  /// **'West'**
+  String get polarKnobEastDirectionWest;
+
+  /// Polar align turn direction (#2081): it picks the way only for a new start pose, later runs turn back toward that start
+  ///
+  /// In en, this message translates to:
+  /// **'Automatic is east in the north and west in the south. A new start turns this way; later starts turn back toward it'**
+  String get polarKnobEastDirectionHint;
+
+  /// Settings › Imaging › Polar align (#2081): the RA motor direction Polar align tested and saved for this mount
+  ///
+  /// In en, this message translates to:
+  /// **'RA motor direction'**
+  String get polarMotorDirection;
+
+  /// Polar align saved RA motor direction (#2081); driver and version are the mount driver's name and version as reported, direction is polarDirectionEast or polarDirectionWest
+  ///
+  /// In en, this message translates to:
+  /// **'Tested on {driver} {version}: the motor\'s positive speed turns RA {direction}.'**
+  String polarMotorDirectionSaved(
+    String driver,
+    String version,
+    String direction,
+  );
+
+  /// Polar align saved RA motor direction (#2081): the connected mount reports another driver name or version than the saved test
+  ///
+  /// In en, this message translates to:
+  /// **'Tested on another driver ({driver} {version}): the next start tests it again with a 0.5° turn.'**
+  String polarMotorDirectionOtherDriver(String driver, String version);
+
+  /// Polar align RA motor direction (#2081): nothing saved, the next motor run tests it first (shown in its confirm step)
+  ///
+  /// In en, this message translates to:
+  /// **'Not tested yet: the next start first turns the mount 0.5° to learn it.'**
+  String get polarMotorDirectionUntested;
+
+  /// Polar align RA motor direction (#2081): an older rig without the motor-direction endpoint
+  ///
+  /// In en, this message translates to:
+  /// **'This rig does not save a motor direction.'**
+  String get polarMotorDirectionUnknown;
+
+  /// Polar align RA motor direction (#2081): the read failed
+  ///
+  /// In en, this message translates to:
+  /// **'Could not read the saved motor direction from the rig.'**
+  String get polarMotorDirectionReadFailed;
+
+  /// Polar align RA motor direction (#2081): button that forgets the saved direction, so the next start tests it with a 0.5° turn
+  ///
+  /// In en, this message translates to:
+  /// **'Test direction again'**
+  String get polarMotorDirectionRetest;
+
+  /// Polar align RA motor direction (#2081): snackbar after Test direction again
+  ///
+  /// In en, this message translates to:
+  /// **'The next start tests the motor direction again.'**
+  String get polarMotorDirectionRetestDone;
+
+  /// Polar align start confirm dialog (#2081): the run's first move, a small RA turn whose reading tells which way the motor runs; deg has one decimal
+  ///
+  /// In en, this message translates to:
+  /// **'First it turns the mount {deg}° to learn the motor direction (not tested yet for this mount and driver).'**
+  String polarConfirmDirectionTest(String deg);
+
+  /// Polar Align card (both modes): the run failed with turn_wrong_way (#2081); 'Test direction again' is polarMotorDirectionRetest
+  ///
+  /// In en, this message translates to:
+  /// **'The mount turned the other way from its saved motor direction, so Polar align stopped it and never turned it back. Check the mount, then tap Test direction again in Settings › Imaging › Polar align, and start again.'**
+  String get polarAlignTurnWrongWay;
 }
 
 class _AppLocalizationsDelegate

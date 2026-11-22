@@ -849,6 +849,26 @@ namespace OpenAstroAra.Test {
             Assert.That(svc.MountAlignmentMode, Is.EqualTo(expected));
         }
 
+        // #2083 — Polar Align's motor start needs CanMoveAxis(Primary), read once at connect.
+        [TestCase("true", true)]
+        [TestCase("false", false)]
+        public async Task CanMoveAxis_primary_is_read_once_at_connect(string wire, bool expected) {
+            var mount = Mount(tracking: true);
+            var other = expected ? "false" : "true";
+            await using var box = ScriptedAlpacaDevice.Start(mount);
+            // Only the Primary axis (axis=0) answers the wire value; the others answer the opposite.
+            box.RespondWithQuery((path, query) => !path.EndsWith("/canmoveaxis", StringComparison.Ordinal) ? null
+                : query.Contains("axis=0", StringComparison.Ordinal) ? wire : other);
+            using var svc = await ConnectedAsync(box);
+
+            await WaitForAsync(() => svc.CanMovePrimaryAxis is not null, "CanMoveAxis(Primary) was never read");
+            Assert.That(svc.CanMovePrimaryAxis, Is.EqualTo(expected));
+            int AxisReads() => box.Gets.Count(p => p.EndsWith("/canmoveaxis", StringComparison.Ordinal));
+            var (reads, seen) = (AxisReads(), box.Gets.Count);
+            await WaitForAsync(() => box.Gets.Count >= seen + 20, "the mount was never polled again");
+            Assert.That(AxisReads(), Is.EqualTo(reads), "read once per connect, not on every poll");
+        }
+
         [Test]
         public async Task A_mount_that_does_not_report_its_type_reads_unknown() {
             var log = new InfoLog();

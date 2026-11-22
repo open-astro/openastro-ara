@@ -950,7 +950,17 @@ class ProfileApi {
       camera: camera as String,
       framesPerPoint: (j['frames_per_point'] as num).toInt(),
       mountClearance: _mountClearanceFromRig(j),
+      eastDirection: _eastDirectionFromRig(j),
     );
+  }
+
+  // #2081 strict too: the key must be there; null is "by the site's
+  // hemisphere", anything else but a bool fails the load.
+  static bool? _eastDirectionFromRig(Map<String, dynamic> j) {
+    if (!j.containsKey('east_direction')) {
+      throw const FormatException('missing east_direction');
+    }
+    return j['east_direction'] as bool?;
   }
 
   // #2068 strict too: the key must be there (null is a profile with no mount's

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 
 import '../../l10n/l10n.dart';
 import '../../models/polar_align.dart';
@@ -17,6 +18,9 @@ import '../adaptive_dialog.dart';
 ///
 /// #2083 — on a rig that takes it, the user can also choose to turn RA by
 /// hand (NINA's manual mode): the start then asks the rig to move nothing.
+///
+/// #2081 — a mount whose RA motor direction is not saved for its driver first
+/// turns 0.5° to learn it: the dialog says so, and the start confirms it.
 ///
 /// #2068 — while the mount's clearance is not confirmed the rig refuses the
 /// motor start's plan; the step then offers Turn RA by hand alone, which moves
@@ -94,6 +98,15 @@ class PolarStartConfirmDialog extends StatelessWidget {
       // #2083 — NINA's guidance on the start field.
       l10n.polarConfirmGuideField,
       l10n.polarConfirmGuideMeridian,
+      // #2081 — the motor-direction test, the run's first move: a motor run's
+      // only (a hand-turn run makes no test).
+      if (motorAllowed && !plan.handTurn && plan.directionTestDeg > 0)
+        l10n.polarConfirmDirectionTest(
+          NumberFormat(
+            '0.0',
+            Localizations.localeOf(context).toString(),
+          ).format(plan.directionTestDeg),
+        ),
       l10n.polarConfirmTurns(
         deg(plan.stepDeg),
         direction,

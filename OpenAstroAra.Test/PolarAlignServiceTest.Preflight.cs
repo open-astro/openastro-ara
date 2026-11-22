@@ -29,6 +29,39 @@ namespace OpenAstroAra.Test {
     /// <summary>#2068 (ARA-18) — the pre-flight list the Start card shows is the one a start refuses on.</summary>
     public partial class PolarAlignServiceTest {
 
+        // #2083 — the start reads the mount type and CanMoveAxis(Primary) the telescope service read at connect.
+        [Test]
+        public async Task Start_refuses_an_alt_az_mount_and_nothing_moves() {
+            var fake = NewFake();
+            var mount = NewMount();
+            var service = mount.As<ITelescopeService>();
+            service.Setup(t => t.MountAlignmentMode).Returns(ASCOM.Common.DeviceInterfaces.AlignmentMode.AltAz);
+            service.Setup(t => t.ReadNowAsync(It.IsAny<CancellationToken>())).ReturnsAsync(() => FreshReading(0.0, 85.0));
+            using var svc = NewService(fake, new ScriptedSolver(), mount);
+
+            var refusal = await Assert.ThrowsAsync<RefusalException>(() => svc.StartConfirmedAsync(PolarAlignStages.Fine, null, CancellationToken.None));
+
+            Assert.That(refusal!.Cause, Is.EqualTo(RefusalCatalog.PolarAlignAltAzMount));
+            Assert.That(fake.LeaseCalls, Is.Empty, "a refused start takes no lease");
+            mount.Verify(m => m.MoveAxis(It.IsAny<TelescopeAxes>(), It.IsNotIn(0.0)), Times.Never, "nothing moved");
+        }
+
+        [Test]
+        public async Task Start_refuses_a_mount_that_cannot_move_its_RA_axis_and_nothing_moves() {
+            var fake = NewFake();
+            var mount = NewMount();
+            var service = mount.As<ITelescopeService>();
+            service.Setup(t => t.CanMovePrimaryAxis).Returns(false);
+            service.Setup(t => t.ReadNowAsync(It.IsAny<CancellationToken>())).ReturnsAsync(() => FreshReading(0.0, 85.0));
+            using var svc = NewService(fake, new ScriptedSolver(), mount);
+
+            var refusal = await Assert.ThrowsAsync<RefusalException>(() => svc.StartConfirmedAsync(PolarAlignStages.Fine, null, CancellationToken.None));
+
+            Assert.That(refusal!.Cause, Is.EqualTo(RefusalCatalog.PolarAlignCannotMoveAxis));
+            Assert.That(fake.LeaseCalls, Is.Empty, "a refused start takes no lease");
+            mount.Verify(m => m.MoveAxis(It.IsAny<TelescopeAxes>(), It.IsNotIn(0.0)), Times.Never, "nothing moved");
+        }
+
         [Test]
         public async Task Preflight_lists_every_check_and_Start_refuses_on_a_fail() {
             var fake = NewFake();
@@ -48,7 +81,6 @@ namespace OpenAstroAra.Test {
                 Assert.That(StatusOf(preflight, PolarAlignPreflightChecks.MountConnected), Is.EqualTo(PolarAlignPreflightStatuses.Ok));
                 Assert.That(StatusOf(preflight, PolarAlignPreflightChecks.StartPointing), Is.EqualTo(PolarAlignPreflightStatuses.Ok));
                 Assert.That(StatusOf(preflight, PolarAlignPreflightChecks.MountLimits), Is.EqualTo(PolarAlignPreflightStatuses.Warn));
-                Assert.That(StatusOf(preflight, PolarAlignPreflightChecks.StartCwAngle), Is.EqualTo(PolarAlignPreflightStatuses.Unknown));
                 Assert.That(preflight.MountKey, Is.EqualTo(PolarAlignPreflightEvaluator.UnidentifiedMountKey));
                 Assert.That(preflight.Planned.Direction, Is.Not.Null, "the plan the next Start would confirm");
                 Assert.That(preflight.Planned.MaxCwAngleDeg, Is.EqualTo(PolarAlignSettingsClamp.DefaultMaxCwAngleDeg));

@@ -12,7 +12,7 @@ The first fix plan (ARA-1 to ARA-19 on #2048, then a 16-PR plan for `stable/1.0`
 
 ## Decision
 
-We decided (2026-11-21, [#2048](https://github.com/open-astro/openastro-ara/issues/2048)) that Polar Align moves the mount the way NINA's `MoveToNextPoint` does, and that Ara's additions are the guards listed in the Rules below, each of which landed on `stable/1.0` or is in an open pull request there. Nothing else is added for parity's sake.
+We decided (2026-11-21, [#2048](https://github.com/open-astro/openastro-ara/issues/2048)) that Polar Align moves the mount the way NINA's `MoveToNextPoint` does, and that Ara's additions are the guards listed in the Rules below, each of which landed on `stable/1.0`. Nothing else is added for parity's sake.
 
 What landed, by plan step:
 

@@ -60,9 +60,10 @@ namespace OpenAstroAra.Test {
         /// <paramref name="benchMotors"/> the motor speeds are 30°/s and 10°/s, so a run takes seconds; without, the
         /// daemon's 3°/s and 1°/s, so a test can land inside a turn.</summary>
         private static PolarAlignService NewGemService(FakeGemMount mount, WsRecorder ws, IProfileStore? store = null, bool benchMotors = true,
-                IPolarAlignerSource? aligner = null) {
+                IPolarAlignerSource? aligner = null, bool motorDirectionSaved = true) {
             mount.EventCount = () => ws.Events.Count;
-            var svc = NewServiceOn(NewFake(), new TrueSkySolver(mount), mount, ws, store ?? TenDegreeStore(), aligner: aligner);
+            var svc = NewServiceOn(NewFake(), new TrueSkySolver(mount), mount, ws, store ?? TenDegreeStore(), aligner: aligner,
+                motorDirectionSaved: motorDirectionSaved);
             if (benchMotors) {
                 svc.AxisFastRateDegPerSec = 30.0;
                 svc.AxisSlowRateDegPerSec = 10.0;
@@ -92,17 +93,20 @@ namespace OpenAstroAra.Test {
 
         // ── a fine run, from either side of the meridian ─────────────────────────────────────
 
-        // Start hour angle (h) → the direction the user confirms, the true φ at the start and after the seed's two 10° turns.
-        // Away from the meridian is toward counterweight-down on both sides: φ falls 20°.
-        [TestCase(-4.0, PolarAlignDirections.East, 30.0, 10.0, PierSide.pierWest)]
-        [TestCase(2.0, PolarAlignDirections.West, 60.0, 40.0, PierSide.pierEast)]
+        // Start hour angle (h) and the profile's east_direction (#2081: null = east in the north) → the direction the user
+        // confirms, the true φ at the start and after the seed's two 10° turns. Set away from the meridian, the turns go
+        // toward counterweight-down on both sides: φ falls 20°.
+        [TestCase(-4.0, null, PolarAlignDirections.East, 30.0, 10.0, PierSide.pierWest)]
+        [TestCase(2.0, false, PolarAlignDirections.West, 60.0, 40.0, PierSide.pierEast)]
         public async Task A_fine_seed_on_the_GEM_turns_the_true_RA_axis_twice_by_its_step_and_never_raises_the_counterweight(
-                double haHours, string direction, double phiStartDeg, double phiEndDeg, PierSide side) {
+                double haHours, bool? eastDirection, string direction, double phiStartDeg, double phiEndDeg, PierSide side) {
             var mount = PolledGemAt(haHours);
             Assert.That(mount.TruePhiDeg, Is.EqualTo(phiStartDeg).Within(0.01), "the start pose (the mount tracks from here on)");
             Assert.That(mount.TrueSide, Is.EqualTo(side));
             var ws = new WsRecorder();
-            using var svc = NewGemService(mount, ws);
+            var store = TenDegreeStore();
+            store.PutPolarAlignSettings(store.GetPolarAlignSettings() with { EastDirection = eastDirection });
+            using var svc = NewGemService(mount, ws, store);
 
             var plan = await FineRunToAdjustingAsync(svc).ConfigureAwait(false);
             await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
