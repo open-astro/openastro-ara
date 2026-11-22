@@ -85,8 +85,6 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Connect {
                 await connections.ConnectAsync(role, token).ConfigureAwait(false);
             } catch (EquipmentRefusedException ex) when (ex.Cause == EquipmentRefusalCause.NotKnown && role != EquipmentRole.Guider) {
                 Logger.Info($"{device} is not known to this rig, so there is nothing to connect");
-            } catch (SequenceEntityFailedException ex) {
-                throw new SequenceEntityFailedException($"Failed to connect to {device}: {ex.Message}", ex);
             }
         }
 

@@ -16,6 +16,8 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using OpenAstroAra.Core.Model;
 using OpenAstroAra.Equipment.Interfaces.Mediator;
+using OpenAstroAra.Profile.Interfaces;
+using OpenAstroAra.Sequencer.Connections;
 using OpenAstroAra.Sequencer.SequenceItem.Connect;
 using OpenAstroAra.Sequencer.Trigger.Connect;
 using OpenAstroAra.Server.Contracts;
@@ -168,7 +170,8 @@ namespace OpenAstroAra.Test {
             Track(new RotatorService { DeviceFactory = _ => fake });
 
         // The construction points of the instructions: Connect Equipment and the Reconnect trigger take the
-        // connections port (the reconnector); Disconnect Equipment, Connect All and Switch Profile take it too (the last two also read the profile).
+        // connections port (the reconnector); Disconnect Equipment and Connect All take it too (Connect All also reads the profile);
+        // Switch Profile takes only the profile.
         private static ConnectEquipment ConnectItem(string device, Rig rig) =>
             new(rig.Reconnector) { SelectedDevice = device };
 
@@ -289,6 +292,18 @@ namespace OpenAstroAra.Test {
             Assert.That(failure!.ToString(), Does.Contain("Safety Monitor"), "the failure names the device that stopped the connect");
             await Task.Delay(200);
             Assert.That(rotator.Connects, Is.EqualTo(0), "no device connects before the Safety Monitor has");
+        }
+
+        // ADR 0023 rule 5: a refusal reaches the Sequencer as a refusal, with its cause, never re-wrapped as a plain failure.
+        [Test]
+        public async Task ConnectAllEquipment_keeps_a_refusal_as_a_refusal() {
+            var port = new Mock<IEquipmentConnections>();
+            port.Setup(p => p.ConnectAsync(EquipmentRole.SafetyMonitor, It.IsAny<CancellationToken>()))
+                .ThrowsAsync(new EquipmentRefusedException(EquipmentRefusalCause.NotSupported, "the monitor cannot connect here"));
+
+            var refusal = await Assert.ThrowsAsync<EquipmentRefusedException>(() =>
+                new ConnectAllEquipment(port.Object, Mock.Of<IProfileService>()).Execute(new Progress<ApplicationStatus>(), CancellationToken.None));
+            Assert.That(refusal!.Cause, Is.EqualTo(EquipmentRefusalCause.NotSupported));
         }
 
         // ── Disconnect Equipment (B3c: a Sequencer disconnect is a user disconnect, #1539) ──
