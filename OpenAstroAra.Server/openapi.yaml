@@ -2403,7 +2403,7 @@ paths:
     post:
       tags:
         - Equipment
-      summary: 'Start one polar-align measurement; RA always turns with the mount''s motor. #2170 removed the hand_turn field (and the hand_turn query of start-plan and preflight): there is no hand-turn mode, and a body that still sends it makes the same motor start.'
+      summary: Start one polar-align measurement; RA always turns with the mount's motor.
       parameters:
         - name: Idempotency-Key
           in: header
