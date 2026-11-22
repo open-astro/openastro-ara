@@ -90,12 +90,12 @@ namespace OpenAstroAra.Sequencer.Container.ExecutionStrategy {
                         // Resume (user, 2026-11-11); a frame (and a container, whose frames are
                         // its own items) still finishes first (unless the pause is a guiding-lost one, which
                         // stops a LIGHT and has it taken again on Resume; a dark or bias needs no guiding and
-                        // always finishes, #2169), and so does a flat set, which takes its
+                        // finishes, #2169; a person's Pause stops every exposure, dark and bias too, #2172), and so does a flat set, which takes its
                         // frames inside one instruction and would shoot the whole set again.
                         if (pauseGate != null && next is not ISequenceContainer
                                 && next is not SequenceItem.FlatDevice.FlatPanelFlats && next is not SequenceItem.FlatDevice.SkyFlats) {
                             var interrupt = next is IExposureItem exposure
-                                ? (UnguidedExposureWriter.IsLight(exposure) ? pauseGate.FrameInterruptToken : CancellationToken.None)
+                                ? (UnguidedExposureWriter.IsLight(exposure) ? pauseGate.FrameInterruptToken : pauseGate.ExposureInterruptToken)
                                 : pauseGate.InterruptToken;
                             using var interruptible = CancellationTokenSource.CreateLinkedTokenSource(token, interrupt);
                             try {

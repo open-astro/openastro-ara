@@ -999,6 +999,89 @@ namespace OpenAstroAra.Test {
             Assert.That(done.InstructionsCompleted, Is.EqualTo(1), "the frame finished and the next instruction never ran");
         }
 
+        /// <summary>The camera service aborts a cancelled exposure and saves nothing (CameraService.TryAbortQuietly).</summary>
+        private static void AbortableCapture(Mock<OpenAstroAra.Equipment.Interfaces.Mediator.IImagingMediator> imaging,
+                TaskCompletionSource<OpenAstroAra.Image.Interfaces.IExposureData> frame) =>
+            imaging.Setup(m => m.CaptureImage(It.IsAny<OpenAstroAra.Equipment.Model.CaptureSequence>(), It.IsAny<CancellationToken>(),
+                    It.IsAny<IProgress<OpenAstroAra.Core.Model.ApplicationStatus>>(), It.IsAny<string>()))
+                .Returns((OpenAstroAra.Equipment.Model.CaptureSequence _, CancellationToken token, IProgress<OpenAstroAra.Core.Model.ApplicationStatus> _, string _) =>
+                    frame.Task.WaitAsync(token));
+
+        private static async Task<CancellationToken> CaptureTokenAsync(Mock<OpenAstroAra.Equipment.Interfaces.Mediator.IImagingMediator> imaging, int calls = 1) {
+            for (var i = 0; i < 500 && imaging.Invocations.Count(v => v.Method.Name == "CaptureImage") < calls; i++) {
+                await Task.Delay(10);
+            }
+            Assert.That(imaging.Invocations.Count(v => v.Method.Name == "CaptureImage"), Is.GreaterThanOrEqualTo(calls), "the camera was asked for the frame");
+            return (CancellationToken)imaging.Invocations.Last(v => v.Method.Name == "CaptureImage").Arguments[1]!;
+        }
+
+        [Test]
+        public async Task A_user_pause_stops_the_frame_in_progress_and_resume_takes_it_again() {
+            // #2172 — Pause during a long light stops the camera at once; the frame is not counted, and Resume takes it again.
+            var (svc, id, imaging, frame) = ExposingRun(exposureSeconds: 299);
+            AbortableCapture(imaging, frame);
+            await svc.StartAsync(id, StartReq, null, CancellationToken.None);
+            await WaitForInstructionInFlightAsync(svc, id, 0);
+            var capture = await CaptureTokenAsync(imaging);
+
+            await svc.PauseAsync(id, null, CancellationToken.None);
+
+            Assert.That(capture.IsCancellationRequested, Is.True, "the exposure in progress is stopped, not left to run its 299 s");
+            Assert.That((svc.PauseInterruptsFrame(id), svc.PauseInterruptsEveryExposure(id)), Is.EqualTo((true, true)));
+            await WaitForStateAsync(svc, id, SequenceRunState.Paused);
+            var paused = await svc.GetRunStateAsync(id, CancellationToken.None);
+            Assert.That(paused!.InstructionsCompleted, Is.Zero, "the stopped frame is not counted");
+
+            await svc.ResumeAsync(id, new SequenceResumeRequestDto(Recenter: false, Refocus: false), null, CancellationToken.None);
+            await CaptureTokenAsync(imaging, calls: 2);
+            frame.SetResult(new Mock<OpenAstroAra.Image.Interfaces.IExposureData>().Object);
+            var done = await WaitForTerminalAsync(svc, id);
+            Assert.That(done!.State, Is.EqualTo(SequenceRunState.Completed));
+            Assert.That(imaging.Invocations.Count(v => v.Method.Name == "CaptureImage"), Is.EqualTo(2), "taken again once");
+            Assert.That(done.InstructionsCompleted, Is.EqualTo(2), "the frame counted once, then the note after it");
+        }
+
+        [Test]
+        public async Task Pause_after_frame_lets_the_frame_finish_then_pauses() {
+            // #2172 — "Pause after this frame": the exposure in progress is filed and counted, then the run holds.
+            var (svc, id, imaging, frame) = ExposingRun(exposureSeconds: 299);
+            await svc.StartAsync(id, StartReq, null, CancellationToken.None);
+            await WaitForInstructionInFlightAsync(svc, id, 0);
+            var capture = await CaptureTokenAsync(imaging);
+
+            await svc.PauseAsync(id, afterFrame: true, null, CancellationToken.None);
+            await Task.Delay(200);
+            var during = await svc.GetRunStateAsync(id, CancellationToken.None);
+            Assert.That((during!.State, capture.IsCancellationRequested), Is.EqualTo((SequenceRunState.Running, false)), "the exposure in progress is not lost");
+
+            frame.SetResult(new Mock<OpenAstroAra.Image.Interfaces.IExposureData>().Object);
+            await WaitForStateAsync(svc, id, SequenceRunState.Paused);
+            var paused = await svc.GetRunStateAsync(id, CancellationToken.None);
+            Assert.That(paused!.InstructionsCompleted, Is.EqualTo(1), "the frame was filed before the pause");
+            await svc.AbortAsync(id, null, CancellationToken.None);
+            await WaitForTerminalAsync(svc, id);
+        }
+
+        [Test]
+        public async Task A_pause_now_overrides_a_pending_stop_after_frame_and_holds_the_run() {
+            // #2172 — Stop after frame is waiting on the exposure, then the person presses Pause: the frame stops
+            // and the run holds Paused instead of ending.
+            var (svc, id, imaging, frame) = ExposingRun(exposureSeconds: 299);
+            AbortableCapture(imaging, frame);
+            await svc.StartAsync(id, StartReq, null, CancellationToken.None);
+            await WaitForInstructionInFlightAsync(svc, id, 0);
+            await CaptureTokenAsync(imaging);
+
+            await svc.StopAfterFrameAsync(id, null, CancellationToken.None);
+            await svc.PauseAsync(id, null, CancellationToken.None);
+
+            await WaitForStateAsync(svc, id, SequenceRunState.Paused);
+            var paused = await svc.GetRunStateAsync(id, CancellationToken.None);
+            Assert.That(paused!.StopAfterFrame, Is.False, "the stop after frame gave way to the pause");
+            await svc.AbortAsync(id, null, CancellationToken.None);
+            await WaitForTerminalAsync(svc, id);
+        }
+
         [Test]
         public async Task Stop_after_frame_with_no_exposure_in_progress_stops_now() {
             var id = Guid.NewGuid();

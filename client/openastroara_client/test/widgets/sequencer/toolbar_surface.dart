@@ -5,6 +5,6 @@ import 'package:flutter_test/flutter_test.dart';
 /// desktop-width surface so every button is inline for tests that tap them
 /// by label. Forgetting this reads as a silent "button not found".
 Future<void> wideSurface(WidgetTester tester) async {
-  await tester.binding.setSurfaceSize(const Size(2000, 800));
+  await tester.binding.setSurfaceSize(const Size(2200, 800));
   addTearDown(() => tester.binding.setSurfaceSize(null));
 }

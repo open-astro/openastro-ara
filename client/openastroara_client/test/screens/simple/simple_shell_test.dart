@@ -6081,9 +6081,18 @@ void main() {
           runState: const SequenceRunStateInfo(
               sequenceId: 'seq-1', state: SequenceRunState.running, currentInstructionDescription: 'Taking frames'));
       await tester.pump();
-      expect(pill(), contains('Pausing after this frame'));
+      expect(pill(), contains('Pausing…'), reason: 'a plain Pause stops the frame in hand (#2172)');
       final dot = tester.widget<StatusDot>(find.descendant(of: find.byType(SimpleStatusPill), matching: find.byType(StatusDot)).first);
       expect((dot.color, dot.ring), (AraColors.accentInfo, true));
+    });
+
+    testWidgets('a Pause after this frame on its way: the Plan pill says the frame finishes first (#2172)', (tester) async {
+      await _pump(tester, const Size(1024, 768),
+          plan: SimpleRun(sequenceId: 'seq-1', started: true, pausing: true, pausingAfterFrame: true, targets: plan.targets),
+          runState: const SequenceRunStateInfo(
+              sequenceId: 'seq-1', state: SequenceRunState.running, currentInstructionDescription: 'Taking frames'));
+      await tester.pump();
+      expect(pill(), contains('Pausing after this frame'));
     });
 
     testWidgets('an older daemon (the code, no seconds) keeps its reason text', (tester) async {

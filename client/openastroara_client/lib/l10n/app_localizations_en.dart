@@ -1733,6 +1733,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get planPauseAfterFrame => 'Pause after this frame';
 
   @override
+  String get planPauseNow => 'Pause';
+
+  @override
   String get planPausingLabel => 'Pausing';
 
   @override
@@ -1937,7 +1940,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get planRecenterAndRefocus => 'Re-center and refocus';
 
   @override
-  String get planHintPause => 'Tap the shutter to pause after this frame.';
+  String get planHintPause => 'Tap the shutter to pause now.';
 
   @override
   String get planStopPlan => 'Stop plan…';

@@ -28,7 +28,7 @@ namespace OpenAstroAra.Sequencer.Utility {
     ///  * <see cref="RequestPause"/> arms the gate. A <see cref="PauseKind.User"/>
     ///    pause also cancels <see cref="InterruptToken"/>, so the instruction or
     ///    trigger in progress stops and runs again on Resume (a frame, flat set or
-    ///    container finishes first, unless the pause asked for <see cref="FrameInterruptToken"/>); the strategy then suspends at that boundary.
+    ///    container finishes first, unless the pause asked for <see cref="FrameInterruptToken"/> or <see cref="ExposureInterruptToken"/>); the strategy then suspends at that boundary.
     ///  * <see cref="PauseEntered"/> fires (on the engine thread) when a wait
     ///    actually blocks, so the owner can flip run state to Paused / notify only
     ///    for a suspension that really happened.
@@ -54,6 +54,8 @@ namespace OpenAstroAra.Sequencer.Utility {
         private bool _interruptHandedOut;
         private CancellationTokenSource _frameInterrupt = new();
         private bool _frameInterruptHandedOut; // the same gap for a frame-interrupting pause
+        private CancellationTokenSource _exposureInterrupt = new();
+        private bool _exposureInterruptHandedOut; // the same gap for a pause that stops every exposure
 
         /// <summary>Cancelled by a user's pause (a person, or the daemon's safety pause), and new
         /// again on Resume: the plan's work in progress stops with it (user, 2026-11-11). An
@@ -63,11 +65,18 @@ namespace OpenAstroAra.Sequencer.Utility {
         }
 
         /// <summary>Cancelled only by a pause that asked to interrupt frames, and new again on Resume:
-        /// the LIGHT in progress stops and is taken again. Only the daemon's guiding-lost pauses ask for it
+        /// the LIGHT in progress stops and is taken again. The daemon's guiding-lost pauses ask for it
         /// (the star-lost watch, and a guider link loss while guiding, #2169): a light without guiding is
-        /// worthless. A person's pause lets the frame finish.</summary>
+        /// worthless. A person's Pause asks for it too, with every other exposure (#2172).</summary>
         public CancellationToken FrameInterruptToken {
             get { lock (_lock) { return _frameInterrupt.Token; } }
+        }
+
+        /// <summary>Cancelled only by a pause that asked to stop every exposure (<see cref="FrameInterrupt.All"/>,
+        /// a person's Pause, #2172), and new again on Resume: a dark, bias or other non-light frame in progress
+        /// stops and is taken again. A light listens to <see cref="FrameInterruptToken"/>, which that pause also cancels.</summary>
+        public CancellationToken ExposureInterruptToken {
+            get { lock (_lock) { return _exposureInterrupt.Token; } }
         }
 
         /// <summary>
@@ -97,13 +106,23 @@ namespace OpenAstroAra.Sequencer.Utility {
         /// only ever escalates (a user pause request cannot downgrade an armed
         /// <see cref="PauseKind.AwaitingUser"/> back to an ordinary pause).
         /// </summary>
-        public void RequestPause(PauseKind kind = PauseKind.User, bool interruptFrames = false) {
+        public void RequestPause(PauseKind kind = PauseKind.User, bool interruptFrames = false) =>
+            RequestPause(interruptFrames ? FrameInterrupt.Lights : FrameInterrupt.None, kind);
+
+        /// <summary>Arm the gate, saying which frames in progress stop with it (<see cref="FrameInterrupt"/>).
+        /// A later request can step a pending pause up (None to Lights to All), never down.</summary>
+        public void RequestPause(FrameInterrupt frames, PauseKind kind = PauseKind.User) {
             CancellationTokenSource? interrupt = null;
             CancellationTokenSource? frameInterrupt = null;
+            CancellationTokenSource? exposureInterrupt = null;
             lock (_lock) {
-                if (interruptFrames) {
+                if (frames >= FrameInterrupt.Lights) {
                     frameInterrupt = _frameInterrupt;
                     _frameInterruptHandedOut = true;
+                }
+                if (frames == FrameInterrupt.All) {
+                    exposureInterrupt = _exposureInterrupt;
+                    _exposureInterruptHandedOut = true;
                 }
                 _resume ??= new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
                 if (kind > _kind) {
@@ -117,6 +136,7 @@ namespace OpenAstroAra.Sequencer.Utility {
             // Outside the lock: cancellation runs the work's callbacks inline.
             interrupt?.Cancel();
             frameInterrupt?.Cancel();
+            exposureInterrupt?.Cancel();
         }
 
         /// <summary>Release all waiters and disarm. Harmless when not paused.</summary>
@@ -129,6 +149,10 @@ namespace OpenAstroAra.Sequencer.Utility {
                 if (_frameInterruptHandedOut || _frameInterrupt.IsCancellationRequested) {
                     _frameInterrupt = new CancellationTokenSource();
                     _frameInterruptHandedOut = false;
+                }
+                if (_exposureInterruptHandedOut || _exposureInterrupt.IsCancellationRequested) {
+                    _exposureInterrupt = new CancellationTokenSource();
+                    _exposureInterruptHandedOut = false;
                 }
                 if (_interruptHandedOut || _interrupt.IsCancellationRequested) {
                     _interrupt = new CancellationTokenSource();
@@ -165,6 +189,20 @@ namespace OpenAstroAra.Sequencer.Utility {
                 await resumeTask.WaitAsync(token).ConfigureAwait(false);
             }
         }
+    }
+
+    /// <summary>Which frames in progress a pause stops. A stopped frame is not saved or counted and is
+    /// taken again on Resume. A flat set and a meridian flip always finish.</summary>
+    public enum FrameInterrupt {
+
+        /// <summary>Every frame in progress finishes first (the safety pause, a "Pause after this frame").</summary>
+        None = 0,
+
+        /// <summary>A light stops; a dark or bias finishes (the guiding-lost pauses, #2169).</summary>
+        Lights = 1,
+
+        /// <summary>Every single exposure stops: light, dark, bias (a person's Pause, #2172, as NINA's Stop does).</summary>
+        All = 2
     }
 
     /// <summary>

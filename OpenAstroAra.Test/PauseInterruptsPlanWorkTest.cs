@@ -284,6 +284,36 @@ namespace OpenAstroAra.Test {
             Assert.That((frame.ExposureCount, captures(), after.Ran), Is.EqualTo((1, 1, true)));
         }
 
+        private static async Task AssertAUserPauseStopsAndRetakes(string imageType) {
+            // #2172 — a person's Pause stops the exposure in progress, whatever its type (NINA's Stop does the
+            // same): nothing is filed or counted, and Resume takes it again.
+            var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var (frame, captures, started) = Frame(imageType, release);
+            var after = new AfterItem();
+            var (block, gate, entered) = Plan(frame, after);
+
+            var run = block.Execute(NoProgress, CancellationToken.None);
+            await started.Task.WaitAsync(Soon);
+            gate.RequestPause(FrameInterrupt.All);
+
+            await entered.Task.WaitAsync(Soon);
+            Assert.That((frame.ExposureCount, captures(), after.Ran), Is.EqualTo((0, 1, false)), $"the {imageType} was stopped, not counted");
+
+            gate.Resume();
+            Assert.That(gate.ExposureInterruptToken.IsCancellationRequested, Is.False, "Resume clears the exposure interrupt");
+            await run.WaitAsync(Soon);
+            Assert.That((frame.ExposureCount, captures(), after.Ran), Is.EqualTo((1, 2, true)), "taken again once, counted once");
+        }
+
+        [Test]
+        public Task A_user_pause_stops_a_light_which_is_not_counted_and_is_taken_again_on_resume() => AssertAUserPauseStopsAndRetakes("LIGHT");
+
+        [Test]
+        public Task A_user_pause_stops_a_dark_which_is_not_counted_and_is_taken_again_on_resume() => AssertAUserPauseStopsAndRetakes("DARK");
+
+        [Test]
+        public Task A_user_pause_stops_a_bias_which_is_not_counted_and_is_taken_again_on_resume() => AssertAUserPauseStopsAndRetakes("BIAS");
+
         [Test]
         public async Task A_pause_lets_a_meridian_flip_finish() {
             var after = new AfterItem();
@@ -350,6 +380,28 @@ namespace OpenAstroAra.Test {
             var run = block.Execute(NoProgress, CancellationToken.None);
             await flats.Started.Task.WaitAsync(Soon);
             gate.RequestPause();
+            await Task.Delay(200);
+            Assert.That(entered.Task.IsCompleted, Is.False, "the flat set is still taking its frames");
+
+            flats.Release.SetResult();
+            await entered.Task.WaitAsync(Soon);
+            Assert.That((flats.Calls, after.Ran), Is.EqualTo((1, false)), "the set ran once; the pause lands after it");
+
+            gate.Resume();
+            await run.WaitAsync(Soon);
+            Assert.That((flats.Calls, after.Ran), Is.EqualTo((1, true)));
+        }
+
+        [Test]
+        public async Task A_user_pause_still_lets_a_flat_set_finish() {
+            // #2172 — a person's Pause stops a single exposure, but a flat set finishes: stopping it would shoot the whole set again.
+            var flats = new SlowFlatExecutor();
+            var after = new AfterItem();
+            var (block, gate, entered) = Plan(new FlatPanelFlats(flats), after);
+
+            var run = block.Execute(NoProgress, CancellationToken.None);
+            await flats.Started.Task.WaitAsync(Soon);
+            gate.RequestPause(FrameInterrupt.All);
             await Task.Delay(200);
             Assert.That(entered.Task.IsCompleted, Is.False, "the flat set is still taking its frames");
 

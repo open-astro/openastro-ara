@@ -59,7 +59,8 @@ void main() {
 
   testWidgets('medium: the run verbs keep labels, trailing utilities fold '
       'into More', (tester) async {
-    await pumpAt(tester, 1000);
+    // 1200, not 1000, since #2172 added Pause after this frame to the run verbs.
+    await pumpAt(tester, 1200);
     expect(find.widgetWithText(TextButton, 'New'), findsOneWidget);
     expect(find.widgetWithText(FilledButton, 'Run'), findsOneWidget);
     expect(find.widgetWithText(OutlinedButton, 'Abort'), findsOneWidget);

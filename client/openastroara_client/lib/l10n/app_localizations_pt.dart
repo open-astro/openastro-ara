@@ -1733,6 +1733,9 @@ class AppLocalizationsPt extends AppLocalizations {
   String get planPauseAfterFrame => 'Pause after this frame';
 
   @override
+  String get planPauseNow => 'Pause';
+
+  @override
   String get planPausingLabel => 'Pausing';
 
   @override
@@ -1937,7 +1940,7 @@ class AppLocalizationsPt extends AppLocalizations {
   String get planRecenterAndRefocus => 'Re-center and refocus';
 
   @override
-  String get planHintPause => 'Tap the shutter to pause after this frame.';
+  String get planHintPause => 'Tap the shutter to pause now.';
 
   @override
   String get planStopPlan => 'Stop plan…';
@@ -9223,6 +9226,9 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String get planPauseAfterFrame => 'Pausar após este quadro';
 
   @override
+  String get planPauseNow => 'Pausar';
+
+  @override
   String get planPausingLabel => 'Pausando';
 
   @override
@@ -9429,8 +9435,7 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String get planRecenterAndRefocus => 'Recentralizar e refocar';
 
   @override
-  String get planHintPause =>
-      'Toque no obturador para pausar após este quadro.';
+  String get planHintPause => 'Toque no obturador para pausar agora.';
 
   @override
   String get planStopPlan => 'Parar a sessão…';
