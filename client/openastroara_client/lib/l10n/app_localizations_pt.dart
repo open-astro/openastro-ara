@@ -6781,6 +6781,42 @@ class AppLocalizationsPt extends AppLocalizations {
       'Ara could not confirm that the mount stopped. Cut the mount\'s power now, and check the mount before you start again.';
 
   @override
+  String get polarAlignErrorSlewStalled =>
+      'The mount stopped turning partway through an RA turn. Check that it can turn freely and is still connected, then start again.';
+
+  @override
+  String get polarAlignErrorSlewTimeout =>
+      'The mount took more than twice as long as it should to make an RA turn, so Polar Align stopped it. Check the mount, then start again.';
+
+  @override
+  String get polarAlignErrorDecMoved =>
+      'The mount\'s Dec reading moved during an RA turn, which an RA turn never does. Check that the Dec clutch is tight, then start again.';
+
+  @override
+  String get polarAlignErrorPierChanged =>
+      'The mount reported a different side of the pier during an RA turn. Polar Align never flips the mount. Check where it points, then start again.';
+
+  @override
+  String get polarAlignErrorTurnMismatch =>
+      'The mount did not turn the way Polar Align asked. Check that it turns freely, only in RA, and stops when told, then start again.';
+
+  @override
+  String get polarAlignErrorPierFlip =>
+      'The mount flipped to the other side of the pier between two frames. Polar Align stopped it and turned tracking off. Check where it points, then start again.';
+
+  @override
+  String get polarAlignErrorTrackingOff =>
+      'The mount is not tracking and would not start. Turn tracking on from the mount controls, then start again.';
+
+  @override
+  String get polarAlignErrorHandTurnTooFar =>
+      'RA was turned further than this measurement allows. Turn it back near where you started, then start again.';
+
+  @override
+  String get polarAlignErrorSweepLimit =>
+      'The next turn would take the RA axis past Polar Align\'s limit. Slew it back near the pole, counterweights down, or take fewer or shorter frames, then start again.';
+
+  @override
   String get refusalPolarAlignOnAxis =>
       'The scope points within 3° of the pole. Point it 2–5° from the pole, counterweights down, then start again.';
 
@@ -14167,6 +14203,42 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String get polarAlignStopNotConfirmed =>
       'O Ara não conseguiu confirmar que a montagem parou. Corte a energia da montagem agora e confira a montagem antes de começar de novo.';
+
+  @override
+  String get polarAlignErrorSlewStalled =>
+      'A montagem parou de girar no meio de um giro em AR. Verifique se ela gira livremente e se ainda está conectada, e comece de novo.';
+
+  @override
+  String get polarAlignErrorSlewTimeout =>
+      'A montagem levou mais que o dobro do tempo esperado para um giro em AR, então o alinhamento polar a parou. Verifique a montagem e comece de novo.';
+
+  @override
+  String get polarAlignErrorDecMoved =>
+      'A leitura de Dec da montagem mudou durante um giro em AR, o que um giro em AR nunca faz. Verifique se a trava de Dec está firme e comece de novo.';
+
+  @override
+  String get polarAlignErrorPierChanged =>
+      'A montagem informou outro lado do pilar durante um giro em AR. O alinhamento polar nunca vira a montagem. Verifique para onde ela aponta e comece de novo.';
+
+  @override
+  String get polarAlignErrorTurnMismatch =>
+      'A montagem não girou como o alinhamento polar pediu. Verifique se ela gira livremente, só em AR, e se para quando recebe o comando, e comece de novo.';
+
+  @override
+  String get polarAlignErrorPierFlip =>
+      'A montagem virou para o outro lado do pilar entre duas imagens. O alinhamento polar a parou e desligou o rastreamento. Verifique para onde ela aponta e comece de novo.';
+
+  @override
+  String get polarAlignErrorTrackingOff =>
+      'A montagem não está rastreando e não quis começar. Ligue o rastreamento pelos controles da montagem e comece de novo.';
+
+  @override
+  String get polarAlignErrorHandTurnTooFar =>
+      'A AR foi girada além do que esta medição permite. Gire-a de volta para perto de onde você começou e comece de novo.';
+
+  @override
+  String get polarAlignErrorSweepLimit =>
+      'O próximo giro levaria o eixo de AR além do limite do alinhamento polar. Leve a montagem de volta para perto do polo, com os contrapesos para baixo, ou faça menos imagens ou imagens mais curtas, e comece de novo.';
 
   @override
   String get refusalPolarAlignOnAxis =>

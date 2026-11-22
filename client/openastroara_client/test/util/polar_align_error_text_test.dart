@@ -92,4 +92,82 @@ void main() {
     );
     expect(polarAlignErrorText(en, other), 'check focus');
   });
+
+  // #2067 the guards' reasons had only the daemon's English.
+  PolarAlignLive failed(
+    String reason, {
+    String message = 'the daemon sentence',
+    bool stopUnconfirmed = false,
+  }) => PolarAlignLive(
+    phase: PolarAlignStates.failed,
+    errorReason: reason,
+    errorMessage: message,
+    errorStopUnconfirmed: stopUnconfirmed,
+  );
+
+  test('each guard reason reads in the app language, in en and pt-BR', () {
+    final cases = <String, String Function(AppLocalizations)>{
+      'slew_stalled': (l) => l.polarAlignErrorSlewStalled,
+      'slew_timeout': (l) => l.polarAlignErrorSlewTimeout,
+      'dec_moved': (l) => l.polarAlignErrorDecMoved,
+      'pier_changed': (l) => l.polarAlignErrorPierChanged,
+      'turn_mismatch': (l) => l.polarAlignErrorTurnMismatch,
+      'pier_flip': (l) => l.polarAlignErrorPierFlip,
+      'tracking_off': (l) => l.polarAlignErrorTrackingOff,
+      'hand_turn_too_far': (l) => l.polarAlignErrorHandTurnTooFar,
+      'sweep_limit': (l) => l.polarAlignErrorSweepLimit,
+      'mount_parked': (l) => l.refusalPolarAlignMountParked,
+      'on_axis': (l) => l.refusalPolarAlignOnAxis,
+      'pointing_unknown': (l) => l.refusalPolarAlignPointingUnknown,
+      'pose_ambiguous': (l) => l.refusalPolarAlignPoseAmbiguous,
+      'mount_busy': (l) => l.refusalPolarAlignMountBusy,
+      'mount_did_not_stop': (l) => l.polarAlignStopNotConfirmed,
+      'aligner_did_not_stop': (l) => l.polarAlignerStopNotConfirmed,
+    };
+    for (final MapEntry(key: reason, value: sentence) in cases.entries) {
+      for (final l in [en, pt]) {
+        expect(
+          polarAlignErrorText(l, failed(reason)),
+          sentence(l),
+          reason: '$reason in ${l.localeName}',
+        );
+      }
+      expect(sentence(pt), isNot(sentence(en)), reason: '$reason pt-BR');
+    }
+  });
+
+  test('a guard reason keeps the cut-power warnings the daemon sent, in both languages', () {
+    for (final l in [en, pt]) {
+      expect(
+        polarAlignErrorText(l, failed('dec_moved', stopUnconfirmed: true)),
+        '${l.polarAlignErrorDecMoved} ${l.polarAlignStopNotConfirmed}',
+      );
+      expect(
+        polarAlignErrorText(
+          l,
+          failed(
+            'pier_flip',
+            message:
+                'the mount flipped. Ara could not confirm that the Polar '
+                'Aligner stopped. Cut its power.',
+          ),
+        ),
+        '${l.polarAlignErrorPierFlip} ${l.polarAlignerStopNotConfirmed}',
+      );
+      expect(
+        polarAlignErrorText(
+          l,
+          failed('mount_did_not_stop', stopUnconfirmed: true),
+        ),
+        l.polarAlignStopNotConfirmed,
+        reason: 'the warning is not said twice',
+      );
+    }
+  });
+
+  test('a reason the app cannot word still shows the daemon sentence', () {
+    for (final reason in ['slew_failed', 'solver_configuration', 'brand_new']) {
+      expect(polarAlignErrorText(pt, failed(reason)), 'the daemon sentence');
+    }
+  });
 }
