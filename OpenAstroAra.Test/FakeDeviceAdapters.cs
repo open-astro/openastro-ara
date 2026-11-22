@@ -420,10 +420,22 @@ namespace OpenAstroAra.Test {
         public List<string> Actions { get; } = [];
         public System.Collections.Concurrent.ConcurrentQueue<(string Name, string Parameters)> ActionCalls { get; } = new();
         public volatile Func<string, string, string>? ActionResponder;
-        public IList<string> SupportedActions => Actions;
+        public IList<string> SupportedActions => SupportedActionsReadFails
+            ? throw new InvalidOperationException("SupportedActions read failed")
+            : Actions;
+        /// <summary>#2173 — the SupportedActions read throws (a driver or link fault).</summary>
+        public volatile bool SupportedActionsReadFails;
         public string Action(string name, string parameters) {
             ActionCalls.Enqueue((name, parameters));
             return ActionResponder is { } respond ? respond(name, parameters) : throw new ASCOM.NotImplementedException(name);
+        }
+        /// <summary>#2173 — the driver says its FindHome is a real home-sensor search: it lists the capability's action and
+        /// answers it with <paramref name="reply"/> (AlpacaBridge's shape by default).</summary>
+        public void SaysHomeIsSensorSearch(string reply = "{\"sensor_search\": true, \"method\": \"zero_sensor_search\", \"model\": \"0036\"}") {
+            Actions.Add(TelescopeService.HomeIsSensorSearchAction);
+            ActionResponder = (name, _) => string.Equals(name, TelescopeService.HomeIsSensorSearchAction, StringComparison.OrdinalIgnoreCase)
+                ? reply
+                : throw new ASCOM.NotImplementedException(name);
         }
         public PointingState DestinationSideOfPier(double raHours, double decDegrees) => PointingState.Normal;
         public void MoveAxis(TelescopeAxis axis, double rate) { if (rate == 0) { Interlocked.Increment(ref _moveAxisStops); } else { Interlocked.Increment(ref _moveAxisStarts); } }
@@ -431,7 +443,15 @@ namespace OpenAstroAra.Test {
         public void AbortSlew() => Interlocked.Increment(ref _aborts);
         public void Park() { _atPark = true; Interlocked.Increment(ref _parks); }
         public void Unpark() { }
-        public void FindHome() { _atHome = true; Interlocked.Increment(ref _homes); }
+        public void FindHome() {
+            Interlocked.Increment(ref _homes);
+            if (FindHomeThrows is { } thrown) {
+                throw thrown; // #2173 — the driver's FindHome failed: the mount did not home
+            }
+            _atHome = true;
+        }
+        /// <summary>#2173 — FindHome throws this (counted first, as a call that reached the driver).</summary>
+        public volatile Exception? FindHomeThrows;
         // What the mount was told to do (#2071: a refused GoTo or Sync sends nothing; Park and Home always go).
         public void SlewToCoordinatesAsync(double raHours, double decDegrees) {
             Interlocked.Increment(ref _slews);

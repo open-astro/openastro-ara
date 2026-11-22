@@ -162,7 +162,7 @@ public interface ITelescopeService : IMountMotionControl {
     /// <summary>#2066, #2065 (ARA-10) — a routine that drove the motors marks the mount's position unverified with
     /// <paramref name="reason"/> (<c>stop_unconfirmed</c>): its stop was not confirmed, or the mount reconnected while it
     /// ran. GoTo, Park and polar alignment are then refused, as after a power loss, until a Home search ends at Home
-    /// (#2173, for the unconfirmed-stop reason only; <see cref="MountPoseTrust.HomeSearchMayTrust"/>) or <see cref="ConfirmHomeAsync"/>; the flag is kept per device across reconnects and restarts. Never throws.</summary>
+    /// (#2173, for the unconfirmed-stop reason only, or for any reason on a mount whose driver says its FindHome is a sensor search; <see cref="MountPoseTrust.HomeSearchMayTrust"/>) or <see cref="ConfirmHomeAsync"/>; the flag is kept per device across reconnects and restarts. Never throws.</summary>
     void MarkPositionUnverified(string reason) { }
 
     /// <summary>#2173 — how many Ara mount commands and axis moves the position trust has been told of: the plate-solve

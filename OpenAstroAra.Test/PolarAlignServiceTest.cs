@@ -453,6 +453,25 @@ namespace OpenAstroAra.Test {
             mount.Verify(m => m.MoveAxis(It.IsAny<TelescopeAxes>(), It.IsAny<double>()), Times.Never);
         }
 
+        // #2173 — on a mount whose driver says its Home is a real home-sensor search, the unverified row says Home clears
+        // it by itself, with no eye check, even after a power loss.
+        [Test]
+        public async Task The_preflight_row_on_a_sensor_search_mount_says_Home_clears_it_by_itself() {
+            var mount = NewMount();
+            mount.As<ITelescopeService>().Setup(t => t.PositionUnverifiedReasonAsync(It.IsAny<CancellationToken>()))
+                .ReturnsAsync(MountPoseTrust.AtHomeOnConnect);
+            mount.As<ITelescopeService>().Setup(t => t.HomeIsSensorSearch).Returns(true);
+            mount.Object.GetInfo().CanFindHome = true;
+            using var svc = NewService(NewFake(), new ScriptedSolver(), mount);
+
+            var preflight = await svc.GetPreflightAsync(PolarAlignStages.Fine, CancellationToken.None);
+
+            var row = preflight.Checks.Single(c => c.Id == PolarAlignPreflightChecks.PoseVerified);
+            Assert.That(row.Status, Is.EqualTo(PolarAlignPreflightStatuses.Fail));
+            Assert.That(row.Detail, Does.Contain("trusted again once the mount is seen to move"));
+            Assert.That(row.Detail, Does.Not.Contain("confirm by eye"));
+        }
+
         [Test]
         public async Task Start_acquires_the_lease_and_publishes_started() {
             var fake = NewFake(answerCaptures: false);

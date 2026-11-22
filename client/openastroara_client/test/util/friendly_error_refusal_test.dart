@@ -140,6 +140,33 @@ void main() {
     }
     expect(_pt.refusalMountPositionStopUnconfirmed, isNot(_en.refusalMountPositionStopUnconfirmed));
   });
+  // #2173 — on a mount whose driver says its Home is a sensor search, Home
+  // clears the warning by itself, after a power loss too: no eye check.
+  test('a refusal on a sensor-search mount says Home clears it by itself, in both languages (#2173)', () {
+    for (final l in [_en, _pt]) {
+      const sensor = Refusal(
+        cause: RefusalCause.mountPositionUnverified,
+        reason: 'mount-position-unverified',
+        detail: 'The daemon detail.',
+        parameters: {
+          'position_unverified_reason': 'at_home_on_connect',
+          'home_is_sensor_search': true,
+        },
+      );
+      const model = Refusal(
+        cause: RefusalCause.mountPositionUnverified,
+        reason: 'mount-position-unverified',
+        detail: 'The daemon detail.',
+        parameters: {
+          'position_unverified_reason': 'at_home_on_connect',
+          'home_is_sensor_search': false,
+        },
+      );
+      expect(failureReason(l, sensor), l.refusalMountPositionSensorSearch);
+      expect(failureReason(l, model), l.refusalMountPositionUnverified);
+    }
+    expect(_pt.refusalMountPositionSensorSearch, isNot(_en.refusalMountPositionSensorSearch));
+  });
   test(
     'the counterweight sentence names the hour angle, the angle and the limit',
     () {

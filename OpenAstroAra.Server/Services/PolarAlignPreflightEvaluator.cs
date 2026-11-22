@@ -47,6 +47,9 @@ namespace OpenAstroAra.Server.Services;
 /// <param name="CanMoveSecondaryAxis">#2166 — CanMoveAxis(Secondary) read at connect
 /// (<see cref="IMountMotionControl.CanMoveSecondaryAxis"/>): null when unknown; null delegate when this daemon reads none.
 /// False blocks the move to the start position.</param>
+/// <param name="HomeIsSensorSearch">#2173 — the driver says its FindHome is a sensor search
+/// (<see cref="IMountMotionControl.HomeIsSensorSearch"/>): the unverified row then says Home clears it by itself. Null
+/// delegate: not a sensor search.</param>
 internal sealed record PolarAlignPreflightInputs(
     string Stage,
     Func<TelescopeInfo?> MountInfo,
@@ -59,7 +62,8 @@ internal sealed record PolarAlignPreflightInputs(
     Func<AlignmentMode?>? AlignmentMode = null,
     Func<bool?>? CanMovePrimaryAxis = null,
     Func<double>? DirectionTestOwedDeg = null,
-    Func<bool?>? CanMoveSecondaryAxis = null);
+    Func<bool?>? CanMoveSecondaryAxis = null,
+    Func<bool>? HomeIsSensorSearch = null);
 
 /// <summary>The pre-flight list and, for a start, the exception the first failing check refuses with (null when none
 /// fails), with the confirm step's plan when it could be made. #2166 — <c>MoveToStartRefusal</c>: what
@@ -239,7 +243,10 @@ internal static class PolarAlignPreflightEvaluator {
                 if (await inputs.PoseUnverifiedReason(ct).ConfigureAwait(false) is { } reason) {
                     // #2173 — the way out named from the mount's Alpaca CanFindHome: Home, else the hand controller.
                     var canFindHome = info?.CanFindHome == true;
-                    poseRow.Fail(TelescopeService.PositionUnverifiedRefusal(reason, canFindHome), TelescopeService.PositionUnverifiedDetail(reason, canFindHome));
+                    // #2173 — on a mount whose driver says its Home is a sensor search, Home clears it by itself.
+                    var sensorSearch = inputs.HomeIsSensorSearch?.Invoke() == true;
+                    poseRow.Fail(TelescopeService.PositionUnverifiedRefusal(reason, canFindHome, sensorSearch),
+                        TelescopeService.PositionUnverifiedDetail(reason, canFindHome, sensorSearch));
                 } else {
                     poseRow.Ok("The mount's position is trusted.");
                 }

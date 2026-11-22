@@ -265,7 +265,11 @@ public sealed record TelescopeCapabilitiesDto(
     // #1264 stage 1 — the mount's spec sheet from AlpacaBridge #815 (`openastro:specs`
     // action), read once per connect. Null when the driver ships no sheet: the client
     // shows "No spec sheet for this mount" and the tracking probe starts from its ladder.
-    MountSpecSheetDto? MountSpecs = null);
+    MountSpecSheetDto? MountSpecs = null,
+    // #2173 — the driver says its FindHome is a real home-sensor search (AlpacaBridge's
+    // `findhomeissensorsearch` action, `sensor_search: true`), read once per connect. False when the
+    // action is not listed or its read fails. A completed Home then trusts the position for every reason.
+    bool HomeIsSensorSearch = false);
 
 /// <summary>#1264 — the bridge's per-driver mount spec sheet (schema <c>openastro.mount-specs/1</c>).
 /// <c>WormPeriodS</c> and <c>PeriodicErrorPpArcsec</c> are the two the unguided prior needs; null means

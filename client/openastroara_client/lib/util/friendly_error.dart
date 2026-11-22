@@ -118,6 +118,10 @@ String? _refusalWords(AppLocalizations l, Refusal r) {
         'not_read_yet' => l.refusalMountPositionNotReadYet,
         MountStatus.stopUnconfirmedReason =>
           l.refusalMountPositionStopUnconfirmed,
+        // #2173 — the driver says its Home is a real home-sensor search:
+        // Home clears the warning by itself, after a power loss too.
+        _ when r.parameters['home_is_sensor_search'] == true =>
+          l.refusalMountPositionSensorSearch,
         _ => l.refusalMountPositionUnverified,
       },
     RefusalCause.polarAlignMountParked => l.refusalPolarAlignMountParked,

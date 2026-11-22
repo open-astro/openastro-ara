@@ -6715,6 +6715,10 @@ class AppLocalizationsPt extends AppLocalizations {
       'The mount\'s position is not confirmed yet: it was just connected, or a reading is being checked against the next one. Try again in a few seconds.';
 
   @override
+  String get refusalMountPositionSensorSearch =>
+      'The mount\'s position is unverified: it may have lost power, or its position jumped. Press Home: this mount searches for its home sensor, so the position is trusted again once the mount is seen to move and then reports Home.';
+
+  @override
   String get refusalMountPositionStopUnconfirmed =>
       'The mount\'s position is unverified: Ara could not confirm that the mount stopped after polar alignment moved it, or the mount reconnected while polar alignment ran. Press Home: the position is trusted again once the mount is seen to move and then reports Home. If the mount has no Home in Ara, run its zero search from its hand controller or app, then confirm Home.';
 
@@ -6736,6 +6740,10 @@ class AppLocalizationsPt extends AppLocalizations {
   @override
   String get mountPositionStopUnconfirmedPressHome =>
       'Press Home: the position is trusted again once the mount is seen to move and then reports Home.';
+
+  @override
+  String get mountPositionSensorSearchPressHome =>
+      'Press Home: this mount searches for its home sensor, so the position is trusted again once the mount is seen to move and then reports Home.';
 
   @override
   String get mountPositionStopUnconfirmedBody =>
@@ -14333,6 +14341,10 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
       'A posição da montagem ainda não foi confirmada: ela acabou de conectar, ou uma leitura está sendo conferida com a próxima. Tente de novo em alguns segundos.';
 
   @override
+  String get refusalMountPositionSensorSearch =>
+      'A posição da montagem não está verificada: ela pode ter perdido energia, ou a posição dela saltou. Toque em Home: esta montagem busca o sensor de Home dela, então a posição volta a ser confiável quando a montagem for vista se movendo e depois indicar Home.';
+
+  @override
   String get refusalMountPositionStopUnconfirmed =>
       'A posição da montagem não está verificada: o Ara não conseguiu confirmar que a montagem parou depois que o alinhamento polar a moveu, ou a montagem reconectou durante o alinhamento polar. Toque em Home: a posição volta a ser confiável quando a montagem for vista se movendo e depois indicar Home. Se a montagem não tiver Home no Ara, rode a busca de zero pelo controle de mão ou app dela e depois confirme Home.';
 
@@ -14355,6 +14367,10 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String get mountPositionStopUnconfirmedPressHome =>
       'Toque em Home: a posição volta a ser confiável quando a montagem for vista se movendo e depois indicar Home.';
+
+  @override
+  String get mountPositionSensorSearchPressHome =>
+      'Toque em Home: esta montagem busca o sensor de Home dela, então a posição volta a ser confiável quando a montagem for vista se movendo e depois indicar Home.';
 
   @override
   String get mountPositionStopUnconfirmedBody =>

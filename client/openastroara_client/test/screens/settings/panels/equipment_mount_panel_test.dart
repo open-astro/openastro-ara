@@ -116,6 +116,7 @@ MountStatus _status({
   bool canSetTracking = true,
   bool canFindHome = false,
   bool canMoveAxis = false,
+  bool homeIsSensorSearch = false,
   List<double> axisRates = const [],
   List<SlewRateBand> axisRateBands = const [],
   bool tracking = false,
@@ -140,6 +141,7 @@ MountStatus _status({
     canSetTracking: canSetTracking,
     canFindHome: canFindHome,
     canMoveAxis: canMoveAxis,
+    homeIsSensorSearch: homeIsSensorSearch,
     axisRatesDegPerSec: axisRates,
     axisRateBands: axisRateBands,
     trackingRates: trackingRates,
@@ -380,6 +382,19 @@ void main() {
     expect(find.textContaining('confirm by eye'), findsOneWidget);
     await _pump(tester, _status(canFindHome: true, positionUnverified: true, unverifiedReason: 'stop_unconfirmed'));
     expect(find.text(en.mountPositionStopUnconfirmedPressHome), findsOneWidget);
+    expect(find.textContaining('confirm by eye'), findsNothing);
+  });
+
+  // #2173 — a mount whose driver says its Find Home is a real sensor search:
+  // a Home that ends at Home clears the warning by itself, after a power loss
+  // too, so no eye check is asked for.
+  testWidgets('Advanced: a sensor-search mount says Home clears the warning by itself (#2173)', (tester) async {
+    final en = lookupAppLocalizations(const Locale('en'));
+    await _pump(
+      tester,
+      _status(canFindHome: true, homeIsSensorSearch: true, positionUnverified: true),
+    );
+    expect(find.text(en.mountPositionSensorSearchPressHome), findsOneWidget);
     expect(find.textContaining('confirm by eye'), findsNothing);
   });
 

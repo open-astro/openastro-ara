@@ -44,7 +44,7 @@ namespace OpenAstroAra.Server.Services;
 /// A routine that drove the motors flags it too (<see cref="StopUnconfirmed"/>): its stop was not confirmed, or the mount
 /// reconnected while it ran (#2066). A reading that suggests one of the model-suspect reasons replaces it (#2173 review, see
 /// <see cref="HomeSearchMayTrust"/>).
-/// Only <see cref="Confirm"/> (the user says the mount is at Home, or #2173 an Ara Home seen to run ended at Home while the reason allows it, <see cref="HomeSearchMayTrust"/>)
+/// Only <see cref="Confirm"/> (the user says the mount is at Home, or #2173 an Ara Home seen to run ended at Home while the reason, or the mount's sensor-search capability, allows it, <see cref="HomeSearchMayTrust"/>)
 /// or #2173 <see cref="TrustBySolve"/> (a plate solve that moved nothing agreed with the mount) clears it; a new session for the
 /// same device keeps it, and the owner persists it per device so a daemon restart keeps it too.
 /// Until a session's first read is observed the mount is not trusted either (<see cref="Observed"/>).
@@ -87,8 +87,14 @@ internal sealed class MountPoseTrust {
     /// slipped clutch.</item>
     /// <item>Any other stored reason (an older daemon's, or an unknown one): eye check, fail safe.</item>
     /// </list>
-    /// Null (already trusted) may trust: the Home then only renews the trusted pose.</summary>
-    public static bool HomeSearchMayTrust(string? reason) => reason is null or StopUnconfirmed;
+    /// Null (already trusted) may trust: the Home then only renews the trusted pose.
+    /// <para>#2173 — <paramref name="homeIsSensorSearch"/>: the driver itself says its FindHome is a real home-sensor
+    /// search (AlpacaBridge's <c>findhomeissensorsearch</c> capability, read once per connect). A sensor search finds the
+    /// physical Home whatever the model says, so every reason may trust, the model-suspect ones included. Only that
+    /// capability decides, never a brand, model or driver name (ADR 0003 rule 2). The watch's guards (seen to run, two
+    /// still reads at Home, a gap or a reconnect wipes the evidence) apply either way.</para></summary>
+    public static bool HomeSearchMayTrust(string? reason, bool homeIsSensorSearch = false) =>
+        homeIsSensorSearch || reason is null or StopUnconfirmed;
 
     // #2173 review — a verdict the mount's readings make may still land while only Ara's knowledge is in doubt
     // (StopUnconfirmed): a model-suspect reason replaces it, so a power cycle after an unconfirmed stop needs the eye check.

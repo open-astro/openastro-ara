@@ -59,6 +59,23 @@ namespace OpenAstroAra.Test {
 
         private static PolarAlignPreflightCheckDto Check(PolarAlignPreflightResult r, string id) => r.Dto.Checks.Single(c => c.Id == id);
 
+        // #2173 — the unverified row words the way out by the sensor-search capability: Home alone clears it on such a
+        // mount; any other mount that can find Home is asked for the eye check after Home.
+        [Test]
+        public async Task The_unverified_row_says_Home_clears_it_by_itself_only_on_a_sensor_search_mount() {
+            var inputs = Inputs(
+                mount: () => new TelescopeInfo { Connected = true, DeviceId = MountId, Name = "Bench GEM", CanFindHome = true },
+                pose: _ => Task.FromResult<string?>(MountPoseTrust.AtHomeOnConnect));
+
+            var sensor = await PolarAlignPreflightEvaluator.EvaluateAsync(inputs with { HomeIsSensorSearch = () => true }, CancellationToken.None);
+            var model = await PolarAlignPreflightEvaluator.EvaluateAsync(inputs, CancellationToken.None);
+
+            Assert.That(Check(sensor, PolarAlignPreflightChecks.PoseVerified).Detail, Does.Contain("trusted again once the mount is seen to move"));
+            Assert.That(Check(sensor, PolarAlignPreflightChecks.PoseVerified).Detail, Does.Not.Contain("confirm by eye"));
+            Assert.That(((RefusalException)sensor.FirstFailure!).Parameters["home_is_sensor_search"], Is.EqualTo(true));
+            Assert.That(Check(model, PolarAlignPreflightChecks.PoseVerified).Detail, Does.Contain("confirm by eye"));
+        }
+
         [Test]
         public async Task Every_input_that_throws_becomes_a_check_status_and_never_an_exception() {
             var boom = new InvalidOperationException("boom");

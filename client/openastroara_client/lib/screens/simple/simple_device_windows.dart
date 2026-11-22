@@ -1475,10 +1475,13 @@ class _SimpleMountWindowState extends ConsumerState<SimpleMountWindow> {
           if (!m.atHome)
             Text(
               // #2173 — Home is the way out on a mount that can find Home (then
-              // an eye check, unless only the stop was unconfirmed).
+              // an eye check, unless only the stop was unconfirmed or the driver
+              // says its Home is a sensor search).
               (m.capabilities?.canFindHome ?? false)
                   ? (m.positionUnverifiedByStop
                         ? l10n.mountPositionStopUnconfirmedPressHome
+                        : (m.capabilities?.homeIsSensorSearch ?? false)
+                        ? l10n.mountPositionSensorSearchPressHome
                         : l10n.mountPositionUnverifiedPressHome)
                   : l10n.mountPositionUnverifiedRunZeroSearch,
               key: const Key('simple-mount-run-zero-search'),

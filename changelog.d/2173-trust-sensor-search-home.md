@@ -1,0 +1,3 @@
+### Changed
+
+- **Home clears an unverified position by itself on a mount with a home sensor** (Mount, #2173): when the mount's driver tells Ara that its Home is a real home-sensor search (AlpacaBridge's new capability), a Home that Ara sees move the mount and end at Home trusts the position again in every case, after a power loss or a position jump too, with no eye check. The mount window, the refused GoTo or Park message and the Polar Align pre-flight list say so. A Home that fails, never moves, loses a reading or spans a reconnect still clears nothing. Other mounts keep the eye check after a power loss or a jump.
