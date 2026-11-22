@@ -6806,7 +6806,7 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get polarAlignErrorTrackingOff =>
-      'The mount is not tracking and would not start. Turn tracking on from the mount controls, then start again.';
+      'The mount is not tracking and did not start tracking when Ara asked. Turn tracking on from the mount controls, then start again.';
 
   @override
   String get polarAlignErrorHandTurnTooFar =>
@@ -14218,11 +14218,11 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get polarAlignErrorPierChanged =>
-      'A montagem informou outro lado do pilar durante um giro em AR. O alinhamento polar nunca vira a montagem. Verifique para onde ela aponta e comece de novo.';
+      'A montagem informou outro lado do pilar durante um giro em AR. O alinhamento polar nunca troca a montagem de lado do pilar. Verifique para onde ela aponta e comece de novo.';
 
   @override
   String get polarAlignErrorTurnMismatch =>
-      'A montagem não girou como o alinhamento polar pediu. Verifique se ela gira livremente, só em AR, e se para quando recebe o comando, e comece de novo.';
+      'A montagem não girou como o alinhamento polar pediu. Verifique se ela gira livremente, só em AR, e se ela para quando recebe o comando; depois comece de novo.';
 
   @override
   String get polarAlignErrorPierFlip =>
@@ -14230,7 +14230,7 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get polarAlignErrorTrackingOff =>
-      'A montagem não está rastreando e não quis começar. Ligue o rastreamento pelos controles da montagem e comece de novo.';
+      'A montagem não está rastreando e não ligou o rastreamento quando o Ara pediu. Ligue o rastreamento pelos controles da montagem e comece de novo.';
 
   @override
   String get polarAlignErrorHandTurnTooFar =>

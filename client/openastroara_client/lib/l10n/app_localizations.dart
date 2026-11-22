@@ -11349,7 +11349,7 @@ abstract class AppLocalizations {
   /// Polar Align card (both modes): why the run ended, polar_align.error tracking_off: the mount was not tracking and refused to start before a turn (#2067)
   ///
   /// In en, this message translates to:
-  /// **'The mount is not tracking and would not start. Turn tracking on from the mount controls, then start again.'**
+  /// **'The mount is not tracking and did not start tracking when Ara asked. Turn tracking on from the mount controls, then start again.'**
   String get polarAlignErrorTrackingOff;
 
   /// Polar Align card (both modes): why the run ended, polar_align.error hand_turn_too_far: in Turn RA by hand, the user turned RA past this measurement's limit (#2067)

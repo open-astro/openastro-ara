@@ -6806,7 +6806,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get polarAlignErrorTrackingOff =>
-      'The mount is not tracking and would not start. Turn tracking on from the mount controls, then start again.';
+      'The mount is not tracking and did not start tracking when Ara asked. Turn tracking on from the mount controls, then start again.';
 
   @override
   String get polarAlignErrorHandTurnTooFar =>

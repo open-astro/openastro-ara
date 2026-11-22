@@ -8701,7 +8701,7 @@
   "@polarAlignErrorTurnMismatch": {"description": "Polar Align card (both modes): why the run ended, polar_align.error turn_mismatch: the turn ended off its step, ran past it, its reading jumped, or the field rotated between two frames (#2067)"},
   "polarAlignErrorPierFlip": "The mount flipped to the other side of the pier between two frames. Polar Align stopped it and turned tracking off. Check where it points, then start again.",
   "@polarAlignErrorPierFlip": {"description": "Polar Align card (both modes): why the run ended, polar_align.error pier_flip: two frames are turned about 180° apart, so the pier flipped; the run stopped the mount and turned tracking off (#2067)"},
-  "polarAlignErrorTrackingOff": "The mount is not tracking and would not start. Turn tracking on from the mount controls, then start again.",
+  "polarAlignErrorTrackingOff": "The mount is not tracking and did not start tracking when Ara asked. Turn tracking on from the mount controls, then start again.",
   "@polarAlignErrorTrackingOff": {"description": "Polar Align card (both modes): why the run ended, polar_align.error tracking_off: the mount was not tracking and refused to start before a turn (#2067)"},
   "polarAlignErrorHandTurnTooFar": "RA was turned further than this measurement allows. Turn it back near where you started, then start again.",
   "@polarAlignErrorHandTurnTooFar": {"description": "Polar Align card (both modes): why the run ended, polar_align.error hand_turn_too_far: in Turn RA by hand, the user turned RA past this measurement's limit (#2067)"},
