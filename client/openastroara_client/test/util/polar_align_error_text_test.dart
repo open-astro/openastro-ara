@@ -5,6 +5,13 @@ import 'package:openastroara/models/polar_align.dart';
 import 'package:openastroara/state/polar_align/polar_align_state.dart';
 import 'package:openastroara/util/polar_align_error_text.dart';
 
+// #2067 the daemon's AlignerCutPowerSentence (PolarAlignService.Aligner.cs),
+// the whole message of every aligner_did_not_stop.
+const alignerCutPower =
+    'Ara could not confirm that the Polar Aligner stopped. Cut the Polar '
+    "Aligner's power if it still moves; Ara sends it Stop again before it "
+    'moves it next.';
+
 void main() {
   final en = lookupAppLocalizations(const Locale('en'));
   final pt = lookupAppLocalizations(const Locale('pt', 'BR'));
@@ -127,7 +134,15 @@ void main() {
     for (final MapEntry(key: reason, value: sentence) in cases.entries) {
       for (final l in [en, pt]) {
         expect(
-          polarAlignErrorText(l, failed(reason)),
+          polarAlignErrorText(
+            l,
+            failed(
+              reason,
+              message: reason == 'aligner_did_not_stop'
+                  ? alignerCutPower
+                  : 'the daemon sentence',
+            ),
+          ),
           sentence(l),
           reason: '$reason in ${l.localeName}',
         );
@@ -147,9 +162,7 @@ void main() {
           l,
           failed(
             'pier_flip',
-            message:
-                'the mount flipped. Ara could not confirm that the Polar '
-                'Aligner stopped. Cut its power.',
+            message: 'the mount flipped. $alignerCutPower',
           ),
         ),
         '${l.polarAlignErrorPierFlip} ${l.polarAlignerStopNotConfirmed}',
@@ -161,6 +174,21 @@ void main() {
         ),
         l.polarAlignStopNotConfirmed,
         reason: 'the warning is not said twice',
+      );
+    }
+  });
+
+  test('an aligner_did_not_stop says the Polar Aligner warning once, in both languages', () {
+    for (final l in [en, pt]) {
+      final words = polarAlignErrorText(
+        l,
+        failed('aligner_did_not_stop', message: alignerCutPower),
+      )!;
+      expect(words, l.polarAlignerStopNotConfirmed);
+      expect(
+        l.polarAlignerStopNotConfirmed.allMatches(words),
+        hasLength(1),
+        reason: 'the warning is not said twice in ${l.localeName}',
       );
     }
   });
