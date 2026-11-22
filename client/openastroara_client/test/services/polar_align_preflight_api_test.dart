@@ -78,37 +78,35 @@ PolarAlignApi _api(_Rig rig) => PolarAlignApi(
 );
 
 void main() {
-  test('start-plan sends hand_turn=true only for a hand-turn start', () async {
+  test('start-plan sends the stage alone, never hand_turn (#2170)', () async {
     final rig = _Rig(reply: _plan);
     final api = _api(rig);
 
-    await api.startPlan(stage: PolarAlignStages.fine, handTurn: true);
     await api.startPlan(stage: PolarAlignStages.fine);
 
     expect(rig.seen.map((s) => s.$1), everyElement(endsWith('/start-plan')));
-    expect(rig.seen[0].$2, {'stage': 'fine', 'hand_turn': true});
-    expect(rig.seen[1].$2, {
+    expect(rig.seen[0].$2, {
       'stage': 'fine',
-    }, reason: 'a motor start sends no hand_turn');
+    }, reason: 'there is no hand-turn start to ask for');
   });
 
   test(
-    'preflight sends hand_turn=true only when asked, and parses the whole list',
+    'preflight sends the stage alone, never hand_turn, and parses the whole list (#2170)',
     () async {
       final rig = _Rig(reply: _list);
       final api = _api(rig);
 
-      final list = await api.preflight(handTurn: true);
+      final list = await api.preflight();
       await api.preflight(stage: PolarAlignStages.check);
 
       expect(
         rig.seen.map((s) => s.$1),
         everyElement(endsWith('/polaralign/preflight')),
       );
-      expect(rig.seen[0].$2, {'hand_turn': true});
+      expect(rig.seen[0].$2, isEmpty, reason: 'no stage, no query');
       expect(rig.seen[1].$2, {
         'stage': 'check',
-      }, reason: 'a motor list sends no hand_turn');
+      }, reason: 'there is no hand-turn list to ask for');
       expect(list, isNotNull);
       expect(list!.ready, isFalse);
       expect(list.mountKey, 'ZWO_AM5_1');

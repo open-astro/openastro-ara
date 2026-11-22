@@ -826,11 +826,6 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
 
     public long SessionEpoch => Interlocked.Read(ref _sessionEpoch);
 
-    // #2083 — bumped by each sync the driver accepted (the mediator's, the REST slew's sync).
-    private long _syncEpoch;
-
-    public long SyncEpoch => Interlocked.Read(ref _syncEpoch);
-
     public Task MoveAxisAsync(int axis, double rate, int? leaseMs, CancellationToken ct) =>
         MoveAxisAsync(axis, rate, leaseMs, unlessAbortedSince: null, ct);
 
@@ -1190,7 +1185,6 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
             if (sync) {
                 // Sync recalibrates the pointing model to the given coordinates without moving.
                 client.SyncToCoordinates(raHours, decDeg);
-                Interlocked.Increment(ref _syncEpoch);
             } else {
                 // #2073 — a Stop Mount or emergency stop (AbortSlew, then Tracking off) that landed after
                 // this goto was accepted wins: the goto is dropped rather than turning tracking back on

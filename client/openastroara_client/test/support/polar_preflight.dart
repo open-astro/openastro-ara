@@ -4,21 +4,19 @@ import 'package:openastroara/models/polar_align.dart';
 const preflightMountKey = 'mount-1';
 
 /// #2068 the rig's pre-flight list for a mount whose clearance is [confirmed]
-/// (or not): the clearance check passes, or fails for a motor start and warns
-/// for a Turn RA by hand start ([handTurn], Joey 2026-11-21), the rest as a
-/// fresh rig has them. The run turns RA up to [reachDeg] each way (#2165: the
-/// two 10° turns plus the 0.5° direction test); [parked] adds the parked
-/// mount's failing check. [onAxis] (#2166): the scope points within 3° of the
-/// pole, so the start pointing fails, and the rig offers [moveToStart].
+/// (or not): the clearance check passes or fails, the rest as a fresh rig has
+/// them. The run turns RA up to [reachDeg] each way (#2165: the two 10° turns
+/// plus the 0.5° direction test); [parked] adds the parked mount's failing
+/// check. [onAxis] (#2166): the scope points within 3° of the pole, so the
+/// start pointing fails, and the rig offers [moveToStart].
 PolarAlignPreflight rigPreflight({
   required bool confirmed,
-  bool handTurn = false,
   bool parked = false,
   double reachDeg = 20.5,
   bool onAxis = false,
   PolarAlignMoveToStartOffer? moveToStart,
 }) => PolarAlignPreflight(
-  ready: (confirmed || handTurn) && !parked && !onAxis,
+  ready: confirmed && !parked && !onAxis,
   mountKey: preflightMountKey,
   moveToStart: onAxis ? moveToStart : null,
   checks: [
@@ -38,8 +36,6 @@ PolarAlignPreflight rigPreflight({
       id: PolarAlignPreflightChecks.clearanceConfirmed,
       status: confirmed
           ? PolarAlignPreflightStatuses.ok
-          : handTurn
-          ? PolarAlignPreflightStatuses.warn
           : PolarAlignPreflightStatuses.fail,
       detail: confirmed
           ? 'You confirmed this mount clears the pier.'
@@ -77,7 +73,6 @@ PolarAlignPreflight rigPreflight({
 /// run's [reachDeg] is no bigger than the reach it was confirmed for).
 PolarAlignPreflight rigPreflightFor(
   PolarAlignSettings? settings, {
-  bool handTurn = false,
   bool parked = false,
   double reachDeg = 20.5,
   bool onAxis = false,
@@ -86,7 +81,6 @@ PolarAlignPreflight rigPreflightFor(
   final entry = settings?.mountClearance[preflightMountKey];
   return rigPreflight(
     confirmed: entry != null && reachDeg <= entry.confirmedReachDeg,
-    handTurn: handTurn,
     parked: parked,
     reachDeg: reachDeg,
     onAxis: onAxis,

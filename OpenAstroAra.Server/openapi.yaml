@@ -2356,10 +2356,6 @@ paths:
           in: query
           schema:
             type: string
-        - name: hand_turn
-          in: query
-          schema:
-            type: boolean
       responses:
         '200':
           description: OK
@@ -2390,10 +2386,6 @@ paths:
           in: query
           schema:
             type: string
-        - name: hand_turn
-          in: query
-          schema:
-            type: boolean
       responses:
         '200':
           description: OK
@@ -2430,6 +2422,7 @@ paths:
     post:
       tags:
         - Equipment
+      summary: Start one polar-align measurement; RA always turns with the mount's motor.
       parameters:
         - name: Idempotency-Key
           in: header
@@ -15161,9 +15154,6 @@ components:
         camera:
           type: string
           default: guide
-        hand_turn_available:
-          type: boolean
-          default: true
         direction_test_deg:
           pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
           type:
@@ -15186,9 +15176,6 @@ components:
             - 'null'
             - string
         new_origin:
-          type: boolean
-          default: false
-        hand_turn:
           type: boolean
           default: false
         direction_test:
@@ -15728,7 +15715,6 @@ components:
         - first-flip-not-completed
         - mount-clock-not-verified
         - polar-align-already-running
-        - polar-align-clutch-turned
         - polar-align-clearance-not-confirmed
         - above-clearance-limit
         - polar-align-site-not-set

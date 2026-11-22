@@ -26,6 +26,9 @@ class _Rig implements PolarAlignClient {
   bool pointingFails = false;
   bool parked = false;
 
+  /// The pre-flight list fails to read (#2165: Start stays on, the rig judges).
+  bool preflightFails = false;
+
   /// How far the run turns RA each way: the turn size on the Start card.
   double reachDeg = 20.5;
 
@@ -50,13 +53,13 @@ class _Rig implements PolarAlignClient {
       rigPreflightFor(section.initial, reachDeg: _reachFor(stage)).ready;
 
   @override
-  Future<PolarAlignPreflight?> preflight({String? stage, bool handTurn = false}) async {
+  Future<PolarAlignPreflight?> preflight({String? stage}) async {
     preflightReads++;
+    if (preflightFails) throw StateError('the pre-flight list did not load');
     if (!mountConnected) return _noMount;
     if (pointingFails) return _pointingFails;
     return rigPreflightFor(
       section.initial,
-      handTurn: handTurn,
       parked: parked,
       reachDeg: reachDeg,
       onAxis: onAxis,
@@ -78,11 +81,10 @@ class _Rig implements PolarAlignClient {
     );
   }
 
-  // As the rig: a motor start's plan is refused while the clearance is not
-  // confirmed; a hand-turn start's is not (Joey, 2026-11-21).
+  // As the rig: a start's plan is refused while the clearance is not confirmed.
   @override
-  Future<PolarAlignStartPlan> startPlan({String? stage, bool handTurn = false}) async {
-    if (!handTurn && !_confirmed(stage)) {
+  Future<PolarAlignStartPlan> startPlan({String? stage}) async {
+    if (!_confirmed(stage)) {
       throw Refusal(
         cause: RefusalCause.polarAlignClearanceNotConfirmed,
         reason: 'polar-align-clearance-not-confirmed',
@@ -94,7 +96,6 @@ class _Rig implements PolarAlignClient {
     return PolarAlignStartPlan(
       stage: stage,
       direction: PolarAlignDirections.east,
-      handTurnAvailable: true,
     );
   }
 
@@ -268,7 +269,16 @@ void main() {
   testWidgets('Start is disabled while a pre-flight check fails', (
     tester,
   ) async {
-    final rig = await _pump(tester, parked: true);
+    // The clearance is confirmed: only the parked mount fails (#2170: an
+    // unconfirmed clearance fails the list too).
+    final rig = await _pump(
+      tester,
+      parked: true,
+      settings: rigPolarAlign.withMountClearance(
+        preflightMountKey,
+        const PolarAlignMountClearance(confirmedReachDeg: 20.5),
+      ),
+    );
 
     expect(
       find.byKey(const Key('polar-preflight-check-mount_parked')),
@@ -433,7 +443,6 @@ void main() {
       await tester.tap(find.byKey(const Key('polar-start-confirm-go')));
       await tester.pumpAndSettle();
       expect(rig.started.single.stage, PolarAlignStages.check);
-      expect(rig.started.single.handTurn, isFalse);
     },
   );
 
@@ -462,59 +471,94 @@ void main() {
     },
   );
 
-  // Joey, 2026-11-21: a Turn RA by hand start moves nothing, so an unconfirmed
-  // clearance only warns for it; the card reads that list and Start stays on.
+  // #2165, #2170: Cancel on the clearance question just closes. Nothing is
+  // saved, no confirm step opens and nothing starts: there is no fallback.
   testWidgets(
-    'The list is read for a Turn RA by hand start: an unconfirmed clearance warns and Start stays on',
+    'Cancel on the clearance question a Check asks closes it and starts nothing',
     (tester) async {
-      await _pump(tester);
+      final rig = await _pump(
+        tester,
+        settings: rigPolarAlign.withMountClearance(
+          preflightMountKey,
+          const PolarAlignMountClearance(confirmedReachDeg: 20.5),
+        ),
+      );
+      rig.checkReachDeg = 40.5;
+
+      await tester.tap(find.byKey(const Key('polar-align-start-check')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('polar-clearance-dialog')), findsOneWidget);
+      await tester.tap(find.byKey(const Key('polar-clearance-cancel')));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('polar-clearance-dialog')), findsNothing);
+      expect(find.byKey(const Key('polar-start-confirm')), findsNothing);
+      expect(
+        find.textContaining('Confirm there is room'),
+        findsNothing,
+        reason: 'Cancel is not an error: the refusal does not reach the card',
+      );
+      expect(rig.section.puts, isEmpty);
+      expect(rig.started, isEmpty);
+    },
+  );
+
+  // #2165: with no pre-flight list to ask from (it failed to read) Start stays
+  // on and the rig's clearance refusal reaches the card: a tap is never silent.
+  testWidgets(
+    'A clearance refusal with no pre-flight list shows the refusal on the card',
+    (tester) async {
+      final rig = _Rig()..preflightFails = true;
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            ...polarAlignSectionOverrides(rig.section),
+            polarAlignApiProvider.overrideWithValue(rig),
+            polarAlignLiveProvider.overrideWith(_Idle.new),
+          ],
+          child: const MaterialApp(
+            home: Scaffold(
+              body: SingleChildScrollView(child: PolarAlignPanel()),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(_onPressed(tester, 'polar-align-start'), isNotNull);
+
+      await tester.tap(find.byKey(const Key('polar-align-start')));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('polar-clearance-dialog')), findsNothing);
+      expect(find.byKey(const Key('polar-start-confirm')), findsNothing);
+      expect(find.textContaining('Confirm there is room'), findsOneWidget);
+      expect(rig.started, isEmpty);
+    },
+  );
+
+  // #2170 — there is no hand-turn start to fall back on: an unconfirmed
+  // clearance fails the list, so Start and Check stay off until it is confirmed.
+  testWidgets(
+    'An unconfirmed clearance fails the list and Start stays off',
+    (tester) async {
+      final rig = await _pump(tester);
 
       final row = find.byKey(
         const Key('polar-preflight-check-clearance_confirmed'),
       );
-      expect(row, findsOneWidget, reason: 'a warning is always shown');
+      expect(row, findsOneWidget, reason: 'the failing check is listed');
       expect(
         find.descendant(
           of: row,
           matching: find.byIcon(Icons.warning_amber_outlined),
         ),
-        findsOneWidget,
-        reason: 'a warn, not a fail',
+        findsNothing,
+        reason: 'a fail, not a warn',
       );
-      expect(_onPressed(tester, 'polar-align-start'), isNotNull);
-      expect(_onPressed(tester, 'polar-align-start-check'), isNotNull);
+      expect(_onPressed(tester, 'polar-align-start'), isNull);
+      expect(_onPressed(tester, 'polar-align-start-check'), isNull);
       expect(find.text('Confirm clearance…'), findsOneWidget);
-    },
-  );
-
-  testWidgets(
-    'With the clearance unconfirmed, Start offers Turn RA by hand alone and starts a hand-turn run',
-    (tester) async {
-      final rig = await _pump(tester);
-
-      await tester.tap(find.byKey(const Key('polar-align-start')));
-      await tester.pumpAndSettle();
-      // #2165: the start asks the clearance question first; Cancel saves
-      // nothing and leaves Turn RA by hand.
-      await tester.tap(find.byKey(const Key('polar-clearance-cancel')));
-      await tester.pumpAndSettle();
-      expect(rig.section.puts, isEmpty);
-
-      expect(find.byKey(const Key('polar-start-confirm')), findsOneWidget);
-      expect(
-        _onPressed(tester, 'polar-start-confirm-go'),
-        isNull,
-        reason: 'the motor waits for the clearance',
-      );
-      expect(
-        find.textContaining("This mount's clearance is not confirmed"),
-        findsOneWidget,
-      );
-      await tester.tap(find.byKey(const Key('polar-start-confirm-hand')));
-      await tester.pumpAndSettle();
-
-      expect(rig.started, hasLength(1));
-      expect(rig.started.single.handTurn, isTrue, reason: 'nothing moves');
+      expect(rig.started, isEmpty);
     },
   );
 

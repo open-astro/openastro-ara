@@ -980,18 +980,16 @@ public static partial class EquipmentEndpoints {
             Results.Ok(await svc.GetStatusAsync(ct)));
         // #2048 — the confirm step's plan: the RA turn direction from the current pointing, the step and the most the run
         // turns from where it starts. 409 for a mount not connected, parked (polar-align-mount-parked) or no latitude.
-        // #2068 — hand_turn=true plans a hand-turn start, which an unconfirmed clearance does not refuse.
-        polar.MapGet("/start-plan", async (string? stage, [FromQuery(Name = "hand_turn")] bool? handTurn, IPolarAlignService svc, CancellationToken ct) =>
-                await PolarAlignStartPlanAsync(svc, stage, handTurn == true, ct))
+        polar.MapGet("/start-plan", async (string? stage, IPolarAlignService svc, CancellationToken ct) =>
+                await PolarAlignStartPlanAsync(svc, stage, ct))
             .WithName("GetPolarAlignStartPlan")
             .WithSummary("What a confirmed polar-align start would do: the RA turn direction, the step and the most it turns from where it starts.")
             .Produces<PolarAlignStartPlanDto>().ProducesProblem(StatusCodes.Status400BadRequest).ProducesProblem(StatusCodes.Status409Conflict);
         // #2068 (ARA-18) — the Start card's pre-flight list: every check a start makes (ok | warn | fail | unknown), in its
         // order, and what the start would do. Always 200 (a failing check is a row, not an error); 400 for an unknown stage.
         // Start and start-plan refuse on the first failing check, with its cause.
-        // hand_turn=true lists a hand-turn start: its clearance check warns, not fails, while the clearance is not confirmed.
-        polar.MapGet("/preflight", (string? stage, [FromQuery(Name = "hand_turn")] bool? handTurn, IPolarAlignService svc, CancellationToken ct) =>
-                PolarAlignPreflightAsync(svc, stage, handTurn == true, ct))
+        polar.MapGet("/preflight", (string? stage, IPolarAlignService svc, CancellationToken ct) =>
+                PolarAlignPreflightAsync(svc, stage, ct))
             .WithName("GetPolarAlignPreflight")
             .WithSummary("Polar Align's pre-flight checks for the next start (ok, warn, fail or unknown each), and what that start would do.")
             .Produces<PolarAlignPreflightDto>().ProducesProblem(StatusCodes.Status400BadRequest);
@@ -1012,7 +1010,9 @@ public static partial class EquipmentEndpoints {
         polar.MapPost("/start", async ([FromHeader(Name = "Idempotency-Key")] string? key,
                 [FromBody(EmptyBodyBehavior = Microsoft.AspNetCore.Mvc.ModelBinding.EmptyBodyBehavior.Allow)] PolarAlignStartRequestDto? body,
                 IPolarAlignService svc, CancellationToken ct) =>
-            await PolarAlignStartAsync(svc, body, key, ct));
+            await PolarAlignStartAsync(svc, body, key, ct))
+            // The removed fields' history is in design/API_CONTRACT.md (#2170), not in the summary.
+            .WithSummary("Start one polar-align measurement; RA always turns with the mount's motor.");
         // Retired (#2082): one measurement per Start, so there is no next step. Always 409.
         polar.MapPost("/next", async ([FromHeader(Name = "Idempotency-Key")] string? key, IPolarAlignService svc, CancellationToken ct) =>
                 await PolarAlignNextAsync(svc, key, ct))
@@ -1317,7 +1317,7 @@ public static partial class EquipmentEndpoints {
     /// <summary>#2048 — the start's confirmation: <c>confirmed</c> with the direction the user was shown, else none (the
     /// service refuses a start without one).</summary>
     internal static PolarAlignStartConfirmation? StartConfirmation(PolarAlignStartRequestDto? body) =>
-        body is { Confirmed: true, Direction: { Length: > 0 } direction } ? new PolarAlignStartConfirmation(direction, body.NewOrigin, body.HandTurn, body.DirectionTest) : null;
+        body is { Confirmed: true, Direction: { Length: > 0 } direction } ? new PolarAlignStartConfirmation(direction, body.NewOrigin, body.DirectionTest) : null;
 
     public static async Task<IResult> PolarAlignStartAsync(IPolarAlignService svc, PolarAlignStartRequestDto? body, string? idempotencyKey, CancellationToken ct) {
         ArgumentNullException.ThrowIfNull(svc);
@@ -1362,24 +1362,24 @@ public static partial class EquipmentEndpoints {
         return PolarAlignService.MotorDirectionState(profiles.GetPolarAlignMotorDirection(), mount?.GetInfo());
     }
 
-    public static async Task<IResult> PolarAlignStartPlanAsync(IPolarAlignService svc, string? stage, bool handTurn, CancellationToken ct) {
+    public static async Task<IResult> PolarAlignStartPlanAsync(IPolarAlignService svc, string? stage, CancellationToken ct) {
         ArgumentNullException.ThrowIfNull(svc);
         if (stage is not null && !PolarAlignStages.IsValid(stage)) {
             return Results.Problem($"unknown polar-align stage '{stage}' — use coarse, fine or check", statusCode: StatusCodes.Status400BadRequest);
         }
         try {
-            return Results.Ok(await svc.GetStartPlanAsync(stage, handTurn, ct));
+            return Results.Ok(await svc.GetStartPlanAsync(stage, ct));
         } catch (System.InvalidOperationException ex) when (ex is not RefusalException) {
             return Results.Problem(ex.Message, statusCode: StatusCodes.Status409Conflict);
         }
     }
 
-    public static async Task<IResult> PolarAlignPreflightAsync(IPolarAlignService svc, string? stage, bool handTurn, CancellationToken ct) {
+    public static async Task<IResult> PolarAlignPreflightAsync(IPolarAlignService svc, string? stage, CancellationToken ct) {
         ArgumentNullException.ThrowIfNull(svc);
         if (stage is not null && !PolarAlignStages.IsValid(stage)) {
             return Results.Problem($"unknown polar-align stage '{stage}' — use coarse, fine or check", statusCode: StatusCodes.Status400BadRequest);
         }
-        return Results.Ok(await svc.GetPreflightAsync(stage, handTurn, ct));
+        return Results.Ok(await svc.GetPreflightAsync(stage, ct));
     }
 
     /// <summary>#2166 — <c>POST /polaralign/move-to-start</c>: a declared Refusal keeps its own answer (RefusalHandler); any

@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:openastroara/l10n/app_localizations.dart';
+import 'package:openastroara/l10n/l10n.dart';
 import 'package:openastroara/models/polar_align.dart';
 import 'package:openastroara/services/polar_align_api.dart';
+import 'package:openastroara/services/refusal.dart';
+import 'package:openastroara/util/friendly_error.dart';
 import 'package:openastroara/widgets/imaging/polar_start_confirm.dart';
 
 /// The rig's side of the confirm step: the plan it answers, and the starts it got.
@@ -12,14 +14,18 @@ class _Rig implements PolarAlignClient {
   Future<PolarAlignMoveToStartResult> moveToStart() =>
       throw UnimplementedError();
   @override
-  Future<PolarAlignPreflight?> preflight({String? stage, bool handTurn = false}) async => null;
-  _Rig(this.plan);
+  Future<PolarAlignPreflight?> preflight({String? stage}) async => null;
+  _Rig(this.plan, {this.refusal});
   final PolarAlignStartPlan plan;
+
+  /// The rig refuses the plan with this, when set.
+  final Refusal? refusal;
   final planned = <String?>[];
   final started = <PolarAlignStartPlan>[];
   @override
-  Future<PolarAlignStartPlan> startPlan({String? stage, bool handTurn = false}) async {
+  Future<PolarAlignStartPlan> startPlan({String? stage}) async {
     planned.add(stage);
+    if (refusal case final r?) throw r;
     return plan;
   }
 
@@ -39,7 +45,11 @@ Future<void> _open(WidgetTester tester, _Rig rig, {String? stage, Locale locale 
         body: Builder(
           builder: (context) => TextButton(
             key: const Key('go'),
-            onPressed: () => confirmAndStartPolarAlign(context, rig, stage: stage),
+            // As the panels do: a refusal is shown in the user's words.
+            onPressed: () => confirmAndStartPolarAlign(context, rig, stage: stage).catchError((Object e) {
+              if (!context.mounted) return;
+              ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(friendlyError(context.l10n, e))));
+            }),
             child: const Text('Start'),
           ),
         ),
@@ -164,31 +174,37 @@ void main() {
     expect(find.text('Choose a start whose turns do not cross the meridian, so the tube cannot swing into the pier.'), findsOneWidget);
   });
 
-  testWidgets('Turn RA by hand starts a run that asks the rig to move nothing, with the direction shown (#2083)', (tester) async {
-    final rig = _Rig(const PolarAlignStartPlan(
-      stage: PolarAlignStages.fine,
-      direction: PolarAlignDirections.west,
-      handTurnAvailable: true,
-    ));
-    await _open(tester, rig, stage: PolarAlignStages.fine);
-    expect(find.textContaining('with Turn RA by hand, Ara moves nothing'), findsOneWidget);
-
-    await tester.tap(find.byKey(const Key('polar-start-confirm-hand')));
-    await tester.pumpAndSettle();
-    expect(rig.started.single.handTurn, isTrue);
-    expect(rig.started.single.direction, PolarAlignDirections.west, reason: 'the turns the user makes go the way shown');
-    expect(rig.started.single.stage, PolarAlignStages.fine);
-  });
-
-  testWidgets('an older rig, which would turn the mount with its motor, is offered no hand turn (#2083)', (tester) async {
+  testWidgets('the confirm step offers no hand-turn button (#2170)', (tester) async {
     final rig = _Rig(const PolarAlignStartPlan(direction: PolarAlignDirections.east));
     await _open(tester, rig);
     expect(find.byKey(const Key('polar-start-confirm-hand')), findsNothing);
-    expect(find.textContaining('Turn RA by hand'), findsNothing);
+    expect(find.textContaining('by hand'), findsNothing);
+    expect(find.textContaining('Turn RA'), findsNothing);
+    expect(find.byKey(const Key('polar-start-confirm-cancel')), findsOneWidget);
 
     await tester.tap(find.byKey(const Key('polar-start-confirm-go')));
     await tester.pumpAndSettle();
-    expect(rig.started.single.handTurn, isFalse, reason: 'Move the mount is a motor run');
+    expect(rig.started, hasLength(1), reason: 'Move the mount is the one way to start, with the motor');
+  });
+
+  testWidgets('a mount that cannot MoveAxis gets the refusal and no hand-turn offer (#2170)', (tester) async {
+    final rig = _Rig(
+      const PolarAlignStartPlan(direction: PolarAlignDirections.east),
+      refusal: const Refusal(
+        cause: RefusalCause.polarAlignCannotMoveAxis,
+        reason: 'polar-align-cannot-move-axis',
+        detail: 'this mount cannot turn its RA axis by rate (CanMoveAxis is false), so Polar Align cannot turn it',
+        status: 409,
+      ),
+    );
+    await _open(tester, rig);
+
+    final l10n = await AppLocalizations.delegate.load(const Locale('en'));
+    expect(find.byKey(const Key('polar-start-confirm')), findsNothing, reason: 'no confirm step opens for a refused plan');
+    expect(find.text(l10n.refusalPolarAlignCannotMoveAxis), findsOneWidget, reason: 'the refusal is shown');
+    expect(find.textContaining('by hand'), findsNothing, reason: 'no hand turn is offered');
+    expect(find.byKey(const Key('polar-start-confirm-hand')), findsNothing);
+    expect(rig.started, isEmpty, reason: 'nothing starts');
   });
 
   testWidgets('the confirm step reads in Brazilian Portuguese', (tester) async {
@@ -215,31 +231,6 @@ void main() {
     await tester.tap(find.byKey(const Key('polar-start-confirm-go')));
     await tester.pumpAndSettle();
     expect(rig.started.single.directionTestDeg, 0.5, reason: 'the start carries the test the user saw');
-  });
-
-  testWidgets('a confirm step that offers only Turn RA by hand shows no motor-direction test (#2081)', (tester) async {
-    const plan = PolarAlignStartPlan(
-      stage: PolarAlignStages.fine,
-      direction: PolarAlignDirections.east,
-      stepDeg: 10,
-      handTurnAvailable: true,
-      directionTestDeg: 0.5,
-    );
-    await tester.pumpWidget(MaterialApp(
-      localizationsDelegates: AppLocalizations.localizationsDelegates,
-      supportedLocales: AppLocalizations.supportedLocales,
-      home: const Scaffold(body: PolarStartConfirmDialog(plan: plan, motorAllowed: false)),
-    ));
-    expect(find.byKey(const Key('polar-start-confirm-hand')), findsOneWidget);
-    expect(find.textContaining('to learn the motor direction'), findsNothing,
-        reason: 'a hand-turn run makes no direction test');
-
-    await tester.pumpWidget(MaterialApp(
-      localizationsDelegates: AppLocalizations.localizationsDelegates,
-      supportedLocales: AppLocalizations.supportedLocales,
-      home: Scaffold(body: PolarStartConfirmDialog(plan: plan.byHand())),
-    ));
-    expect(find.textContaining('to learn the motor direction'), findsNothing, reason: 'a hand-turn plan makes no test');
   });
 
   testWidgets('the motor-direction test distance uses the language decimal comma in pt-BR (#2081)', (tester) async {

@@ -89,13 +89,8 @@ public static class RefusalCatalog {
     // #1589 — the user confirms a profile's meridian flip only after one ran to the end.
     public static readonly RefusalCause FirstFlipNotCompleted = new("first-flip-not-completed", 409, "No completed meridian flip to confirm");
 
-    // #2083 — a Start while a run is active that asks for the other way of turning RA (by hand, or with the motor): the
-    // user confirmed something the running run does not do. A matching retry is still a no-op accept.
+    // #2081 — a motor-direction retest while a run is going (its own 0.5° test could save a sign right after).
     public static readonly RefusalCause PolarAlignAlreadyRunning = new("polar-align-already-running", 409, "Polar alignment is already running");
-
-    // #2083 — a hand-turn run saw RA turn with the clutch open, so the mount's reading is off by the user's turns: a start
-    // that turns RA with the motor is refused until the mount is synced or reconnected (a hand-turn start goes ahead).
-    public static readonly RefusalCause PolarAlignClutchTurned = new("polar-align-clutch-turned", 409, "RA was turned with the clutch open");
 
     // #2068 (ARA-8, ARA-18) — the connected mount's clearance is not confirmed for this run's reach (the pre-flight list's
     // clearance check): no Polar Align motor motion until the user said in the app that there is room for the tube,
@@ -110,8 +105,8 @@ public static class RefusalCatalog {
     public static readonly RefusalCause PolarAlignSiteNotSet = new("polar-align-site-not-set", 409, "The site's longitude is not set");
     // #2083 — the mount reports AlignmentMode altAz: its first axis turns azimuth, not RA, so the RA turns cannot run.
     public static readonly RefusalCause PolarAlignAltAzMount = new("polar-align-alt-az-mount", 409, "Polar Align needs an equatorial mount");
-    // #2083 — the mount reports CanMoveAxis(Primary) false: it cannot turn its RA axis by rate, so no motor start (a Turn
-    // RA by hand start goes ahead).
+    // #2083 — the mount reports CanMoveAxis(Primary) false: it cannot turn its RA axis by rate, so Polar Align cannot run
+    // (#2170: there is no hand-turn fallback).
     public static readonly RefusalCause PolarAlignCannotMoveAxis = new("polar-align-cannot-move-axis", 409, "The mount cannot turn its RA axis by rate");
     // #2166 — Move to start position while a Polar Align run is going (or its exit still stops the mount): stop it first.
     public static readonly RefusalCause PolarAlignRunActive = new("polar-align-run-active", 409, "A Polar Align run is going");
@@ -126,7 +121,7 @@ public static class RefusalCatalog {
         EndNightInProgress, BelowHorizonLimit, MountPositionUnverified, CounterweightLimit,
         PolarAlignMountParked, PolarAlignUnconfirmed, PolarAlignSweepLimit, PolarAlignMovingMount, PolarAlignOnAxis,
         PolarAlignPointingUnknown, PolarAlignPoseAmbiguous, PolarAlignMountBusy,
-        FirstFlipNotCompleted, MountClockNotVerified, PolarAlignAlreadyRunning, PolarAlignClutchTurned,
+        FirstFlipNotCompleted, MountClockNotVerified, PolarAlignAlreadyRunning,
         PolarAlignClearanceNotConfirmed,
         AboveClearanceLimit, PolarAlignSiteNotSet, PolarAlignAltAzMount, PolarAlignCannotMoveAxis,
         PolarAlignRunActive, PolarAlignCannotMoveDec, PolarAlignMoveToStartNotNeeded,

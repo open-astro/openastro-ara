@@ -53,9 +53,9 @@ class _PolarApi implements PolarAlignClient {
   Future<PolarAlignMoveToStartResult> moveToStart() =>
       throw UnimplementedError();
   @override
-  Future<PolarAlignPreflight?> preflight({String? stage, bool handTurn = false}) async => null;
+  Future<PolarAlignPreflight?> preflight({String? stage}) async => null;
   @override
-  Future<PolarAlignStartPlan> startPlan({String? stage, bool handTurn = false}) async =>
+  Future<PolarAlignStartPlan> startPlan({String? stage}) async =>
       PolarAlignStartPlan(stage: stage, direction: PolarAlignDirections.east);
   final calls = <String>[];
   @override
@@ -126,9 +126,9 @@ class _StatusApi implements PolarAlignClient {
   Future<PolarAlignMoveToStartResult> moveToStart() =>
       throw UnimplementedError();
   @override
-  Future<PolarAlignPreflight?> preflight({String? stage, bool handTurn = false}) async => null;
+  Future<PolarAlignPreflight?> preflight({String? stage}) async => null;
   @override
-  Future<PolarAlignStartPlan> startPlan({String? stage, bool handTurn = false}) async =>
+  Future<PolarAlignStartPlan> startPlan({String? stage}) async =>
       PolarAlignStartPlan(stage: stage, direction: PolarAlignDirections.east);
   PolarAlignLastResult? last;
   String state = PolarAlignStates.idle;

@@ -702,7 +702,7 @@ namespace OpenAstroAra.Test {
             Assert.That(status.CheckResult!.DecSpreadArcsec, Is.EqualTo(verdict.GetProperty("dec_spread_arcsec").GetDouble()));
         }
 
-        // ── the field check with several frames per point (#2082) and in a hand-turn run (#2083) ──────────────
+        // ── the field check with several frames per point (#2082) ──────────────
 
         [Test]
         public async Task M05_a_point_of_three_frames_keeps_their_position_angle_so_a_flipped_seed_b_fails_as_pier_flip() {
@@ -731,69 +731,6 @@ namespace OpenAstroAra.Test {
                 "359° and 1° are 0°, not 180°");
             Assert.That(PolarAlignService.MeanPositionAngleDeg(new double?[] { null, 20.0, null }), Is.EqualTo(20.0).Within(1e-9));
             Assert.That(PolarAlignService.MeanPositionAngleDeg(new double?[] { null, null }), Is.Null);
-        }
-
-        [TestCase(10.0)]
-        [TestCase(-10.0)]
-        public void HandStepRaTurnDeg_signs_the_solved_turn_about_the_fitted_axis_as_an_RA_turn_in_either_hemisphere(double turnDeg) {
-            // A hand turn has no mount turn: the solved turn about the fitted axis stands in for it. A field 3° from an axis
-            // 2° off the pole passes with it, as with the mount's own turn. The southern fit's axis is the south end.
-            for (var phi = 0.0; phi < 360.0; phi += 30.0) {
-                var (before, after) = FramesAroundAxis(axisOffPoleDeg: 2.0, fromAxisDeg: 3.0, phi, turnDeg);
-                var northAxis = (RaDeg: 40.0, DecDeg: 88.0, ConeDeg: 3.0);
-                var southAxis = (RaDeg: 220.0, DecDeg: -88.0, ConeDeg: 3.0);
-
-                var north = PolarAlignService.HandStepRaTurnDeg(northAxis, before, after, north: true);
-                var south = PolarAlignService.HandStepRaTurnDeg(southAxis, before, after, north: false);
-
-                Assert.That(north, Is.EqualTo(turnDeg).Within(1e-6), $"φ {phi}°");
-                Assert.That(south, Is.EqualTo(turnDeg).Within(1e-6), $"φ {phi}°");
-                Assert.That(PolarAlignService.FieldRotationFailure(before, after, north), Is.Null, $"φ {phi}°");
-            }
-        }
-
-        /// <summary>A true-sky solve whose position angle the test sets (<see cref="Angle"/>), for a hand-turn run's many
-        /// solves.</summary>
-        private sealed class SetAngleSkySolver(FakeGemMount mount) : IPolarAlignFrameSolver {
-            private double _angle = 10.0;
-            public double Angle { get => Volatile.Read(ref _angle); set => Volatile.Write(ref _angle, value); }
-
-            public Task<PolarAlignSolveOutcome> SolveAsync(string fitsPath, int binning, double? hintRaDegJnow, double? hintDecDegJnow, CancellationToken ct) {
-                var (ra, dec) = mount.TrueSky;
-                return Task.FromResult(new PolarAlignSolveOutcome(true, ra, dec, Angle));
-            }
-        }
-
-        [TestCase(190.0, false)]
-        [TestCase(14.0, true)]
-        public async Task A_hand_turn_check_gets_the_field_check_a_third_point_turned_180_degrees_fails_as_pier_flip(double thirdAngle, bool checks) {
-            // #2083 — no motor turn, so none of the turn guards; the frames still get ARA-13's field check after the fit.
-            var mount = FakeGemMount.CounterweightDownAt(-4.0, 85.0, lstHours: 20.0, tracking: false, clock: new ManualMountClock());
-            mount.FreshReadTakes = FreshRead;
-            var ws = new WsRecorder();
-            var solver = new SetAngleSkySolver(mount);
-            using var svc = NewGemServiceWith(mount, ws, solver);
-            // The check's verdict waits for the exit's stop check, which the bench service gives 500 ms of wall time: a CI
-            // runner that stalls longer there fails the check as mount_did_not_stop. The fake stops at once, so the stop
-            // is confirmed on its first two reads and a longer window costs nothing.
-            svc.StopVerifyWindow = TimeSpan.FromSeconds(10);
-
-            await StartByHandAsync(svc, PolarAlignStages.Check).ConfigureAwait(false);
-            await TurnByHandWhenAskedAsync(ws, mount, point: 2, deg: 10.0).ConfigureAwait(false);
-            await ws.WhenAsync(events => events.Any(e => e.Type == WsEventCatalog.PolarAlignHandTurn
-                    && e.Payload.GetProperty("point").GetInt32() == 3)).WaitAsync(SignalTimeout).ConfigureAwait(false);
-            solver.Angle = thirdAngle;
-            await TurnByHandWhenAskedAsync(ws, mount, point: 3, deg: 10.0).ConfigureAwait(false);
-            var status = await PollStateAsync(svc, "checked", "failed").ConfigureAwait(false);
-
-            Assert.That(status.State, Is.EqualTo(checks ? "checked" : "failed"));
-            Assert.That(ws.Events.Any(e => e.Type == WsEventCatalog.PolarAlignChecked), Is.EqualTo(checks));
-            if (!checks) {
-                var error = ws.Events.Last(e => e.Type == WsEventCatalog.PolarAlignError).Payload;
-                Assert.That(error.GetProperty("reason").GetString(), Is.EqualTo(PolarAlignService.PierFlip));
-                Assert.That(error.GetProperty("message").GetString(), Does.Contain("check-3"));
-            }
-            Assert.That(mount.Motions, Is.Empty, "Ara moved nothing. " + mount.Describe());
         }
     }
 }

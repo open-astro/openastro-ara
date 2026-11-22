@@ -1579,7 +1579,7 @@ const List<Setting> settingsRegistry = [
     id: 'img.polar.clearance_confirmed',
     tier: SettingTier.advanced,
     label: 'Clearance confirmed',
-    description: 'You said there is room for this mount\'s tube, counterweight and cables to move as far as Polar align turns it: up to the turn size twice each way, plus 0.5° the first time it learns the RA motor\'s direction. Polar align does not turn a mount with its motor until its clearance is confirmed; Turn RA by hand moves nothing, so it can start. A bigger turn size asks again; Take back withdraws it. Kept for each mount.',
+    description: 'You said there is room for this mount\'s tube, counterweight and cables to move as far as Polar align turns it: up to the turn size twice each way, plus 0.5° the first time it learns the RA motor\'s direction. Polar align does not start on a mount until its clearance is confirmed. A bigger turn size asks again; Take back withdraws it. Kept for each mount.',
     keywords: ['polar', 'alignment', 'clearance', 'confirm', 'counterweight', 'cables', 'pier', 'safety', 'room', 'reach'],
     path: ['Settings', 'Imaging', 'Polar align'],
     type: SettingType.bool(),

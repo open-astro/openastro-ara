@@ -51,10 +51,6 @@ public interface IMountMotionControl {
     /// swapped meanwhile.</summary>
     long SessionEpoch => 0;
 
-    /// <summary>#2083 — counts the syncs the mount accepted (a plate solve's, Center's): a routine that stopped trusting the
-    /// mount's reading (Polar Align after a clutch turn) trusts it again once this changes.</summary>
-    long SyncEpoch => 0;
-
     /// <summary>#2066 — what raised the first count after <paramref name="abortEpoch"/> other than
     /// <paramref name="except"/>: <c>user_request</c> (Stop Mount), <c>emergency_stop</c>, <c>watchdog</c>, <c>park</c>,
     /// <c>findhome</c>, <c>polar_align</c>. Null when there is none, or it is no longer known.</summary>
