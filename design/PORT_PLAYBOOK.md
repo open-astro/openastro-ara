@@ -6665,8 +6665,8 @@ that and adds only the guards below, each merged on `stable/1.0`.
 
 **Dropped on 2026-11-21 as beyond NINA parity:** plan PR 12 (the counterweight limit and the start
 band, #2065) and the rest of the old PR 13 (the pose envelope, the motion budget, the fork-mount
-opt-in, the pier-side checks, the `motionsafety` marker). Their pre-flight rows stay `unknown` and never
-refuse.
+opt-in, the pier-side checks, the `motionsafety` marker). Their five placeholder pre-flight rows were
+removed by #2159.
 
 **No flag lifts a guard.** `force` on `POST /equipment/telescope/slew` lifts only `run_in_progress`;
 `polar-align-moving-mount`, `below-horizon-limit` and `counterweight-limit` (the GoTo refusal of #2073,
