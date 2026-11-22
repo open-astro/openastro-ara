@@ -271,8 +271,7 @@ public sealed partial class EquipmentReconnector : IEquipmentReconnector, IEquip
         }
         var outcome = await DispatchAsync(type, recovery, ct).ConfigureAwait(false);
         if (outcome.Attempted == 0) {
-            throw new EquipmentRefusedException(EquipmentRefusalCause.NotKnown,
-                $"No {label} is remembered on this rig: connect it once from the Equipment page");
+            throw NotKnown(label);
         }
         if (outcome.Dispatched == 0) {
             if (recovery && GetDesiredConnection(type) == DesiredConnection.DisconnectedByUser) {
@@ -281,19 +280,71 @@ public sealed partial class EquipmentReconnector : IEquipmentReconnector, IEquip
             }
             throw new SequenceEntityFailedException($"Failed to connect to {label}");
         }
-        using var deadline = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        deadline.CancelAfter(SettleTimeout);
-        var settled = await ConnectSettle.UntilAsync(async () => {
+        var settled = await SettleAsync(async () => {
             var state = await GetConnectionStateAsync(type, ct).ConfigureAwait(false);
             if (state is EquipmentConnectionState.Error or EquipmentConnectionState.Disconnected) {
                 throw new SequenceEntityFailedException($"Failed to connect to {label}");
             }
             return state == EquipmentConnectionState.Connected && IsCleanlyConnected(type);
-        }, deadline.Token, ct).ConfigureAwait(false);
+        }, ct).ConfigureAwait(false);
         if (!settled) {
             throw new SequenceEntityFailedException($"Failed to connect to {label}");
         }
     }
+
+    // The settle poll within SettleTimeout; false when the budget ran out, OperationCanceledException on ct.
+    private async Task<bool> SettleAsync(Func<Task<bool>> settled, CancellationToken ct) {
+        using var deadline = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        deadline.CancelAfter(SettleTimeout);
+        return await ConnectSettle.UntilAsync(settled, deadline.Token, ct).ConfigureAwait(false);
+    }
+
+    /// <summary>The user's disconnect: the service's own <c>DisconnectAsync</c> (which records
+    /// <see cref="DesiredConnection.DisconnectedByUser"/>), then waits until the service reads Disconnected.
+    /// A Switch role disconnects every known switch by its device id (which also turns off a paired dew heater).</summary>
+    public async Task DisconnectAsync(EquipmentRole role, CancellationToken ct) {
+        var (type, label) = Describe(role);
+        ct.ThrowIfCancellationRequested();
+        if (role == EquipmentRole.Guider) {
+            await _services.GetRequiredService<IGuiderService>().DisconnectAsync(null, ct).ConfigureAwait(false);
+        } else if (role == EquipmentRole.Switch) {
+            var switches = _services.GetRequiredService<ISwitchService>();
+            var known = await switches.GetAllAsync(ct).ConfigureAwait(false);
+            if (known.Count == 0 && !await IsRememberedAsync(type, ct).ConfigureAwait(false)) {
+                throw NotKnown(label);
+            }
+            foreach (var sw in known) {
+                await switches.DisconnectAsync(sw.DeviceId, null, ct).ConfigureAwait(false);
+            }
+        } else {
+            if (ResolveRetained(type) is null && !await IsRememberedAsync(type, ct).ConfigureAwait(false)) {
+                throw NotKnown(label);
+            }
+            await (ResolveService(type) switch {
+                ICameraService s => s.DisconnectAsync(null, ct),
+                ITelescopeService s => s.DisconnectAsync(null, ct),
+                IFocuserService s => s.DisconnectAsync(null, ct),
+                IFilterWheelService s => s.DisconnectAsync(null, ct),
+                IRotatorService s => s.DisconnectAsync(null, ct),
+                IDomeService s => s.DisconnectAsync(null, ct),
+                ISafetyMonitorService s => s.DisconnectAsync(null, ct),
+                IObservingConditionsService s => s.DisconnectAsync(null, ct),
+                IFlatDeviceService s => s.DisconnectAsync(null, ct),
+                _ => throw NotKnown(label),
+            }).ConfigureAwait(false);
+        }
+        var settled = await SettleAsync(async () =>
+            await GetConnectionStateAsync(type, ct).ConfigureAwait(false) is null or EquipmentConnectionState.Disconnected, ct).ConfigureAwait(false);
+        if (!settled) {
+            throw new SequenceEntityFailedException($"Failed to disconnect {label}");
+        }
+    }
+
+    private static EquipmentRefusedException NotKnown(string label) =>
+        new(EquipmentRefusalCause.NotKnown, $"No {label} is remembered on this rig: connect it once from the Equipment page");
+
+    private async Task<bool> IsRememberedAsync(DeviceType type, CancellationToken ct) =>
+        (await _store.GetAllAsync(ct).ConfigureAwait(false)).Any(d => SameGroup(d.Type, type));
 
     // #1127 — the single-instance service's retained record for the type (null when the service
     // is a placeholder or holds nothing; the multi-switch service retains none). Internal for direct unit testing.

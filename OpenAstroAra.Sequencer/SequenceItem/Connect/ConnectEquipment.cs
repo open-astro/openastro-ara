@@ -57,7 +57,10 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Connect {
         internal bool Recover { get; init; }
 
         /// <summary>The role <see cref="SelectedDevice"/> names, or null for a name no role has.</summary>
-        public EquipmentRole? Role => SelectedDevice switch {
+        public EquipmentRole? Role => RoleOf(SelectedDevice);
+
+        /// <summary>The role a device name of the Connect family names, or null for a name no role has.</summary>
+        internal static EquipmentRole? RoleOf(string device) => device switch {
             "Camera" => EquipmentRole.Camera,
             "Filter Wheel" => EquipmentRole.FilterWheel,
             "Focuser" => EquipmentRole.Focuser,
