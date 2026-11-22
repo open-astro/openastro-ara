@@ -30,8 +30,8 @@ namespace OpenAstroAra.Server.Services.Equipment;
 /// Same pattern as the §38k-9 … §38k-18 stubs. Completes the device-mediator
 /// stub set together with <see cref="HeadlessWeatherDataMediator"/>. No
 /// sequence instruction takes it: the Connect instructions reach devices
-/// through the connections port (#1545), and there are no flat-device
-/// sequence instructions in the tree.
+/// through the connections port (#1545), and the flat-panel instructions
+/// go through <c>IFlatCaptureExecutor</c>.
 /// </summary>
 public sealed class HeadlessFlatDeviceMediator : IFlatDeviceMediator {
 
