@@ -350,7 +350,9 @@ namespace OpenAstroAra.Test {
         public double TargetRightAscension => throw new InvalidOperationException("no target set");
         public double TargetDeclination => throw new InvalidOperationException("no target set");
         public DriveRate TrackingRate { get => DriveRate.Sidereal; set { } }
-        public bool Tracking { get { ThrowIfLatched(); return TrackingOn; } set => TrackingOn = value; }
+        public bool Tracking { get { ThrowIfLatched(); return TrackingOn; } set { TrackingOn = value; OnTrackingWrite?.Invoke(value); } }
+        /// <summary>#2173 review — runs on each Tracking write, after it lands (a stop that races the GoTo's enable).</summary>
+        public volatile Action<bool>? OnTrackingWrite;
         public bool AtPark { get { ThrowIfLatched(); return ReportsArrival && _atPark; } }
         public bool AtHome {
             get {
@@ -379,7 +381,19 @@ namespace OpenAstroAra.Test {
         public bool CanUnpark => true;
         public bool CanSetTracking => true;
         public bool CanPulseGuide => true;
-        public bool CanFindHome => FindHomeCapable;
+        public bool CanFindHome {
+            get {
+                if (CanFindHomeReadFails) {
+                    throw new InvalidOperationException("CanFindHome read failed");
+                }
+                CanFindHomeHold?.Wait();
+                return FindHomeCapable;
+            }
+        }
+        /// <summary>#2173 review — the CanFindHome read throws (a driver or link fault), or blocks until the test sets the
+        /// event (a slow link: the read times out).</summary>
+        public volatile bool CanFindHomeReadFails;
+        public volatile ManualResetEventSlim? CanFindHomeHold;
         /// <summary>#2173 — the mount's Alpaca CanFindHome (true unless a test turns it off).</summary>
         public volatile bool FindHomeCapable = true;
         public bool CanSetPierSide { get => PierSideSettable; set => PierSideSettable = value; }

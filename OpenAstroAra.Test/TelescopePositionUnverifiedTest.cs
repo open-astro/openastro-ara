@@ -77,9 +77,11 @@ namespace OpenAstroAra.Test {
             public override DateTimeOffset GetUtcNow() => new(Interlocked.Read(ref _ticks), TimeSpan.Zero);
         }
 
-        private TelescopeService Build(IMountPoseStore? store = null, IProfileService? profile = null, TimeSpan? refresh = null, TimeProvider? clock = null) =>
+        private TelescopeService Build(IMountPoseStore? store = null, IProfileService? profile = null, TimeSpan? refresh = null, TimeProvider? clock = null,
+                TimeSpan? poseRead = null) =>
             new(faults: _faults, profileService: profile, poseStore: store) {
                 PoseClock = clock ?? TimeProvider.System,
+                PoseReadTimeout = poseRead ?? TimeSpan.FromSeconds(10),
                 RefreshPeriod = refresh ?? TimeSpan.FromMilliseconds(20),
                 StopGuidingBeforeMoveTimeout = TimeSpan.FromMilliseconds(50),
                 HomeSearchPollInterval = TimeSpan.FromMilliseconds(20),
@@ -484,6 +486,154 @@ namespace OpenAstroAra.Test {
             await Task.Delay(150);
 
             Assert.That(Runtime(svc)!.PositionUnverified, Is.False, "the park's own landing");
+        }
+
+        // #2173 review — after a GoTo's noted target no longer explains anything, a power blip that moves the Dec to about
+        // that target must still flag. Shared by the GoTo-target tests below.
+        private static async Task ABlipToDec24FlagsAsync(TelescopeService svc, ManualClock clock, FakeTelescopeDevice mount) {
+            await Task.Delay(150);
+            clock.Advance(MountPoseTrust.QuietWindow + TimeSpan.FromSeconds(30)); // nothing commanded for a while
+            await Task.Delay(150);
+            mount.Dec = 24.2; // the blip lands near the dropped GoTo's target
+            for (var i = 0; i < 3; i++) {
+                await Task.Delay(150);
+                clock.Advance(MountPoseTrust.ConfirmGap + TimeSpan.FromSeconds(1));
+            }
+            await WaitForAsync(() => Runtime(svc)?.PositionUnverifiedReason == MountPoseTrust.PoseJumpInSession, "the blip flagged as a jump");
+        }
+
+        private async Task<(TelescopeService Svc, ManualClock Clock, FakeTelescopeDevice Mount)> TrustedAtDec30Async() {
+            var clock = new ManualClock();
+            _configure = f => { f.ReportsAtHome = false; f.Dec = 30.0; };
+            var svc = Build(clock: clock);
+            await ConnectAsync(svc);
+            await WaitForAsync(() => Runtime(svc)?.DeclinationDegrees is 30.0, "a still position");
+            return (svc, clock, Current);
+        }
+
+        // #2173 review — a REST GoTo to Dec 24 whose PUT throws never got there: its target must not excuse a later jump.
+        [Test]
+        public async Task A_rest_goto_whose_put_fails_excuses_no_later_jump_to_its_target() {
+            var (svc, clock, mount) = await TrustedAtDec30Async();
+            using var _ = svc;
+            mount.OnSlew = (_, _) => throw new InvalidOperationException("the PUT failed");
+
+            await svc.SlewAsync(new SlewRequestDto(3.77, 24.0), null, CancellationToken.None);
+            await WaitForAsync(() => mount.Slews == 1, "the failed PUT");
+
+            await ABlipToDec24FlagsAsync(svc, clock, mount);
+        }
+
+        // #2173 review — the same GoTo dropped because a routine took the mount before it went out.
+        [Test]
+        public async Task A_rest_goto_dropped_for_the_motion_owner_excuses_no_later_jump_to_its_target() {
+            var (svc, clock, mount) = await TrustedAtDec30Async();
+            using var _ = svc;
+            using (svc.AcquireMotion(MotionOwners.PolarAlign)) {
+                await svc.SlewAsync(new SlewRequestDto(3.77, 24.0), null, CancellationToken.None);
+                await Task.Delay(200); // the background send sees the owner and drops it
+            }
+            Assert.That(mount.Slews, Is.Zero);
+
+            await ABlipToDec24FlagsAsync(svc, clock, mount);
+        }
+
+        // #2173 review — the same GoTo dropped because a stop landed during its tracking enable.
+        [Test]
+        public async Task A_rest_goto_dropped_after_a_stop_excuses_no_later_jump_to_its_target() {
+            var (svc, clock, mount) = await TrustedAtDec30Async();
+            using var _ = svc;
+            mount.TrackingOn = false;
+            var fenced = 0;
+            mount.OnTrackingWrite = on => {
+                if (on && Interlocked.Exchange(ref fenced, 1) == 0) {
+                    svc.FenceMotion("test_stop"); // a stop that races the GoTo's tracking enable
+                }
+            };
+
+            await svc.SlewAsync(new SlewRequestDto(3.77, 24.0), null, CancellationToken.None);
+            await WaitForAsync(() => Volatile.Read(ref fenced) == 1, "the stop during the enable");
+            await Task.Delay(100);
+            Assert.That(mount.Slews, Is.Zero, "dropped after the stop");
+
+            await ABlipToDec24FlagsAsync(svc, clock, mount);
+        }
+
+        // #2173 review — a sequencer GoTo whose PUT throws: the mediator's end of the move drops its target too.
+        [Test]
+        public async Task A_sequence_goto_that_fails_excuses_no_later_jump_to_its_target() {
+            var (svc, clock, mount) = await TrustedAtDec30Async();
+            using var _ = svc;
+            mount.OnSlew = (_, _) => throw new InvalidOperationException("the PUT failed");
+
+            await Assert.ThrowsAsync<SequenceEntityFailedException>(() =>
+                ((ITelescopeMediator)svc).SlewToCoordinatesAsync(new Coordinates(Angle.ByHours(3.77), Angle.ByDegree(24.0), Epoch.JNOW), CancellationToken.None));
+            Assert.That(mount.Slews, Is.EqualTo(1));
+
+            await ABlipToDec24FlagsAsync(svc, clock, mount);
+        }
+
+        // #2173 review — the user's Home on a mount whose CanFindHome is false, sent from a trusted pose: the FindHome call
+        // returns at once and the mount moves on for longer than the quiet window over a link that drops the Slewing
+        // reads. The move stays Ara's own until the mount reports Home, so the landing is no jump.
+        [Test]
+        public async Task A_home_that_returns_at_once_on_a_mount_that_cannot_find_home_lands_with_no_jump() {
+            var clock = new ManualClock();
+            _configure = f => { f.ReportsAtHome = false; f.Dec = 30.0; f.FindHomeCapable = false; };
+            using var svc = Build(clock: clock);
+            await ConnectAsync(svc);
+            await WaitForAsync(() => Runtime(svc)?.DeclinationDegrees is 30.0, "a still position");
+            var mount = Current;
+
+            mount.SlewingReadFails = true; // the slow link, from the Home on
+            await svc.FindHomeAsync(null, CancellationToken.None);
+            await WaitForAsync(() => mount.Homes == 1, "the Home call");
+            await Task.Delay(100);
+            clock.Advance(MountPoseTrust.QuietWindow + TimeSpan.FromSeconds(30)); // it moves on, unseen
+            mount.Dec = 90.0; // where it homes
+            mount.ReportsAtHome = true;
+            await Task.Delay(100);
+            mount.SlewingReadFails = false;
+            for (var i = 0; i < 3; i++) {
+                await Task.Delay(150);
+                clock.Advance(MountPoseTrust.ConfirmGap + TimeSpan.FromSeconds(1));
+            }
+            await Task.Delay(150);
+
+            Assert.That(Runtime(svc)!.PositionUnverified, Is.False, "the Home's own landing");
+        }
+
+        // #2173 review — an unverified mount over a slow link: the fresh CanFindHome read times out, and Home still runs on
+        // the connect's capability read (the mount said it can find Home).
+        [Test]
+        public async Task Home_runs_while_unverified_when_the_fresh_can_find_home_read_times_out() {
+            _configure = f => { f.ReportsAtHome = true; f.Dec = 90; };
+            using var svc = Build(poseRead: TimeSpan.FromMilliseconds(200));
+            await ConnectAsync(svc);
+            await WaitForAsync(() => Runtime(svc)?.PositionUnverified == true, "the unverified position");
+            using var hold = new ManualResetEventSlim(false);
+            Current.CanFindHomeHold = hold; // the slow link: the read hangs past the timeout
+            try {
+                await svc.FindHomeAsync(null, CancellationToken.None);
+                await WaitForAsync(() => Current.Homes == 1, "the Home");
+            } finally {
+                hold.Set();
+            }
+        }
+
+        // #2173 review — the reverse: the connect read said the mount cannot find Home, and the fresh read fails. Home is
+        // still refused, with the hand controller named.
+        [Test]
+        public async Task Home_stays_refused_while_unverified_when_the_connect_read_said_no_and_the_fresh_read_fails() {
+            using var svc = await ConnectedAtFalseZeroAsync(also: f => f.FindHomeCapable = false);
+            Current.CanFindHomeReadFails = true;
+
+            var home = await RefusedAsync(() => svc.FindHomeAsync(null, CancellationToken.None));
+
+            Assert.That(home.Cause, Is.EqualTo(RefusalCatalog.MountPositionUnverified));
+            Assert.That(home.Message, Does.Contain("hand controller"));
+            await Task.Delay(100);
+            Assert.That(Current.Homes, Is.Zero);
         }
 
         // #2173 review — a driver that still reads Slewing false right after Park returns, before its slew starts: that

@@ -48,7 +48,8 @@ public sealed partial class TelescopeService {
     // Test knob: the clock of the in-session quiet window.
     internal TimeProvider PoseClock { get; init; } = TimeProvider.System;
 
-    private static readonly TimeSpan PoseReadTimeout = TimeSpan.FromSeconds(10);
+    // Test knob (#2173 review): how long one guard read of the mount may take before it counts as failed.
+    internal TimeSpan PoseReadTimeout { get; init; } = TimeSpan.FromSeconds(10);
 
     // Caller holds the gate (ResetSessionLocked).
     private void BeginPoseSessionLocked() {
