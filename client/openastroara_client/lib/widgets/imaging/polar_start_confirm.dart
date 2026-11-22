@@ -28,12 +28,13 @@ import '../adaptive_dialog.dart';
 /// question for the refusal's `reach_deg`, the rig's reach for this stage (a
 /// Check turns by the Check step, which can be bigger than the turn size the
 /// Start card's list confirmed), and once that is saved asks the rig for the
-/// plan again. Cancel there just closes: nothing starts.
+/// plan again. Cancel there just closes: nothing starts. When it cannot ask
+/// ([confirmClearance] returns null) the refusal reaches the caller.
 Future<void> confirmAndStartPolarAlign(
   BuildContext context,
   PolarAlignClient api, {
   String? stage,
-  Future<bool> Function(double reachDeg)? confirmClearance,
+  Future<bool?> Function(double reachDeg)? confirmClearance,
 }) async {
   PolarAlignStartPlan plan;
   try {
@@ -46,7 +47,9 @@ Future<void> confirmAndStartPolarAlign(
         !context.mounted) {
       rethrow;
     }
-    if (!await confirmClearance(reach.toDouble())) return;
+    final confirmed = await confirmClearance(reach.toDouble());
+    if (confirmed == null) rethrow;
+    if (!confirmed) return;
     plan = await api.startPlan(stage: stage);
   }
   if (!context.mounted) return;

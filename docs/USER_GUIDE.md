@@ -224,8 +224,7 @@ framing/focus loop when you need to point or focus by eye.
   turn its RA axis by motor speed: Polar Align always turns RA with the motor. Before anything moves,
   a confirm step shows which way RA will turn (east or west: on the first start the **Turn
   direction** setting, later back toward Polar Align's start) and how far (about 10° twice); the
-  mount moves only when you tap **Move the mount**. Keep a hand on the mount's power switch. Each
-  Start is one measurement, its two turns the way the confirm step says.
+  mount moves only when you tap **Move the mount**. Keep a hand on the mount's power switch.
 - **Room to turn the mount** (#2165). Before the motor first turns a mount, Polar Align asks one
   question: "Polar Align will turn the mount up to N° each way. Is there room for the tube,
   counterweight and cables to move that far?" N is how far this run turns RA each way: the two turns,

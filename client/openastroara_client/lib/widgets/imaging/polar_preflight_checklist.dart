@@ -299,16 +299,18 @@ Future<String?> confirmPolarClearance(
 /// (the refusal's `reach_deg`: a Check turns by the Check step, which can be
 /// bigger than the turn size the Start card's list shows), and "Yes, there is
 /// room" saves this mount's entry for it. True once that is saved; false on
-/// Cancel, on Take back, and with no mount. A failed save throws its message
-/// in the user's words (a [StateError]).
-Future<bool> confirmPolarClearanceForStart(
+/// Cancel and on Take back. Null when it cannot ask (the pre-flight list is
+/// not loaded or failed to read, or names no mount): the caller shows the
+/// rig's refusal. A failed save throws its message in the user's words (a
+/// [StateError]).
+Future<bool?> confirmPolarClearanceForStart(
   BuildContext context,
   WidgetRef ref,
   double reachDeg,
 ) async {
   final preflight = ref.read(polarAlignPreflightProvider).value;
   final key = preflight?.mountKey;
-  if (preflight == null || key == null) return false;
+  if (preflight == null || key == null) return null;
   final result = await _askPolarClearance(
     context,
     key,

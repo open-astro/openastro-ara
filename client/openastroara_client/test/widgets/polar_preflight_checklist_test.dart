@@ -25,6 +25,9 @@ class _Rig implements PolarAlignClient {
   bool pointingFails = false;
   bool parked = false;
 
+  /// The pre-flight list fails to read (#2165: Start stays on, the rig judges).
+  bool preflightFails = false;
+
   /// How far the run turns RA each way: the turn size on the Start card.
   double reachDeg = 20.5;
 
@@ -41,6 +44,7 @@ class _Rig implements PolarAlignClient {
   @override
   Future<PolarAlignPreflight?> preflight({String? stage}) async {
     preflightReads++;
+    if (preflightFails) throw StateError('the pre-flight list did not load');
     if (!mountConnected) return _noMount;
     if (pointingFails) return _pointingFails;
     return rigPreflightFor(
@@ -424,6 +428,39 @@ void main() {
         reason: 'Cancel is not an error: the refusal does not reach the card',
       );
       expect(rig.section.puts, isEmpty);
+      expect(rig.started, isEmpty);
+    },
+  );
+
+  // #2165: with no pre-flight list to ask from (it failed to read) Start stays
+  // on and the rig's clearance refusal reaches the card: a tap is never silent.
+  testWidgets(
+    'A clearance refusal with no pre-flight list shows the refusal on the card',
+    (tester) async {
+      final rig = _Rig()..preflightFails = true;
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            ...polarAlignSectionOverrides(rig.section),
+            polarAlignApiProvider.overrideWithValue(rig),
+            polarAlignLiveProvider.overrideWith(_Idle.new),
+          ],
+          child: const MaterialApp(
+            home: Scaffold(
+              body: SingleChildScrollView(child: PolarAlignPanel()),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(_onPressed(tester, 'polar-align-start'), isNotNull);
+
+      await tester.tap(find.byKey(const Key('polar-align-start')));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('polar-clearance-dialog')), findsNothing);
+      expect(find.byKey(const Key('polar-start-confirm')), findsNothing);
+      expect(find.textContaining('Confirm there is room'), findsOneWidget);
       expect(rig.started, isEmpty);
     },
   );
