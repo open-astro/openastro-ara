@@ -1188,6 +1188,25 @@ void main() {
       await _teardownPanel(tester, container);
     });
 
+    testWidgets('a window whose Dec pulses the star did not answer reads as backlash, not noisy (#2072)', (tester) async {
+      final ws = StreamController<WsEvent>.broadcast();
+      addTearDown(() => unawaited(ws.close()));
+      final container = await _pump(tester, status: guiding, ws: ws.stream);
+      ws.add(WsEvent(type: 'guider.pa_residual', ts: DateTime.utc(2026, 11, 22), seq: 1, payload: const {
+        'id': 'r9', 'status': 'done', 'sample_seconds': 301.0, 'target_seconds': 300.0, 'frames': 130,
+        'pa_error_min_arcmin': 45.61, 'uncertainty_arcmin': 1.0, 'reliable': false, 'align_error_arcmin': 0.61,
+        'above_align': null, 'dec_pulses_unanswered': true,
+      }));
+      await tester.pump();
+      await tester.pump();
+      expect(find.text('PA ≥ 46′ · backlash'), findsOneWidget);
+      final tip = tester.widget<Tooltip>(find.ancestor(
+          of: find.text('PA ≥ 46′ · backlash'), matching: find.byType(Tooltip)));
+      expect(tip.message, contains("Dec backlash ate the guide pulses, so this window can't measure polar alignment."));
+      expect(tip.message, isNot(contains('too noisy')));
+      await _teardownPanel(tester, container);
+    });
+
     testWidgets('a fit far above Polar Align says so instead of noisy (#1731)', (tester) async {
       final container = await _pump(tester,
           status: const GuiderStatus(

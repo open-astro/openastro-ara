@@ -11772,6 +11772,12 @@ abstract class AppLocalizations {
   /// **'PA ≥ {value} · disagrees with Polar Align'**
   String paResidualChipDisagrees(String value);
 
+  /// Guiding strip chip: the star did not answer the Dec guide pulses (Dec backlash), so the figure is not a polar-alignment measurement (#2072)
+  ///
+  /// In en, this message translates to:
+  /// **'PA ≥ {value} · backlash'**
+  String paResidualChipBacklash(String value);
+
   /// Guiding strip chip: the residual is too uncertain for a firm figure
   ///
   /// In en, this message translates to:
@@ -11871,6 +11877,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Polar Align and guiding disagree ({align} vs at least {guiding}). Either Dec backlash ate guide pulses, so the guiding figure is too high, or the mount shifted since the alignment or its reference was wrong, so the Polar Align figure is too low. Run Polar Align again: about {align} again points at backlash, much more points at the mount or the alignment.'**
   String paResidualDetailDisagree(String align, String guiding);
+
+  /// Guiding residual tooltip: the star did not answer the Dec guide pulses (#2072)
+  ///
+  /// In en, this message translates to:
+  /// **'Dec backlash ate the guide pulses, so this window can\'t measure polar alignment.'**
+  String get paResidualDetailBacklash;
 
   /// Guiding residual tooltip: the figure is too uncertain
   ///

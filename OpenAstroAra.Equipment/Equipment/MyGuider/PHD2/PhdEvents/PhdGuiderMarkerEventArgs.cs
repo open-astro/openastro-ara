@@ -23,7 +23,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2.PhdEvents {
     public sealed class PhdGuiderMarkerEventArgs : System.EventArgs {
 
         /// <summary>
-        /// <c>dithered</c> | <c>settling</c> | <c>settle_done</c> | <c>star_lost</c> |
+        /// <c>dithered</c> | <c>settle_begin</c> | <c>settling</c> | <c>settle_done</c> | <c>star_lost</c> |
         /// <c>calibration_started</c> | <c>calibration_complete</c> | <c>calibration_failed</c> |
         /// <c>calibrating</c> | <c>guiding_started</c> | <c>guiding_stopped</c> | <c>paused</c> |
         /// <c>resumed</c> | <c>lock_position_lost</c> | <c>guiding_assistant_progress</c> |

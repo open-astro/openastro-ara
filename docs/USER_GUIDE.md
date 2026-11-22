@@ -382,7 +382,11 @@ framing/focus loop when you need to point or focus by eye.
   can't see: refraction, flexure and the mount's own slop. It is a lower bound ("≥"): Dec drift at
   one hour angle shows only part of the error. The tooltip has the drift, the hour angle and
   tonight's Polar Align result to compare. "noisy" means the guiding was too rough for a firm
-  figure; "disagrees with Polar Align" means it came out well above tonight's Polar Align result,
+  figure. "backlash" means the star did not answer the Dec pulses: the guider kept pushing one way
+  and the star kept moving away, which is Dec backlash, not drift, so that window can't measure
+  polar alignment. Both are marked unreliable. When the Dec pulses change direction, Ara also waits
+  until the star answers the new pulses, at most 60 s, before it measures again, so the gear's
+  slack is taken up first. "disagrees with Polar Align" means it came out well above tonight's Polar Align result,
   which a lower bound can't be: either Dec backlash ate guide pulses (the guiding figure is too
   high), or the mount shifted since the alignment or its reference was wrong (the Polar Align figure
   is too low). Run Polar Align again: about the same figure again points at backlash, a much larger
