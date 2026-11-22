@@ -25,10 +25,16 @@ import '../adaptive_dialog.dart';
 /// #2068 — while the mount's clearance is not confirmed the rig refuses the
 /// motor start's plan; the step then offers Turn RA by hand alone, which moves
 /// nothing (Joey, 2026-11-21).
+///
+/// #2165 — with [confirmClearance] the step first asks the clearance question
+/// for the refusal's `reach_deg`, the rig's reach for this stage (a Check turns
+/// by the Check step, which can be bigger than the turn size the Start card's
+/// list confirmed), and once that is saved asks the rig for the plan again.
 Future<void> confirmAndStartPolarAlign(
   BuildContext context,
   PolarAlignClient api, {
   String? stage,
+  Future<bool> Function(double reachDeg)? confirmClearance,
 }) async {
   PolarAlignStartPlan plan;
   var motorAllowed = true;
@@ -36,9 +42,23 @@ Future<void> confirmAndStartPolarAlign(
     plan = await api.startPlan(stage: stage);
   } on Refusal catch (refusal) {
     if (refusal.cause != RefusalCause.polarAlignClearanceNotConfirmed) rethrow;
-    plan = await api.startPlan(stage: stage, handTurn: true);
-    if (!plan.handTurnAvailable) rethrow;
-    motorAllowed = false;
+    PolarAlignStartPlan? confirmed;
+    if (context.mounted) {
+      confirmed = await _planAfterClearance(
+        context,
+        api,
+        stage,
+        refusal,
+        confirmClearance,
+      );
+    }
+    if (confirmed != null) {
+      plan = confirmed;
+    } else {
+      plan = await api.startPlan(stage: stage, handTurn: true);
+      if (!plan.handTurnAvailable) rethrow;
+      motorAllowed = false;
+    }
   }
   if (!context.mounted) return;
   final choice = await showAdaptiveAlert<PolarStartChoice>(
@@ -53,6 +73,29 @@ Future<void> confirmAndStartPolarAlign(
       await api.start(plan.byHand());
     case null:
       return;
+  }
+}
+
+/// #2165 the motor plan once the user confirmed the room for [refusal]'s
+/// reach; null when there is no question to ask, the user did not confirm, or
+/// the rig still refuses for clearance.
+Future<PolarAlignStartPlan?> _planAfterClearance(
+  BuildContext context,
+  PolarAlignClient api,
+  String? stage,
+  Refusal refusal,
+  Future<bool> Function(double reachDeg)? confirmClearance,
+) async {
+  final reach = refusal.parameters['reach_deg'];
+  if (confirmClearance == null || reach is! num) {
+    return null;
+  }
+  if (!await confirmClearance(reach.toDouble())) return null;
+  try {
+    return await api.startPlan(stage: stage);
+  } on Refusal catch (again) {
+    if (again.cause != RefusalCause.polarAlignClearanceNotConfirmed) rethrow;
+    return null;
   }
 }
 

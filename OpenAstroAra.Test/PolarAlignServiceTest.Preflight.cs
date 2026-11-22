@@ -92,6 +92,28 @@ namespace OpenAstroAra.Test {
             mount.Verify(m => m.MoveAxis(TelescopeAxes.Primary, It.IsNotIn(0.0)), Times.Never, "nothing moved");
         }
 
+        // #2165 — a Check turns by the Check step, set apart from the turn size: a confirmation for the fine run's reach
+        // does not cover a bigger Check step, and the refusal carries the Check's own reach for the app to confirm.
+        [Test]
+        public async Task A_Check_start_with_a_bigger_Check_step_is_refused_with_the_Checks_own_reach() {
+            var fake = NewFake();
+            var mount = NewMount();
+            var store = NewStore();
+            store.PutPolarAlignSettings(store.GetPolarAlignSettings() with { SeedRotationDeg = 10.0, CheckStepDeg = 20.0, MountClearance = null });
+            using var svc = NewService(fake, new ScriptedSolver(), mount, store: store);
+            var fine = await svc.GetPreflightAsync(null, CancellationToken.None).ConfigureAwait(false);
+            store.PutPolarAlignSettings(store.GetPolarAlignSettings().Confirmed(fine.MountKey!, fine.Planned.ReachDeg));
+
+            var refusal = await Assert.ThrowsAsync<RefusalException>(() => svc.StartConfirmedAsync(PolarAlignStages.Check, null, CancellationToken.None));
+
+            Assert.Multiple(() => {
+                Assert.That(refusal!.Cause, Is.EqualTo(RefusalCatalog.PolarAlignClearanceNotConfirmed));
+                Assert.That(refusal.Parameters["reach_deg"], Is.EqualTo(fine.Planned.ReachDeg + 20.0), "two 20° Check turns, not two 10° turns");
+                Assert.That(fake.LeaseCalls, Is.Empty, "a refused start takes no lease");
+            });
+            mount.Verify(m => m.MoveAxis(TelescopeAxes.Primary, It.IsNotIn(0.0)), Times.Never, "nothing moved");
+        }
+
         [Test]
         public async Task Preflight_lists_every_check_and_Start_refuses_on_a_fail() {
             var fake = NewFake();

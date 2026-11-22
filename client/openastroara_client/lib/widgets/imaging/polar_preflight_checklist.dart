@@ -272,7 +272,8 @@ String polarPreflightCheckTitle(AppLocalizations l10n, String id) =>
 /// [PolarAlignPreflightPlanned.reachDeg]: its turns plus the 0.5° direction
 /// test when owed), and on "Yes, there is room" saves this mount's entry
 /// confirmed for that reach, then reads the pre-flight list again. Take back
-/// (a confirmed mount) removes the entry (Joey, 2026-11-21). Nothing is saved
+/// (a mount with an entry, confirmed for this reach or a smaller one) removes
+/// the entry (Joey, 2026-11-21). Nothing is saved
 /// on Cancel. The section is loaded from the rig before it is saved (ADR
 /// 0015). Returns a failed save's message in the user's words, null
 /// otherwise; the caller shows it.
@@ -283,27 +284,87 @@ Future<String?> confirmPolarClearance(
 ) async {
   final key = preflight.mountKey;
   if (key == null) return null;
-  final confirmed =
-      preflight.check(PolarAlignPreflightChecks.clearanceConfirmed)?.passes ??
+  final result = await _askPolarClearance(
+    context,
+    key,
+    preflight.planned.reachDeg,
+    hasEntry: polarMountHasClearanceEntry(ref, preflight),
+  );
+  if (result == null || !context.mounted) return null;
+  return _savePolarClearance(context, ref, result.change(key));
+}
+
+/// #2165 the confirm step's clearance question: a motor start the rig refused
+/// for clearance asks about [reachDeg], the rig's reach for that start's stage
+/// (the refusal's `reach_deg`: a Check turns by the Check step, which can be
+/// bigger than the turn size the Start card's list shows), and "Yes, there is
+/// room" saves this mount's entry for it. True once that is saved; false on
+/// Cancel, on Take back, and with no mount. A failed save throws its message
+/// in the user's words (a [StateError]).
+Future<bool> confirmPolarClearanceForStart(
+  BuildContext context,
+  WidgetRef ref,
+  double reachDeg,
+) async {
+  final preflight = ref.read(polarAlignPreflightProvider).value;
+  final key = preflight?.mountKey;
+  if (preflight == null || key == null) return false;
+  final result = await _askPolarClearance(
+    context,
+    key,
+    reachDeg,
+    hasEntry: polarMountHasClearanceEntry(ref, preflight),
+  );
+  if (result == null || !context.mounted) return false;
+  final failure = await _savePolarClearance(context, ref, result.change(key));
+  if (failure != null) throw StateError(failure);
+  return result.saved != null;
+}
+
+/// #2165 the mount has a clearance entry (Take back has something to remove),
+/// confirmed for this run's reach or not; the clearance row's pass while the
+/// settings are not loaded yet.
+bool polarMountHasClearanceEntry(
+  WidgetRef ref,
+  PolarAlignPreflight preflight,
+) {
+  final key = preflight.mountKey;
+  final settings = ref.read(polarAlignSettingsProvider).value;
+  if (key != null && settings != null) {
+    return settings.mountClearance.containsKey(key);
+  }
+  return preflight.check(PolarAlignPreflightChecks.clearanceConfirmed)?.passes ??
       false;
-  final reachDeg = preflight.planned.reachDeg;
+}
+
+/// The dialog's answer for [reachDeg]: the change it makes to the settings,
+/// and the entry it saves (null for Take back). Null on Cancel.
+Future<({PolarAlignMountClearance? saved})?> _askPolarClearance(
+  BuildContext context,
+  String key,
+  double reachDeg, {
+  required bool hasEntry,
+}) async {
   final result = await showAdaptiveAlert<PolarClearanceResult>(
     context: context,
     builder: (_) =>
-        PolarClearanceDialog(reachDeg: reachDeg, confirmed: confirmed),
+        PolarClearanceDialog(reachDeg: reachDeg, confirmed: hasEntry),
   );
-  if (result == null || !context.mounted) return null;
-  return _savePolarClearance(
-    context,
-    ref,
-    (s) => switch (result) {
-      PolarClearanceResult.takeBack => s.withoutMountClearance(key),
-      PolarClearanceResult.confirm => s.withMountClearance(
-        key,
-        PolarAlignMountClearance(confirmedReachDeg: reachDeg),
-      ),
-    },
-  );
+  return switch (result) {
+    null => null,
+    PolarClearanceResult.takeBack => (saved: null),
+    PolarClearanceResult.confirm => (
+      saved: PolarAlignMountClearance(confirmedReachDeg: reachDeg),
+    ),
+  };
+}
+
+extension on ({PolarAlignMountClearance? saved}) {
+  PolarAlignSettings Function(PolarAlignSettings) change(String key) =>
+      (s) => switch (saved) {
+        null => s.withoutMountClearance(key),
+        final entry => s.withMountClearance(key, entry),
+      };
 }
 
 /// #2068 Take back: this mount's entry removed, so the clearance check fails
@@ -444,7 +505,8 @@ class PolarClearanceDialog extends StatelessWidget {
   /// How far this run turns RA each way: the rig's plan.
   final double reachDeg;
 
-  /// The mount's clearance is confirmed now: the dialog offers Take back.
+  /// The mount has a clearance entry, for this reach or a smaller one: the
+  /// dialog offers Take back.
   final bool confirmed;
 
   @override

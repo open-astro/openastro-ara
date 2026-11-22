@@ -27,10 +27,16 @@ class _Rig implements PolarAlignClient {
 
   /// How far the run turns RA each way: the turn size on the Start card.
   double reachDeg = 20.5;
+
+  /// How far a Check turns RA each way: the Check step, set apart (#2165).
+  double? checkReachDeg;
   final List<PolarAlignStartPlan> started = [];
 
-  bool get _confirmed =>
-      rigPreflightFor(section.initial, reachDeg: reachDeg).ready;
+  double _reachFor(String? stage) =>
+      stage == PolarAlignStages.check ? checkReachDeg ?? reachDeg : reachDeg;
+
+  bool _confirmed(String? stage) =>
+      rigPreflightFor(section.initial, reachDeg: _reachFor(stage)).ready;
 
   @override
   Future<PolarAlignPreflight?> preflight({String? stage, bool handTurn = false}) async {
@@ -49,11 +55,12 @@ class _Rig implements PolarAlignClient {
   // confirmed; a hand-turn start's is not (Joey, 2026-11-21).
   @override
   Future<PolarAlignStartPlan> startPlan({String? stage, bool handTurn = false}) async {
-    if (!handTurn && !_confirmed) {
-      throw const Refusal(
+    if (!handTurn && !_confirmed(stage)) {
+      throw Refusal(
         cause: RefusalCause.polarAlignClearanceNotConfirmed,
         reason: 'polar-align-clearance-not-confirmed',
         detail: "Confirm this mount's clearance first",
+        parameters: {'reach_deg': _reachFor(stage)},
         status: 409,
       );
     }
@@ -315,6 +322,75 @@ void main() {
     },
   );
 
+  // #2165: a Check turns by the Check step, set apart from the turn size, so
+  // the fine run's confirmation can be too small for it. The start asks the
+  // clearance question for the rig's reach, saves it, and the motor goes.
+  testWidgets(
+    'A Check whose step is bigger than the turn asks about its own reach and then starts on the motor',
+    (tester) async {
+      final rig = await _pump(
+        tester,
+        settings: rigPolarAlign.withMountClearance(
+          preflightMountKey,
+          const PolarAlignMountClearance(confirmedReachDeg: 20.5),
+        ),
+      );
+      rig.checkReachDeg = 40.5;
+
+      await tester.tap(find.byKey(const Key('polar-align-start-check')));
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const Key('polar-clearance-dialog')),
+        findsOneWidget,
+        reason: "the rig refused the Check's motor start for clearance",
+      );
+      expect(find.textContaining('40.5°'), findsOneWidget);
+      await tester.tap(find.byKey(const Key('polar-clearance-confirm')));
+      await tester.pumpAndSettle();
+
+      expect(
+        rig.section.puts.last.mountClearance[preflightMountKey],
+        const PolarAlignMountClearance(confirmedReachDeg: 40.5),
+        reason: "the entry covers the Check's reach, the refusal's number",
+      );
+      expect(find.byKey(const Key('polar-start-confirm')), findsOneWidget);
+      expect(
+        _onPressed(tester, 'polar-start-confirm-go'),
+        isNotNull,
+        reason: 'the plan was asked again and the motor is allowed',
+      );
+      await tester.tap(find.byKey(const Key('polar-start-confirm-go')));
+      await tester.pumpAndSettle();
+      expect(rig.started.single.stage, PolarAlignStages.check);
+      expect(rig.started.single.handTurn, isFalse);
+    },
+  );
+
+  // #2165: an entry for a smaller reach than the run's still has Take back,
+  // which removes it.
+  testWidgets(
+    'The clearance dialog offers Take back for an entry too small for the run',
+    (tester) async {
+      final rig = await _pump(
+        tester,
+        settings: rigPolarAlign.withMountClearance(
+          preflightMountKey,
+          const PolarAlignMountClearance(confirmedReachDeg: 10),
+        ),
+      );
+
+      await tester.tap(find.byKey(const Key('polar-preflight-clearance')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('polar-clearance-take-back')));
+      await tester.pumpAndSettle();
+
+      expect(
+        rig.section.puts.single.mountClearance.containsKey(preflightMountKey),
+        isFalse,
+      );
+    },
+  );
+
   // Joey, 2026-11-21: a Turn RA by hand start moves nothing, so an unconfirmed
   // clearance only warns for it; the card reads that list and Start stays on.
   testWidgets(
@@ -347,6 +423,11 @@ void main() {
 
       await tester.tap(find.byKey(const Key('polar-align-start')));
       await tester.pumpAndSettle();
+      // #2165: the start asks the clearance question first; Cancel saves
+      // nothing and leaves Turn RA by hand.
+      await tester.tap(find.byKey(const Key('polar-clearance-cancel')));
+      await tester.pumpAndSettle();
+      expect(rig.section.puts, isEmpty);
 
       expect(find.byKey(const Key('polar-start-confirm')), findsOneWidget);
       expect(
