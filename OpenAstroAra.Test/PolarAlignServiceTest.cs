@@ -325,7 +325,7 @@ namespace OpenAstroAra.Test {
             store ??= NewStore();
             if (motorDirectionSaved && store.GetPolarAlignMotorDirection() is null) {
                 var driver = PolarAlignService.MountDriverOf(mount.GetInfo());
-                store.PutPolarAlignMotorDirection(new PolarAlignMotorDirectionDto(1, driver.Mount, driver.Version, DateTimeOffset.UtcNow));
+                store.PutPolarAlignMotorDirection(new PolarAlignMotorDirectionDto(1, driver.Mount, driver.Info, driver.Version, DateTimeOffset.UtcNow));
             }
             if (mount is IMocked<ITelescopeMediator> mocked && mount is ITelescopeService service) {
                 // #2067 — a mock set up as the telescope service answers a turn's poll (position and pier side) with its

@@ -341,7 +341,7 @@ void main() {
     (tester) async {
       final direction = _DirectionRig(
         PolarAlignMotorDirectionState(
-          saved: PolarAlignMotorDirection(sign: -1, mountKey: 'hae29c-unique-id', driverVersion: '6.0.0', testedUtc: DateTime.utc(2026, 11, 21)),
+          saved: PolarAlignMotorDirection(sign: -1, mountKey: 'hae29c-unique-id', driverInfo: '', driverVersion: '6.0.0', testedUtc: DateTime.utc(2026, 11, 21)),
           matchesConnectedMount: true,
         ),
       );
@@ -373,7 +373,7 @@ void main() {
       await tester.pumpAndSettle();
       // The run's 0.5° test saved a sign on the rig.
       direction.state = PolarAlignMotorDirectionState(
-        saved: PolarAlignMotorDirection(sign: 1, mountKey: 'hae29c-unique-id', driverVersion: '6.0.0', testedUtc: DateTime.utc(2026, 11, 21)),
+        saved: PolarAlignMotorDirection(sign: 1, mountKey: 'hae29c-unique-id', driverInfo: '', driverVersion: '6.0.0', testedUtc: DateTime.utc(2026, 11, 21)),
         matchesConnectedMount: true,
       );
       live.set(const PolarAlignLive(phase: PolarAlignStates.stopped));
@@ -390,7 +390,7 @@ void main() {
     (tester) async {
       final direction = _DirectionRig(
         PolarAlignMotorDirectionState(
-          saved: PolarAlignMotorDirection(sign: 1, mountKey: 'hae29c-unique-id', driverVersion: '6.0.0', testedUtc: DateTime.utc(2026, 11, 21)),
+          saved: PolarAlignMotorDirection(sign: 1, mountKey: 'hae29c-unique-id', driverInfo: '', driverVersion: '6.0.0', testedUtc: DateTime.utc(2026, 11, 21)),
           matchesConnectedMount: true,
         ),
       );
@@ -418,7 +418,7 @@ void main() {
     (tester) async {
       final direction = _DirectionRig(
         PolarAlignMotorDirectionState(
-          saved: PolarAlignMotorDirection(sign: 1, mountKey: 'iOptron HAE29C', driverVersion: '', testedUtc: DateTime.utc(2026, 11, 21)),
+          saved: PolarAlignMotorDirection(sign: 1, mountKey: 'iOptron HAE29C', driverInfo: '', driverVersion: '', testedUtc: DateTime.utc(2026, 11, 21)),
           matchesConnectedMount: true,
         ),
       );
@@ -432,13 +432,30 @@ void main() {
   );
 
   testWidgets(
+    'the saved motor direction names the driver it was tested on (#2167)',
+    (tester) async {
+      final direction = _DirectionRig(
+        PolarAlignMotorDirectionState(
+          saved: PolarAlignMotorDirection(sign: 1, mountKey: 'hae29c-unique-id', driverInfo: 'AlpacaBridge iOptron', driverVersion: '6.0.0', testedUtc: DateTime.utc(2026, 11, 21)),
+          matchesConnectedMount: true,
+        ),
+      );
+      await _pumpWithDirection(tester, direction);
+      expect(
+        find.text('Tested on hae29c-unique-id, driver AlpacaBridge iOptron 6.0.0: the motor\'s positive speed turns RA east.'),
+        findsOneWidget,
+      );
+    },
+  );
+
+  testWidgets(
     'a saved direction for another driver says the next start tests again (#2081)',
     (tester) async {
       await _pumpWithDirection(
         tester,
         _DirectionRig(
           PolarAlignMotorDirectionState(
-            saved: PolarAlignMotorDirection(sign: 1, mountKey: 'hae29c-unique-id', driverVersion: '5.0.0', testedUtc: DateTime.utc(2026, 11, 21)),
+            saved: PolarAlignMotorDirection(sign: 1, mountKey: 'hae29c-unique-id', driverInfo: '', driverVersion: '5.0.0', testedUtc: DateTime.utc(2026, 11, 21)),
             matchesConnectedMount: false,
           ),
         ),

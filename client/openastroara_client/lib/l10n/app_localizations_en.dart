@@ -7365,8 +7365,8 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String polarMotorDirectionMountDriver(String mount, String version) {
-    return '$mount, driver $version';
+  String polarMotorDirectionMountDriver(String mount, String driver) {
+    return '$mount, driver $driver';
   }
 
   @override

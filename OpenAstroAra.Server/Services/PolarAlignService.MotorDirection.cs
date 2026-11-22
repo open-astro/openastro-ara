@@ -56,25 +56,37 @@ namespace OpenAstroAra.Server.Services {
 
         /// <summary>#2167 — the mount a saved motor direction stands for: <see cref="Mount"/> is its identity, the key its
         /// <c>mount_clearance</c> entry uses (<see cref="PolarAlignPreflightEvaluator.MountKey"/>: the Alpaca UniqueID, else
-        /// its name, else <see cref="PolarAlignPreflightEvaluator.UnidentifiedMountKey"/>, never blank), and
-        /// <see cref="Version"/> its driver's DriverVersion (read once per connect; empty when the driver reports none).
-        /// A blank DriverInfo and DriverVersion were the whole key before: the daemon never read them, so every mount
-        /// shared one saved direction.</summary>
-        internal sealed record MountDriverKey(string Mount, string Version) {
-            /// <summary>What a log line names: the mount, and its driver version when one is reported.</summary>
-            public string Identity => Version.Length == 0 ? Mount : $"{Mount}, driver {Version}";
+        /// its name, else <see cref="PolarAlignPreflightEvaluator.UnidentifiedMountKey"/>; blank only with no mount
+        /// connected, a key no saved test stands for and none is saved under), <see cref="Info"/> its driver's DriverInfo
+        /// and <see cref="Version"/> its DriverVersion (both read once per connect; empty when the driver reports none).
+        /// The driver's name is in the key because another driver set up behind the same Alpaca device keeps its UniqueID
+        /// and the bridge's version. A blank DriverInfo and DriverVersion were the whole key before: the daemon never read
+        /// them, so every mount shared one saved direction.</summary>
+        internal sealed record MountDriverKey(string Mount, string Info, string Version) {
+            /// <summary>What a log line names: the mount, and its driver's name and version when they are reported.</summary>
+            public string Identity {
+                get {
+                    var mount = Mount.Length == 0 ? "(no mount connected)" : Mount;
+                    var driver = Info.Length == 0 ? Version : Version.Length == 0 ? Info : $"{Info} {Version}";
+                    return driver.Length == 0 ? mount : $"{mount}, driver {driver}";
+                }
+            }
         }
 
+        /// <summary>The key of the mount <paramref name="info"/> reports. With no mount connected the key is blank (never
+        /// <see cref="PolarAlignPreflightEvaluator.UnidentifiedMountKey"/>, which a mount with no UniqueID and no name
+        /// saves under): no saved test stands for it, and a test is never saved under it.</summary>
         internal static MountDriverKey MountDriverOf(TelescopeInfo? info) =>
-            new(PolarAlignPreflightEvaluator.MountKey(info) ?? PolarAlignPreflightEvaluator.UnidentifiedMountKey,
-                info?.DriverVersion?.Trim() ?? string.Empty);
+            new(PolarAlignPreflightEvaluator.MountKey(info) ?? string.Empty,
+                info?.Connected == true ? info.DriverInfo?.Trim() ?? string.Empty : string.Empty,
+                info?.Connected == true ? info.DriverVersion?.Trim() ?? string.Empty : string.Empty);
 
         private MountDriverKey ReadMountDriver() => MountDriverOf(_mount.GetInfo());
 
         /// <summary>The saved RA motor sign (+1 or −1) when one stands for <paramref name="driver"/>; null otherwise (never
-        /// tested, forgotten, or tested on another driver name or version).</summary>
+        /// tested, forgotten, tested on another mount or driver name or version, or no mount connected).</summary>
         private double? SavedRaMotorSign(MountDriverKey driver) =>
-            _profileStore.GetPolarAlignMotorDirection() is { } saved && saved.IsFor(driver.Mount, driver.Version)
+            _profileStore.GetPolarAlignMotorDirection() is { } saved && saved.IsFor(driver.Mount, driver.Info, driver.Version)
                 ? saved.Sign
                 : null;
 
@@ -83,14 +95,15 @@ namespace OpenAstroAra.Server.Services {
         /// nothing saved (never a null <c>mount_key</c> the client's strict reader refuses), so the next start tests again.
         /// Pure, for the endpoint and its tests.</summary>
         internal static PolarAlignMotorDirectionStateDto MotorDirectionState(PolarAlignMotorDirectionDto? saved, TelescopeInfo? mount) {
-            saved = saved is { MountKey: { } key } && !string.IsNullOrWhiteSpace(key) && saved.DriverVersion is not null
+            saved = saved is { MountKey: { } key } && !string.IsNullOrWhiteSpace(key) && saved.DriverInfo is not null
+                    && saved.DriverVersion is not null
                 ? saved
                 : null;
             if (mount?.Connected != true) {
                 return new(saved, null);
             }
             var driver = MountDriverOf(mount);
-            return new(saved, saved is not null && saved.IsFor(driver.Mount, driver.Version));
+            return new(saved, saved is not null && saved.IsFor(driver.Mount, driver.Info, driver.Version));
         }
 
         /// <summary>#2081 — when no saved RA motor direction stands for the mount's driver (<see cref="RunBand.RaMotorSign"/>
@@ -140,7 +153,11 @@ namespace OpenAstroAra.Server.Services {
                 LogDirectionTestNotSavedProfileSwitched(sign, band.ProfileId, profileNow);
                 return;
             }
-            _profileStore.PutPolarAlignMotorDirection(new PolarAlignMotorDirectionDto(sign, driver.Mount, driver.Version, DateTimeOffset.UtcNow));
+            if (driver.Mount.Length == 0) {
+                // No mount was connected when the key was read: a blank key stands for no mount, so nothing is saved.
+                return;
+            }
+            _profileStore.PutPolarAlignMotorDirection(new PolarAlignMotorDirectionDto(sign, driver.Mount, driver.Info, driver.Version, DateTimeOffset.UtcNow));
             LogDirectionTested(moved, sign, driver.Identity);
         }
 

@@ -60,6 +60,9 @@ internal interface ITelescopeDevice : IDeviceAdapter {
     double SiderealTime { get; }
     /// <summary>The driver's version string (#2167): Polar Align keys its saved RA motor direction by it.</summary>
     string DriverVersion { get; }
+    /// <summary>The driver's description (#2167): Polar Align keys its saved RA motor direction by it too, so another
+    /// driver set up behind the same Alpaca device (same UniqueID, same bridge version) is tested again.</summary>
+    string DriverInfo { get; }
     bool CanMoveAxis(TelescopeAxis axis);
     IAxisRates AxisRates(TelescopeAxis axis);
     string Action(string name, string parameters);
@@ -124,6 +127,7 @@ internal sealed class AlpacaTelescopeDevice(AlpacaTelescope client) : ITelescope
     }
     public double SiderealTime => client.SiderealTime;
     public string DriverVersion => client.DriverVersion;
+    public string DriverInfo => client.DriverInfo;
     public bool CanMoveAxis(TelescopeAxis axis) => client.CanMoveAxis(axis);
     public IAxisRates AxisRates(TelescopeAxis axis) => client.AxisRates(axis);
     public string Action(string name, string parameters) => client.Action(name, parameters);

@@ -2020,7 +2020,7 @@
   "polarMotorDirection": "Direção do motor de AR",
   "polarMotorDirectionSaved": "Testada em {mount}: a velocidade positiva do motor gira a AR para {direction}.",
   "polarMotorDirectionOtherDriver": "Testada em outra montagem ou driver ({mount}): o próximo início testa de novo com um giro de 0,5°.",
-  "polarMotorDirectionMountDriver": "{mount}, driver {version}",
+  "polarMotorDirectionMountDriver": "{mount}, driver {driver}",
   "polarMotorDirectionUntested": "Ainda não testada: o próximo início primeiro gira a montagem 0,5° para descobri-la.",
   "polarMotorDirectionUnknown": "Este setup não salva uma direção do motor.",
   "polarMotorDirectionReadFailed": "Não foi possível ler do setup a direção do motor salva.",

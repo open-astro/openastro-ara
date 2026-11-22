@@ -371,6 +371,7 @@ namespace OpenAstroAra.Test {
         public DateTime UTCDate { get; set; } = DateTime.UtcNow;
         public double SiderealTime => 0.0;
         public string DriverVersion { get; set; } = string.Empty;
+        public string DriverInfo { get; set; } = string.Empty;
         public bool CanMoveAxis(TelescopeAxis axis) => true;
         public IAxisRates AxisRates(TelescopeAxis axis) => new FakeAxisRates();
         // The driver's actions: set the list before the connect reads it; ActionResponder answers each

@@ -429,7 +429,7 @@ internal static class ProfileSections {
         (st, v) => st.PutPolarAlignMotorDirection(v),
         null,
         kept: [],
-        stripped: ["Sign", "MountKey", "DriverVersion", "TestedUtc"],
+        stripped: ["Sign", "MountKey", "DriverInfo", "DriverVersion", "TestedUtc"],
         strip: _ => null);
 
     /// <summary>Guard thresholds and probe ladder: tuning judgement.</summary>

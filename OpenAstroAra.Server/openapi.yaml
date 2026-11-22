@@ -14787,6 +14787,7 @@ components:
       required:
         - sign
         - mount_key
+        - driver_info
         - driver_version
         - tested_utc
       type: object
@@ -14798,6 +14799,8 @@ components:
             - string
           format: int32
         mount_key:
+          type: string
+        driver_info:
           type: string
         driver_version:
           type: string

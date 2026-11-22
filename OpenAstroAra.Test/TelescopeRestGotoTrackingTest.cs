@@ -888,6 +888,23 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task GetInfo_reports_the_driver_name_read_once_at_connect() {
+            // #2167 — Polar Align keys its saved RA motor direction by the driver's name too: another driver behind the
+            // same AlpacaBridge device keeps its UniqueID and the bridge's version.
+            var mount = Mount(tracking: true);
+            await using var box = ScriptedAlpacaDevice.Start(path =>
+                path.EndsWith("/driverinfo", StringComparison.Ordinal) ? "\" AlpacaBridge iOptron \"" : mount(path));
+            using var svc = await ConnectedAsync(box);
+
+            await WaitForAsync(() => svc.GetInfo().DriverInfo.Length > 0, "DriverInfo was never read");
+            Assert.That(svc.GetInfo().DriverInfo, Is.EqualTo("AlpacaBridge iOptron"));
+            int InfoReads() => box.Gets.Count(p => p.EndsWith("/driverinfo", StringComparison.Ordinal));
+            var (reads, seen) = (InfoReads(), box.Gets.Count);
+            await WaitForAsync(() => box.Gets.Count >= seen + 20, "the mount was never polled again");
+            Assert.That(InfoReads(), Is.EqualTo(reads), "read once per connect, not on every poll");
+        }
+
+        [Test]
         public async Task A_mount_that_does_not_report_its_type_reads_unknown() {
             var log = new InfoLog();
             var mount = Mount(tracking: true);
