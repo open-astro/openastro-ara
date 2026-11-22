@@ -294,6 +294,10 @@ public sealed partial class TelescopeService {
         }
     }
 
+    /// <summary>#2173 — the connect's read of the sensor-search capability; see
+    /// <see cref="IMountMotionControl.HomeIsSensorSearch"/>.</summary>
+    public bool HomeIsSensorSearch => HomeIsSensorSearchKnown;
+
     // #2173 — the connect's read of the sensor-search capability (false until read, and for every new session until re-read).
     private bool HomeIsSensorSearchKnown {
         get {
@@ -461,7 +465,11 @@ public sealed partial class TelescopeService {
     /// the flag by itself for every reason.</param>
     internal static RefusalException PositionUnverifiedRefusal(string reason, bool canFindHome = false, bool homeIsSensorSearch = false) =>
         new(RefusalCatalog.MountPositionUnverified, PositionUnverifiedDetail(reason, canFindHome, homeIsSensorSearch),
-            new Dictionary<string, object?> { ["position_unverified_reason"] = reason });
+            new Dictionary<string, object?> {
+                ["position_unverified_reason"] = reason,
+                // #2173 — always sent: the client words the way out by it (a Home then clears the flag by itself).
+                ["home_is_sensor_search"] = homeIsSensorSearch,
+            });
 
     internal static string PositionUnverifiedDetail(string reason, bool canFindHome = false, bool homeIsSensorSearch = false) {
         // #2173 review — a completed Home trusts the position by itself only when the reason leaves the mount's model intact.

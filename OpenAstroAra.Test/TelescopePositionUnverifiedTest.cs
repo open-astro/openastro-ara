@@ -149,6 +149,7 @@ namespace OpenAstroAra.Test {
 
             Assert.That(refusal.Cause, Is.EqualTo(RefusalCatalog.MountPositionUnverified));
             Assert.That(refusal.Parameters["position_unverified_reason"], Is.EqualTo(MountPoseTrust.AtHomeOnConnect));
+            Assert.That(refusal.Parameters["home_is_sensor_search"], Is.EqualTo(false), "always sent (#2173)");
             await Task.Delay(100);
             Assert.That(Current.Slews, Is.Zero);
         }
@@ -456,6 +457,18 @@ namespace OpenAstroAra.Test {
             await Task.Delay(400);
 
             Assert.That(Runtime(svc)!.PositionUnverifiedReason, Is.EqualTo(MountPoseTrust.AtHomeOnConnect));
+        }
+
+        // #2173 — a refusal on a sensor-search mount carries the capability and says Home clears it by itself.
+        [Test]
+        public async Task A_refusal_on_a_sensor_search_mount_says_Home_clears_it_by_itself() {
+            using var svc = await ConnectedAtFalseZeroAsync(also: f => f.SaysHomeIsSensorSearch());
+
+            var goTo = await RefusedAsync(() => svc.SlewAsync(new SlewRequestDto(5.0, 30.0), null, CancellationToken.None));
+
+            Assert.That(goTo.Parameters["home_is_sensor_search"], Is.EqualTo(true));
+            Assert.That(goTo.Message, Does.Contain("trusted again once the mount is seen to move"));
+            Assert.That(goTo.Message, Does.Not.Contain("confirm by eye"));
         }
 
         // #2173 — the capability read: listed (case-insensitive) and answered sensor_search true is a sensor search;

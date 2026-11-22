@@ -45,6 +45,11 @@ public interface IMountMotionControl {
     /// start position needs it.</summary>
     bool? CanMoveSecondaryAxis => null;
 
+    /// <summary>#2173 — the driver says its FindHome is a real home-sensor search (AlpacaBridge's
+    /// <c>findhomeissensorsearch</c>), read once per connection; false when not connected, not read yet, or the read
+    /// failed. A Home then clears an unverified position by itself, for every reason, so the refusals word it so.</summary>
+    bool HomeIsSensorSearch => false;
+
     /// <summary>#2089 — counts every mount session the daemon starts or ends: a connect, a disconnect, a fault trip. A
     /// routine that keeps a pose across runs (Polar Align's sweep origin) reads it and forgets the pose once it changes,
     /// and a run that sees it change mid-run ends (#2066 ARA-5): a reconnected mount may have been moved, re-homed or

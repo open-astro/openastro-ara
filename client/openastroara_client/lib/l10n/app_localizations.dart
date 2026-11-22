@@ -11226,6 +11226,12 @@ abstract class AppLocalizations {
   /// **'The mount\'s position is not confirmed yet: it was just connected, or a reading is being checked against the next one. Try again in a few seconds.'**
   String get refusalMountPositionNotReadYet;
 
+  /// Refusal (mount-position-unverified, home_is_sensor_search true, #2173): GoTo, Park and Polar Align are blocked after a power loss or a jump, on a mount whose driver says its Find Home is a real home-sensor search, so a completed Home clears it by itself with no eye check
+  ///
+  /// In en, this message translates to:
+  /// **'The mount\'s position is unverified: it may have lost power, or its position jumped. Press Home: this mount searches for its home sensor, so the position is trusted again once the mount is seen to move and then reports Home.'**
+  String get refusalMountPositionSensorSearch;
+
   /// Refusal (mount-position-unverified, reason stop_unconfirmed, #2066): GoTo, Park and Polar Align are blocked (and Home on a mount that cannot find Home) because a polar alignment's stop of the mount was not confirmed, or the mount reconnected during it
   ///
   /// In en, this message translates to:
