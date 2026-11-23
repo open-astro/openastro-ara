@@ -587,6 +587,8 @@ namespace OpenAstroAra.Server.Services {
                 var travel = new CommandedTravel(Clock);
                 travel.Reset(0.0, Rate(), began);
                 var segmentBegan = began;
+                // A top-up's settle is not motor time: the bound counts only the moves (#2188 review).
+                var settledFor = TimeSpan.Zero;
                 while (true) {
                     var byClock = false;
                     var read = 0.0;
@@ -628,7 +630,7 @@ namespace OpenAstroAra.Server.Services {
                             throw new RoutineFailedException(SlewStalled, string.Create(CultureInfo.InvariantCulture,
                                 $"the mount's reading stopped changing after {Math.Max(best, 0):F1}° of the {degrees:F0}° turn (no progress for {AxisMoveStall.TotalSeconds:F0} s) — check it can turn freely and its connection, then start again"));
                         }
-                        if (Clock.GetElapsedTime(began, at) > bound) {
+                        if (Clock.GetElapsedTime(began, at) - settledFor > bound) {
                             LogAxisMoveTimedOut(axis, Math.Max(best, 0), degrees, bound.TotalSeconds);
                             throw new RoutineFailedException(SlewTimeout, string.Create(CultureInfo.InvariantCulture,
                                 $"the mount turned only {Math.Max(best, 0):F1}° of {degrees:F0}° in {bound.TotalSeconds:F0} s, twice the time the turn takes at its speed — check it, then start again"));
@@ -661,12 +663,18 @@ namespace OpenAstroAra.Server.Services {
                     await StopAxisBestEffortAsync(axis).ConfigureAwait(false);
                     settled = true;
                     after = await SettleAfterTurnAsync(start, startSide, degrees, progress, gen, ct).ConfigureAwait(false);
+                    settledFor += Clock.GetElapsedTime(stoppedAt, Clock.GetTimestamp());
                     if (!byClock) {
                         break;
                     }
                     // Stopped by the clock: the settled reading says where the turn really ended.
                     LogClockStop(axis, commanded, read, degrees);
                     var settledDeg = progress(start, (after.RaDeg, after.DecDeg));
+                    if (checkDirection && settledDeg <= -WrongWayDeg) {
+                        // #2081 — never reversed, as on a poll: the motor is stopped and the run fails (#2188 review).
+                        LogAxisMoveWrongWay(axis, -settledDeg, Rate(), learnedSign);
+                        throw new RoutineFailedException(TurnWrongWay, TurnWrongWayMessage);
+                    }
                     // The reading made no progress for the second half of the segment: it froze, not lagged.
                     var stoodStill = Clock.GetElapsedTime(bestAt, stoppedAt) * 2 >= Clock.GetElapsedTime(segmentBegan, stoppedAt);
                     ThrowIfReadingDidNotFollow(axis, settledDeg, commanded, degrees, stoodStill, "turn");

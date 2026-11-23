@@ -163,6 +163,10 @@ namespace OpenAstroAra.Test {
             var moves = RaTurns(mount);
             Assert.That(moves.Where(t => t.TrueDeltaHaDeg != 0).Select(t => Math.Sign(t.TrueDeltaHaDeg)).Distinct().Count(), Is.EqualTo(1), mount.Describe());
             Assert.That(Math.Abs(moves.Sum(t => t.TrueDeltaHaDeg)), Is.LessThan(1.0 * (bound.TotalSeconds + 0.1)), "stopped at the bound. " + mount.Describe());
+            // The bound counts motor time only (a top-up's settle is not motion): the moves together run at most the bound,
+            // plus the last poll's 10 ms read.
+            var motorTime = moves.Aggregate(TimeSpan.Zero, (sum, t) => sum + (t.EndedAt!.Value - t.StartedAt));
+            Assert.That(motorTime, Is.LessThanOrEqualTo(bound + TimeSpan.FromMilliseconds(20)), "no motor time past the bound. " + mount.Describe());
             mount.AssertEndedStopped(tracking: false);
             mount.AssertCommon(LastEventIndex(ws, WsEventCatalog.PolarAlignError), CounterweightLimitDeg);
         }

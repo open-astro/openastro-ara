@@ -364,6 +364,8 @@ namespace OpenAstroAra.Server.Services {
                 var travel = new CommandedTravel(Clock);
                 travel.Reset(0.0, Rate(), began);
                 var segmentBegan = began;
+                // A top-up's settle is not motor time: the bound counts only the moves (#2188 review).
+                var settledFor = TimeSpan.Zero;
                 while (true) {
                     var byClock = false;
                     var read = 0.0;
@@ -401,7 +403,7 @@ namespace OpenAstroAra.Server.Services {
                             throw new RoutineFailedException(SlewStalled, string.Create(CultureInfo.InvariantCulture,
                                 $"the mount's Dec reading stopped changing after {Math.Max(best, 0):F1}° of the {degrees:F1}° move (no progress for {AxisMoveStall.TotalSeconds:F0} s) — check it can move freely and its connection, then try again"));
                         }
-                        if (Clock.GetElapsedTime(began, at) > bound) {
+                        if (Clock.GetElapsedTime(began, at) - settledFor > bound) {
                             LogAxisMoveTimedOut(axis, Math.Max(best, 0), degrees, bound.TotalSeconds);
                             throw new RoutineFailedException(SlewTimeout, string.Create(CultureInfo.InvariantCulture,
                                 $"the mount moved Dec only {Math.Max(best, 0):F1}° of {degrees:F1}° in {bound.TotalSeconds:F0} s, twice the time the move takes at its speed — check it, then try again"));
@@ -432,6 +434,7 @@ namespace OpenAstroAra.Server.Services {
                     // The settle's progress reads the track, which checkPose has just moved on to the settle's reading.
                     await SettleAfterTurnAsync(start, startSide, degrees, (_, _) => progress(from, track.SignedOffPoleDeg), gen, ct,
                         checkPose: r => ObserveDecMove(track, r), foldPastPole: true).ConfigureAwait(false);
+                    settledFor += Clock.GetElapsedTime(stoppedAt, Clock.GetTimestamp());
                     if (!byClock) {
                         break;
                     }
