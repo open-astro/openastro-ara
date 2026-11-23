@@ -34,8 +34,32 @@ namespace OpenAstroAra.Test {
 
         protected override string DeviceName => "Dome";
 
+        /// <summary>#1134 — the case that runs on every dome: connect, read the runtime through REST
+        /// and the mediator, disconnect. The shutter and the dome stay where they are.</summary>
+        [Test]
+        public async Task Connect_reads_runtime_without_moving_then_disconnects() {
+            var device = await DiscoverAsync().ConfigureAwait(false);
+            Assert.That(device, Is.Not.Null, "no Dome found (OmniSim discovery or ARA_ALPACA_URL)");
+
+            using var svc = new DomeService();
+            await svc.ConnectAsync(new ConnectRequestDto(device!), idempotencyKey: null, CancellationToken.None).ConfigureAwait(false);
+            var connected = await PollUntilAsync(svc, d => d.State != EquipmentConnectionState.Connecting).ConfigureAwait(false);
+            Assert.That(connected!.State, Is.EqualTo(EquipmentConnectionState.Connected));
+            try {
+                var read = await PollUntilAsync(svc, d => d.Capabilities is not null).ConfigureAwait(false);
+                Assert.That(read!.Capabilities, Is.Not.Null, "capabilities should be populated once connected");
+                Assert.That(read.Runtime.State, Is.Not.Empty, "the dome's runtime state is read");
+                Assert.That(svc.GetInfo().Connected, Is.True, "the mediator should report connected");
+            } finally {
+                await svc.DisconnectAsync(idempotencyKey: null, CancellationToken.None).ConfigureAwait(false);
+            }
+            var disconnected = await PollUntilAsync(svc, d => d.State == EquipmentConnectionState.Disconnected).ConfigureAwait(false);
+            Assert.That(disconnected!.State, Is.EqualTo(EquipmentConnectionState.Disconnected));
+        }
+
         [Test]
         public async Task Connect_opens_shutter_and_slews_then_disconnects() {
+            RequireMotionOptIn("opens the shutter and slews the dome");
             var device = await DiscoverAsync().ConfigureAwait(false);
             Assert.That(device, Is.Not.Null, "no Dome discovered from the running OmniSim");
 
@@ -76,6 +100,7 @@ namespace OpenAstroAra.Test {
         /// </summary>
         [Test]
         public async Task Mediator_OpenShutter_and_SlewToAzimuth_drive_the_live_device() {
+            RequireMotionOptIn("opens the shutter and slews the dome");
             var device = await DiscoverAsync().ConfigureAwait(false);
             Assert.That(device, Is.Not.Null, "no Dome discovered from the running OmniSim");
 
@@ -132,19 +157,6 @@ namespace OpenAstroAra.Test {
             } catch (SequenceEntityFailedException) {
                 return false;
             }
-        }
-
-        private static async Task<DiscoveredDeviceDto?> DiscoverAsync() {
-            var discovery = new AlpacaEquipmentDiscoveryService();
-            for (var attempt = 1; attempt <= MaxDiscoveryAttempts; attempt++) {
-                using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
-                var found = await discovery.DiscoverAsync(DeviceType.Dome, forceRefresh: true, cts.Token).ConfigureAwait(false);
-                if (found.Count > 0) {
-                    return found[0];
-                }
-                await Task.Delay(TimeSpan.FromMilliseconds(500)).ConfigureAwait(false);
-            }
-            return null;
         }
 
         // Polls up to ~24s (shutter/slew moves + the 2s cache) until the predicate holds; null on timeout.

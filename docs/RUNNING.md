@@ -396,6 +396,41 @@ the [ASCOM Alpaca OmniSim](https://github.com/ASCOMInitiative/ASCOM.Alpaca.Simul
 simulators — the same devices the integration tests use
 (`scripts/get-alpaca-simulators.sh` fetches the pinned build CI runs against).
 
+### Running the live connect tests against a real rig
+
+The `*ConnectIntegrationTest` fixtures in `OpenAstroAra.Test` run against the OmniSim by
+default and skip when none answers. To run them against real gear through AlpacaBridge, set:
+
+| Variable | Meaning |
+|---|---|
+| `ARA_ALPACA_URL` | The Alpaca server, `http://host:port` (for example `http://openastro.lan:6800`); a path after the port is ignored. Unset: the OmniSim path, unchanged. |
+| `ARA_ALPACA_<TYPE>` | Optional device number per type: `CAMERA`, `TELESCOPE`, `FOCUSER`, `FILTERWHEEL`, `ROTATOR`, `SWITCH`, `DOME`, `COVERCALIBRATOR` (flat panel), `OBSERVINGCONDITIONS`, `SAFETYMONITOR`. Unset: the lowest-numbered device of that type. |
+| `ARA_ALPACA_ALLOW_MOTION` | `1` also runs the cases that move or switch gear. Off by default. |
+
+The device comes from the server's `configureddevices` list. A fixture whose type the server
+does not have skips with a message (a base rig without a rotator skips the rotator tests).
+
+**Motion rule.** Without `ARA_ALPACA_ALLOW_MOTION=1`, only connect, disconnect and read-only
+cases run on real gear. Every case that slews, unparks or tracks the mount, moves the focuser,
+rotator or filter wheel (a plain wheel connect homes it to slot 0), opens the dome or a cover,
+turns a flat light on, or writes a switch output skips and says so. The camera case takes one
+short exposure (0.5 s, or the camera's minimum if that is longer) and never touches the cooler.
+With the opt-in, stand at the rig: the moves stay small (the mount slews 2° in Dec at the same
+RA, the focuser 50 steps and back, the rotator 10° and back), and a switch write flips one port
+and puts it back, so unplug anything a switch port powers that must not lose power. The mount
+cases unpark the mount and turn tracking on, and leave it that way: park it yourself after the
+run. The mount's own slew limits still apply; the tests do not check the horizon.
+
+Base rig (camera, mount, focuser, switch), no motion:
+
+```bash
+ARA_ALPACA_URL=http://openastro.lan:6800 dotnet test OpenAstroAra.Test \
+  --filter "FullyQualifiedName~CameraConnectIntegrationTest|FullyQualifiedName~TelescopeConnectIntegrationTest|FullyQualifiedName~FocuserConnectIntegrationTest|FullyQualifiedName~SwitchConnectIntegrationTest"
+```
+
+`--filter TestCategory=Integration` runs every fixture; the ones the rig lacks skip.
+`AlpacaDiscoveryIntegrationTest` stays an OmniSim-only UDP check.
+
 ---
 
 ## 4. Troubleshooting (client builds)

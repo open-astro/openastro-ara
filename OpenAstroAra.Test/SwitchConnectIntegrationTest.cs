@@ -29,7 +29,9 @@ namespace OpenAstroAra.Test {
     /// §14e — live integration test for <see cref="SwitchService"/>, the first device with a
     /// control action. Discovers a Switch from a running ASCOM OmniSim, connects, reads its ports,
     /// writes a writable port via <see cref="SwitchService.SetValueAsync"/>, and verifies the
-    /// cached value reflects the write. Runs in the <c>alpaca-sim-integration</c> CI job.
+    /// cached value reflects the write. Runs in the <c>alpaca-sim-integration</c> CI job. #1134 — a
+    /// real switch powers real gear (the ASIAIR's 12 V ports), so on real gear only the read-only case
+    /// runs unless <c>ARA_ALPACA_ALLOW_MOTION=1</c>; the write cases then put the port back.
     /// </summary>
     [TestFixture]
     [Category("Integration")]
@@ -37,8 +39,36 @@ namespace OpenAstroAra.Test {
 
         protected override string DeviceName => "Switch";
 
+        /// <summary>#1134 — the case that runs on every switch: connect, read the ports, a repeat
+        /// connect stays connected, disconnect. No output is written.</summary>
+        [Test]
+        public async Task Connect_reads_ports_without_writing_then_disconnects() {
+            var device = await DiscoverAsync().ConfigureAwait(false);
+            Assert.That(device, Is.Not.Null, "no Switch found (OmniSim discovery or ARA_ALPACA_URL)");
+
+            using var svc = new SwitchService();
+            var n = device!.UniqueId;
+            await svc.ConnectAsync(new ConnectRequestDto(device!), idempotencyKey: null, CancellationToken.None).ConfigureAwait(false);
+            var connected = await PollUntilAsync(svc, n, s => s != EquipmentConnectionState.Connecting).ConfigureAwait(false);
+            Assert.That(connected!.State, Is.EqualTo(EquipmentConnectionState.Connected));
+            try {
+                Assert.That(connected.Ports, Is.Not.Empty, "the Switch should expose ports");
+                Assert.That(connected.Ports.Select(p => p.Id), Is.Unique, "each port has its own id");
+                await svc.ConnectAsync(new ConnectRequestDto(device!), idempotencyKey: null, CancellationToken.None).ConfigureAwait(false);
+                var stillConnected = await svc.GetAsync(n, CancellationToken.None).ConfigureAwait(false);
+                Assert.That(stillConnected!.State, Is.EqualTo(EquipmentConnectionState.Connected),
+                    "a repeat connect to the same connected device must stay Connected");
+                Assert.That(((ISwitchMediator)svc).GetInfo().Connected, Is.True, "the mediator should report connected");
+            } finally {
+                await svc.DisconnectAsync(n, null, CancellationToken.None).ConfigureAwait(false);
+            }
+            var disconnected = await PollUntilAsync(svc, n, s => s == EquipmentConnectionState.Disconnected).ConfigureAwait(false);
+            Assert.That(disconnected!.State, Is.EqualTo(EquipmentConnectionState.Disconnected));
+        }
+
         [Test]
         public async Task Connect_reads_ports_writes_one_then_disconnects() {
+            RequireMotionOptIn("writes a switch output (it may power gear off)");
             var device = await DiscoverAsync().ConfigureAwait(false);
             Assert.That(device, Is.Not.Null, "no Switch device discovered from the running OmniSim");
 
@@ -61,12 +91,18 @@ namespace OpenAstroAra.Test {
             var writable = connected.Ports.FirstOrDefault(p => p.CanWrite && p.Max > p.Min);
             if (writable is not null) {
                 var target = Math.Abs(writable.Value - writable.Max) < double.Epsilon ? writable.Min : writable.Max;
-                await svc.SetValueAsync(n, new SwitchValueRequestDto(writable.Id, target), CancellationToken.None).ConfigureAwait(false);
+                try {
+                    await svc.SetValueAsync(n, new SwitchValueRequestDto(writable.Id, target), CancellationToken.None).ConfigureAwait(false);
 
-                var updated = await PollUntilPortAsync(svc, n, writable.Id, target).ConfigureAwait(false);
-                Assert.That(updated, Is.Not.Null, "port never reflected the written value");
-                Assert.That(updated!.Value, Is.EqualTo(target).Within(1e-6),
-                    "the cached port value should reflect the SetValue write");
+                    var updated = await PollUntilPortAsync(svc, n, writable.Id, target).ConfigureAwait(false);
+                    Assert.That(updated, Is.Not.Null, "port never reflected the written value");
+                    Assert.That(updated!.Value, Is.EqualTo(target).Within(1e-6),
+                        "the cached port value should reflect the SetValue write");
+                } finally {
+                    if (OnRealGear) {
+                        await svc.SetValueAsync(n, new SwitchValueRequestDto(writable.Id, writable.Value), CancellationToken.None).ConfigureAwait(false);
+                    }
+                }
             } else {
                 Assert.Warn("no writable port on the simulated Switch — write path not exercised");
             }
@@ -85,6 +121,7 @@ namespace OpenAstroAra.Test {
         /// </summary>
         [Test]
         public async Task Mediator_GetInfo_and_SetSwitchValue_drive_the_live_device() {
+            RequireMotionOptIn("writes a switch output (it may power gear off)");
             var device = await DiscoverAsync().ConfigureAwait(false);
             Assert.That(device, Is.Not.Null, "no Switch device discovered from the running OmniSim");
 
@@ -116,37 +153,31 @@ namespace OpenAstroAra.Test {
                 }
 
                 var target = info.WritableSwitches[index];
-                var newValue = Math.Abs(target.Value - target.Maximum) < double.Epsilon ? target.Minimum : target.Maximum;
-                await ((ISwitchMediator)svc).SetSwitchValue((short)index, newValue, progress: null!, CancellationToken.None).ConfigureAwait(false);
+                var original = target.Value;
+                var newValue = Math.Abs(original - target.Maximum) < double.Epsilon ? target.Minimum : target.Maximum;
+                try {
+                    await ((ISwitchMediator)svc).SetSwitchValue((short)index, newValue, progress: null!, CancellationToken.None).ConfigureAwait(false);
 
-                // The wrapper's Value reads the live §32.4 cache, so the same stored reference must
-                // converge on the written value as the refresh ticks.
-                var reflected = false;
-                for (var i = 0; i < 40 && !reflected; i++) {
-                    reflected = Math.Abs(target.Value - newValue) < 1e-6;
-                    if (!reflected) {
-                        await Task.Delay(TimeSpan.FromMilliseconds(200)).ConfigureAwait(false);
+                    // The wrapper's Value reads the live §32.4 cache, so the same stored reference must
+                    // converge on the written value as the refresh ticks.
+                    var reflected = false;
+                    for (var i = 0; i < 40 && !reflected; i++) {
+                        reflected = Math.Abs(target.Value - newValue) < 1e-6;
+                        if (!reflected) {
+                            await Task.Delay(TimeSpan.FromMilliseconds(200)).ConfigureAwait(false);
+                        }
+                    }
+                    Assert.That(reflected, Is.True, "the mediator write should be reflected by the live wrapper Value");
+                } finally {
+                    if (OnRealGear) {
+                        await ((ISwitchMediator)svc).SetSwitchValue((short)index, original, progress: null!, CancellationToken.None).ConfigureAwait(false);
                     }
                 }
-                Assert.That(reflected, Is.True, "the mediator write should be reflected by the live wrapper Value");
             } finally {
                 await svc.DisconnectAsync(n, null, CancellationToken.None).ConfigureAwait(false);
             }
             var disconnected = await PollUntilAsync(svc, n, s => s == EquipmentConnectionState.Disconnected).ConfigureAwait(false);
             Assert.That(disconnected!.State, Is.EqualTo(EquipmentConnectionState.Disconnected));
-        }
-
-        private static async Task<DiscoveredDeviceDto?> DiscoverAsync() {
-            var discovery = new AlpacaEquipmentDiscoveryService();
-            for (var attempt = 1; attempt <= MaxDiscoveryAttempts; attempt++) {
-                using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
-                var found = await discovery.DiscoverAsync(DeviceType.Switch, forceRefresh: true, cts.Token).ConfigureAwait(false);
-                if (found.Count > 0) {
-                    return found[0];
-                }
-                await Task.Delay(TimeSpan.FromMilliseconds(500)).ConfigureAwait(false);
-            }
-            return null;
         }
 
         private static async Task<SwitchDto?> PollUntilAsync(SwitchService svc, string deviceId, Func<EquipmentConnectionState, bool> predicate) {

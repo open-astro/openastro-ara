@@ -29,7 +29,9 @@ namespace OpenAstroAra.Test {
     /// §14e — live integration test for <see cref="FilterWheelService"/>. Discovers a FilterWheel
     /// from a running ASCOM OmniSim, connects, reads its slots, changes to a target slot via
     /// <see cref="FilterWheelService.ChangeFilterAsync"/>, and verifies the cached current slot
-    /// reflects the change, then disconnects. Runs in the <c>alpaca-sim-integration</c> CI job.
+    /// reflects the change, then disconnects. Runs in the <c>alpaca-sim-integration</c> CI job. #1134 —
+    /// a plain connect homes a fresh wheel to slot 0 (#1066), so on real gear only the home-off case
+    /// runs unless <c>ARA_ALPACA_ALLOW_MOTION=1</c>.
     /// </summary>
     [TestFixture]
     [Category("Integration")]
@@ -37,8 +39,39 @@ namespace OpenAstroAra.Test {
 
         protected override string DeviceName => "FilterWheel";
 
+        /// <summary>#1134 — the case that runs on every wheel: with the profile's home-on-first-connect
+        /// off (#1075) a connect reads the slots and the current slot, and the wheel stays put.</summary>
+        [Test]
+        public async Task Connect_with_home_off_reads_slots_without_moving_then_disconnects() {
+            var device = await DiscoverAsync().ConfigureAwait(false);
+            Assert.That(device, Is.Not.Null, "no FilterWheel found (OmniSim discovery or ARA_ALPACA_URL)");
+
+            var store = new InMemoryProfileStore();
+            store.PutFilterWheelPolicy(new FilterWheelPolicyDto(HomeOnFirstConnect: false));
+            using var svc = new FilterWheelService(logger: null, profileStore: store);
+            await svc.ConnectAsync(new ConnectRequestDto(device!), idempotencyKey: null, CancellationToken.None).ConfigureAwait(false);
+            var connected = await PollUntilAsync(svc, s => s != EquipmentConnectionState.Connecting).ConfigureAwait(false);
+            Assert.That(connected!.State, Is.EqualTo(EquipmentConnectionState.Connected));
+            try {
+                var withSlots = await PollUntilSlotsAsync(svc).ConfigureAwait(false);
+                Assert.That(withSlots, Is.Not.Null, "slots were never seeded after connect");
+                Assert.That(withSlots!.Slots, Is.Not.Empty, "a wheel exposes at least one slot");
+                var first = await PollUntilKnownSlotAsync(svc).ConfigureAwait(false);
+                Assert.That(first, Is.Not.Null, "the current slot was never read");
+                // Several refresh ticks later the wheel is still on the slot it was found on.
+                await Task.Delay(TimeSpan.FromSeconds(3)).ConfigureAwait(false);
+                var later = await svc.GetAsync(CancellationToken.None).ConfigureAwait(false);
+                Assert.That(later!.Runtime.CurrentSlot, Is.EqualTo(first), "with home-on-first-connect off the wheel must not move");
+            } finally {
+                await svc.DisconnectAsync(idempotencyKey: null, CancellationToken.None).ConfigureAwait(false);
+            }
+            var disconnected = await PollUntilAsync(svc, s => s == EquipmentConnectionState.Disconnected).ConfigureAwait(false);
+            Assert.That(disconnected!.State, Is.EqualTo(EquipmentConnectionState.Disconnected));
+        }
+
         [Test]
         public async Task Connect_reads_slots_changes_filter_then_disconnects() {
+            RequireMotionOptIn("homes the wheel to slot 0 and changes the filter");
             var device = await DiscoverAsync().ConfigureAwait(false);
             Assert.That(device, Is.Not.Null, "no FilterWheel device discovered from the running OmniSim");
 
@@ -81,6 +114,7 @@ namespace OpenAstroAra.Test {
         /// </summary>
         [Test]
         public async Task Mediator_imports_profile_filters_and_ChangeFilter_drives_the_live_device() {
+            RequireMotionOptIn("homes the wheel to slot 0 and changes the filter");
             var device = await DiscoverAsync().ConfigureAwait(false);
             Assert.That(device, Is.Not.Null, "no FilterWheel device discovered from the running OmniSim");
 
@@ -128,19 +162,6 @@ namespace OpenAstroAra.Test {
             Assert.That(disconnected!.State, Is.EqualTo(EquipmentConnectionState.Disconnected));
         }
 
-        private static async Task<DiscoveredDeviceDto?> DiscoverAsync() {
-            var discovery = new AlpacaEquipmentDiscoveryService();
-            for (var attempt = 1; attempt <= MaxDiscoveryAttempts; attempt++) {
-                using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
-                var found = await discovery.DiscoverAsync(DeviceType.FilterWheel, forceRefresh: true, cts.Token).ConfigureAwait(false);
-                if (found.Count > 0) {
-                    return found[0];
-                }
-                await Task.Delay(TimeSpan.FromMilliseconds(500)).ConfigureAwait(false);
-            }
-            return null;
-        }
-
         private static async Task<FilterWheelDto?> PollUntilAsync(FilterWheelService svc, Func<EquipmentConnectionState, bool> predicate) {
             for (var i = 0; i < 50; i++) {
                 var dto = await svc.GetAsync(CancellationToken.None).ConfigureAwait(false);
@@ -157,6 +178,18 @@ namespace OpenAstroAra.Test {
                 var dto = await svc.GetAsync(CancellationToken.None).ConfigureAwait(false);
                 if (dto is not null && dto.Slots.Count > 0) {
                     return dto;
+                }
+                await Task.Delay(TimeSpan.FromMilliseconds(200)).ConfigureAwait(false);
+            }
+            return null;
+        }
+
+        // A known (not moving, -1) slot within ~16s; null on timeout.
+        private static async Task<int?> PollUntilKnownSlotAsync(FilterWheelService svc) {
+            for (var i = 0; i < 80; i++) {
+                var dto = await svc.GetAsync(CancellationToken.None).ConfigureAwait(false);
+                if (dto?.Runtime.CurrentSlot is int slot && slot >= 0) {
+                    return slot;
                 }
                 await Task.Delay(TimeSpan.FromMilliseconds(200)).ConfigureAwait(false);
             }

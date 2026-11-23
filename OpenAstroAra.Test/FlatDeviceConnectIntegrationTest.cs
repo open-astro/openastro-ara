@@ -34,8 +34,30 @@ namespace OpenAstroAra.Test {
 
         protected override string DeviceName => "FlatDevice";
 
+        /// <summary>#1134 — the case that runs on every flat panel: connect, read the cover and light
+        /// state, disconnect. The cover stays put and the light is not switched.</summary>
+        [Test]
+        public async Task Connect_reads_cover_and_light_without_changing_them_then_disconnects() {
+            var device = await DiscoverAsync().ConfigureAwait(false);
+            Assert.That(device, Is.Not.Null, "no FlatDevice (CoverCalibrator) found (OmniSim discovery or ARA_ALPACA_URL)");
+
+            using var svc = new FlatDeviceService();
+            await svc.ConnectAsync(new ConnectRequestDto(device!), idempotencyKey: null, CancellationToken.None).ConfigureAwait(false);
+            var connected = await PollUntilAsync(svc, d => d.State != EquipmentConnectionState.Connecting).ConfigureAwait(false);
+            Assert.That(connected!.State, Is.EqualTo(EquipmentConnectionState.Connected));
+            try {
+                Assert.That(connected.Runtime.State, Is.Not.Empty, "the cover/light state is read from the device");
+                Assert.That(connected.Runtime.State, Is.Not.EqualTo("error"), "a healthy panel does not read as error");
+            } finally {
+                await svc.DisconnectAsync(idempotencyKey: null, CancellationToken.None).ConfigureAwait(false);
+            }
+            var disconnected = await PollUntilAsync(svc, d => d.State == EquipmentConnectionState.Disconnected).ConfigureAwait(false);
+            Assert.That(disconnected!.State, Is.EqualTo(EquipmentConnectionState.Disconnected));
+        }
+
         [Test]
         public async Task Connect_opens_cover_and_lights_on_then_disconnects() {
+            RequireMotionOptIn("opens the cover and turns the light on");
             var device = await DiscoverAsync().ConfigureAwait(false);
             Assert.That(device, Is.Not.Null, "no FlatDevice (CoverCalibrator) discovered from the running OmniSim");
 
@@ -62,19 +84,6 @@ namespace OpenAstroAra.Test {
             await svc.DisconnectAsync(idempotencyKey: null, CancellationToken.None).ConfigureAwait(false);
             var disconnected = await PollUntilAsync(svc, d => d.State == EquipmentConnectionState.Disconnected).ConfigureAwait(false);
             Assert.That(disconnected!.State, Is.EqualTo(EquipmentConnectionState.Disconnected));
-        }
-
-        private static async Task<DiscoveredDeviceDto?> DiscoverAsync() {
-            var discovery = new AlpacaEquipmentDiscoveryService();
-            for (var attempt = 1; attempt <= MaxDiscoveryAttempts; attempt++) {
-                using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
-                var found = await discovery.DiscoverAsync(DeviceType.FlatDevice, forceRefresh: true, cts.Token).ConfigureAwait(false);
-                if (found.Count > 0) {
-                    return found[0];
-                }
-                await Task.Delay(TimeSpan.FromMilliseconds(500)).ConfigureAwait(false);
-            }
-            return null;
         }
 
         // Polls up to ~16s (cover/light moves + the 2s cache) until the predicate holds; null on timeout.

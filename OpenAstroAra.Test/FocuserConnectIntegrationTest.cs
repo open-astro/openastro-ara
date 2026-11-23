@@ -26,7 +26,9 @@ namespace OpenAstroAra.Test {
     /// §14e — live integration test for <see cref="FocuserService"/>. Discovers a Focuser from a
     /// running ASCOM OmniSim, connects, reads its capabilities, moves it to a target position via
     /// <see cref="FocuserService.MoveAsync"/>, and verifies the cached runtime reflects the new
-    /// position, then disconnects. Runs in the <c>alpaca-sim-integration</c> CI job.
+    /// position, then disconnects. Runs in the <c>alpaca-sim-integration</c> CI job. #1134 — on real
+    /// gear only the read-only case runs unless <c>ARA_ALPACA_ALLOW_MOTION=1</c>; the move cases then
+    /// step 50 from the current position, allow a few steps of settle and move back.
     /// </summary>
     [TestFixture]
     [Category("Integration")]
@@ -34,8 +36,38 @@ namespace OpenAstroAra.Test {
 
         protected override string DeviceName => "Focuser";
 
+        // Real gear: a small step that keeps the rig near focus, and the step slop a motor may settle with.
+        private const int RealGearStep = 50;
+        private int Tolerance => OnRealGear ? 3 : 0;
+
+        /// <summary>#1134 — the case that runs on every focuser: connect, read the capabilities and the
+        /// position, disconnect. Nothing is moved.</summary>
+        [Test]
+        public async Task Connect_reads_caps_and_position_without_moving_then_disconnects() {
+            var device = await DiscoverAsync().ConfigureAwait(false);
+            Assert.That(device, Is.Not.Null, "no Focuser found (OmniSim discovery or ARA_ALPACA_URL)");
+
+            using var svc = new FocuserService();
+            await svc.ConnectAsync(new ConnectRequestDto(device!), idempotencyKey: null, CancellationToken.None).ConfigureAwait(false);
+            var connected = await PollUntilAsync(svc, s => s != EquipmentConnectionState.Connecting).ConfigureAwait(false);
+            Assert.That(connected!.State, Is.EqualTo(EquipmentConnectionState.Connected));
+            try {
+                var withCaps = await PollUntilCapsAsync(svc).ConfigureAwait(false);
+                Assert.That(withCaps, Is.Not.Null, "capabilities were never seeded after connect");
+                Assert.That(withCaps!.Capabilities!.MaxPosition, Is.GreaterThan(0), "an absolute focuser exposes a max position");
+                Assert.That(withCaps.Runtime.Position, Is.Not.Null, "the position is read from the focuser");
+                Assert.That(withCaps.Runtime.Position!.Value, Is.InRange(0, withCaps.Capabilities.MaxPosition));
+                Assert.That(svc.GetInfo().Connected, Is.True, "the mediator should report connected");
+            } finally {
+                await svc.DisconnectAsync(idempotencyKey: null, CancellationToken.None).ConfigureAwait(false);
+            }
+            var disconnected = await PollUntilAsync(svc, s => s == EquipmentConnectionState.Disconnected).ConfigureAwait(false);
+            Assert.That(disconnected!.State, Is.EqualTo(EquipmentConnectionState.Disconnected));
+        }
+
         [Test]
         public async Task Connect_reads_caps_moves_then_disconnects() {
+            RequireMotionOptIn("moves the focuser");
             var device = await DiscoverAsync().ConfigureAwait(false);
             Assert.That(device, Is.Not.Null, "no Focuser device discovered from the running OmniSim");
 
@@ -55,13 +87,21 @@ namespace OpenAstroAra.Test {
             // Move to a target away from the current position and confirm the read-back.
             var max = withCaps.Capabilities.MaxPosition;
             var current = withCaps.Runtime.Position ?? 0;
-            var target = current < max / 2 ? Math.Min(max, max / 2 + 100) : Math.Max(0, max / 2 - 100);
+            var target = TargetFrom(current, max);
 
-            await svc.MoveAsync(new FocuserMoveRequestDto(target), idempotencyKey: null, CancellationToken.None).ConfigureAwait(false);
+            try {
+                await svc.MoveAsync(new FocuserMoveRequestDto(target), idempotencyKey: null, CancellationToken.None).ConfigureAwait(false);
 
-            var moved = await PollUntilPositionAsync(svc, target).ConfigureAwait(false);
-            Assert.That(moved, Is.Not.Null, "focuser never reported the target position");
-            Assert.That(moved!.Runtime.Position, Is.EqualTo(target), "the cached position should reflect the move");
+                var moved = await PollUntilPositionAsync(svc, target, Tolerance).ConfigureAwait(false);
+                Assert.That(moved, Is.Not.Null, "focuser never reported the target position");
+                Assert.That(moved!.Runtime.Position, Is.EqualTo(target).Within(Tolerance), "the cached position should reflect the move");
+            } finally {
+                if (OnRealGear) {
+                    // Leave the rig where it was focused.
+                    await svc.MoveAsync(new FocuserMoveRequestDto(current), idempotencyKey: null, CancellationToken.None).ConfigureAwait(false);
+                    await PollUntilPositionAsync(svc, current, Tolerance).ConfigureAwait(false);
+                }
+            }
 
             await svc.DisconnectAsync(idempotencyKey: null, CancellationToken.None).ConfigureAwait(false);
             var disconnected = await PollUntilAsync(svc, s => s == EquipmentConnectionState.Disconnected).ConfigureAwait(false);
@@ -76,6 +116,7 @@ namespace OpenAstroAra.Test {
         /// </summary>
         [Test]
         public async Task Mediator_MoveFocuser_drives_the_live_device_and_returns_the_settled_position() {
+            RequireMotionOptIn("moves the focuser");
             var device = await DiscoverAsync().ConfigureAwait(false);
             Assert.That(device, Is.Not.Null, "no Focuser device discovered from the running OmniSim");
 
@@ -94,32 +135,33 @@ namespace OpenAstroAra.Test {
 
             var max = withCaps!.Capabilities!.MaxPosition;
             var current = svc.GetInfo().Position;
-            var target = current < max / 2 ? Math.Min(max, max / 2 + 100) : Math.Max(0, max / 2 - 100);
+            var target = TargetFrom(current, max);
 
             // Blocking move via the mediator — returns once the device settles at the target.
             // Exact equality is safe against the OmniSim (no step-size quantisation, so it lands
             // exactly on the requested integer position); a physical focuser that rounds to the
-            // nearest motor step could settle a step or two off and would want a small tolerance.
-            var settled = await svc.MoveFocuser(target, CancellationToken.None).ConfigureAwait(false);
-            Assert.That(settled, Is.EqualTo(target), "MoveFocuser should return the settled position");
-            Assert.That(svc.GetInfo().Position, Is.EqualTo(target), "the mediator snapshot should reflect the move");
+            // nearest motor step could settle a step or two off, so real gear (#1134) gets a small tolerance.
+            try {
+                var settled = await svc.MoveFocuser(target, CancellationToken.None).ConfigureAwait(false);
+                Assert.That(settled, Is.EqualTo(target).Within(Tolerance), "MoveFocuser should return the settled position");
+                Assert.That(svc.GetInfo().Position, Is.EqualTo(target).Within(Tolerance), "the mediator snapshot should reflect the move");
+            } finally {
+                if (OnRealGear) {
+                    await svc.MoveFocuser(current, CancellationToken.None).ConfigureAwait(false);
+                }
+            }
 
             await svc.DisconnectAsync(idempotencyKey: null, CancellationToken.None).ConfigureAwait(false);
             var disconnected = await PollUntilAsync(svc, s => s == EquipmentConnectionState.Disconnected).ConfigureAwait(false);
             Assert.That(disconnected!.State, Is.EqualTo(EquipmentConnectionState.Disconnected));
         }
 
-        private static async Task<DiscoveredDeviceDto?> DiscoverAsync() {
-            var discovery = new AlpacaEquipmentDiscoveryService();
-            for (var attempt = 1; attempt <= MaxDiscoveryAttempts; attempt++) {
-                using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
-                var found = await discovery.DiscoverAsync(DeviceType.Focuser, forceRefresh: true, cts.Token).ConfigureAwait(false);
-                if (found.Count > 0) {
-                    return found[0];
-                }
-                await Task.Delay(TimeSpan.FromMilliseconds(500)).ConfigureAwait(false);
+        // OmniSim: either side of mid-travel. Real gear: RealGearStep from where the focuser is, inside its travel.
+        private int TargetFrom(int current, int max) {
+            if (OnRealGear) {
+                return current + RealGearStep <= max ? current + RealGearStep : Math.Max(0, current - RealGearStep);
             }
-            return null;
+            return current < max / 2 ? Math.Min(max, max / 2 + 100) : Math.Max(0, max / 2 - 100);
         }
 
         private static async Task<FocuserDto?> PollUntilAsync(FocuserService svc, Func<EquipmentConnectionState, bool> predicate) {
@@ -149,10 +191,10 @@ namespace OpenAstroAra.Test {
         // Up to ~16s for the move to complete + the 2s cache to reflect it. Returns null on
         // timeout so the caller's Is.Not.Null assertion fails fast with the right message rather
         // than a confusing position-equality mismatch.
-        private static async Task<FocuserDto?> PollUntilPositionAsync(FocuserService svc, int target) {
+        private static async Task<FocuserDto?> PollUntilPositionAsync(FocuserService svc, int target, int tolerance) {
             for (var i = 0; i < 80; i++) {
                 var dto = await svc.GetAsync(CancellationToken.None).ConfigureAwait(false);
-                if (dto?.Runtime.Position == target) {
+                if (dto?.Runtime.Position is int position && Math.Abs(position - target) <= tolerance) {
                     return dto;
                 }
                 await Task.Delay(TimeSpan.FromMilliseconds(200)).ConfigureAwait(false);

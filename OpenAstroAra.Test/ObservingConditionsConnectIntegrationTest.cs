@@ -54,26 +54,16 @@ namespace OpenAstroAra.Test {
             Assert.That(connected.DeviceId, Is.Not.Empty);
             // The OmniSim ObservingConditions simulator implements the temperature sensor, so the
             // §32.4 cache (seeded on connect) should carry a value — proving the read path works.
-            Assert.That(connected.TemperatureC, Is.Not.Null, "the cache should carry the sim's temperature reading");
+            // #1134 — a real station may have no temperature sensor: OmniSim only.
+            if (!OnRealGear) {
+                Assert.That(connected.TemperatureC, Is.Not.Null, "the cache should carry the sim's temperature reading");
+            }
 
             await svc.DisconnectAsync(idempotencyKey: null, CancellationToken.None).ConfigureAwait(false);
 
             var disconnected = await PollUntilAsync(svc, s => s == EquipmentConnectionState.Disconnected).ConfigureAwait(false);
             Assert.That(disconnected, Is.Not.Null);
             Assert.That(disconnected!.State, Is.EqualTo(EquipmentConnectionState.Disconnected));
-        }
-
-        private static async Task<DiscoveredDeviceDto?> DiscoverAsync() {
-            var discovery = new AlpacaEquipmentDiscoveryService();
-            for (var attempt = 1; attempt <= MaxDiscoveryAttempts; attempt++) {
-                using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
-                var found = await discovery.DiscoverAsync(DeviceType.ObservingConditions, forceRefresh: true, cts.Token).ConfigureAwait(false);
-                if (found.Count > 0) {
-                    return found[0];
-                }
-                await Task.Delay(TimeSpan.FromMilliseconds(500)).ConfigureAwait(false);
-            }
-            return null;
         }
 
         private static async Task<ObservingConditionsDto?> PollUntilAsync(
