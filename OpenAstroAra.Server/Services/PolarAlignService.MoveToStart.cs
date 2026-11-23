@@ -71,12 +71,15 @@ namespace OpenAstroAra.Server.Services {
         internal TimeSpan PoleReadingWaitMax { get; set; } = TimeSpan.FromSeconds(30);
 
         /// <summary>#2189 rig check — a start closer to the pole than this has no side (a sky-relative Dec rate moves away from
-        /// the pole whatever its sign), so its first leg only leaves the pole, to at least this far from it. From this far a
-        /// 0.3° probe toward the pole ends 0.2° short of it, so it cannot cross; the mount's pier side is read off the pole.</summary>
+        /// the pole whatever its sign), so its first leg only leaves the pole, to at least this far from it (aiming
+        /// <see cref="LeavePoleMarginDeg"/> farther). From this far a 0.3° probe toward the pole, even one that runs to 0.4°,
+        /// ends short of it, so it cannot cross; the mount's pier side is read off the pole.</summary>
         internal const double LeavePoleDeg = 0.5;
 
-        /// <summary>How far short of <see cref="LeavePoleDeg"/> the leg may end (a clock stop lands within a read's travel).</summary>
-        internal const double LeavePoleSlackDeg = 0.1;
+        /// <summary>How far past <see cref="LeavePoleDeg"/> the leg aims, so a short clock stop still ends at least
+        /// <see cref="LeavePoleDeg"/> off the pole: the rig's clock-stopped 0.3° probe moved 0.37–0.40°, so a probe toward the
+        /// pole from 0.5° off ends at least 0.1° short of it (#2189 review).</summary>
+        internal const double LeavePoleMarginDeg = 0.2;
 
         /// <summary>An RA reading change under this is still (the flip of a crossing is 180°).</summary>
         internal const double PoleReadingQuietRaDeg = 1.0;
@@ -383,8 +386,8 @@ namespace OpenAstroAra.Server.Services {
         /// <summary>
         /// #2189 rig check — a start within <see cref="LeavePoleDeg"/> of the pole has no side: on the HAE29C a positive Dec
         /// rate from Home stayed on the west side once and went over to the east the next time, as the mount picked. One leg
-        /// at a positive rate takes the scope off the pole: <paramref name="start"/>'s distance plus
-        /// <see cref="LeavePoleDeg"/> of the Dec reading's path (|Δ| summed, so a pass over the pole counts right), stopped by
+        /// at a positive rate takes the scope off the pole: <paramref name="start"/>'s distance plus <see cref="LeavePoleDeg"/>
+        /// and <see cref="LeavePoleMarginDeg"/> of the Dec reading's path (|Δ| summed, so a pass over the pole counts right), stopped by
         /// the clock, never judged wrong-way, over the pole or a pier-side change, since every side is right here; the RA
         /// reading's own moves still count against <see cref="DecMoveRaSkyLimitDeg"/>. Then the wait for a still pier side and
         /// RA reading (<see cref="WaitForReadingAtThePoleAsync"/>). Returns the reading the move goes on from: at least
@@ -392,7 +395,7 @@ namespace OpenAstroAra.Server.Services {
         /// </summary>
         private async Task<FreshPointing> LeaveThePoleAsync(double poleSign, FreshPointing start, int gen, CancellationToken ct) {
             var startOffPole = 90.0 - (poleSign * start.DecDeg);
-            var path = startOffPole + LeavePoleDeg;
+            var path = startOffPole + LeavePoleDeg + LeavePoleMarginDeg;
             LogMoveToStartLeavesThePole(startOffPole, path);
             var leaving = new DecMoveTrack(poleSign) { Leaving = true };
             var lastOffPole = startOffPole;
@@ -406,7 +409,7 @@ namespace OpenAstroAra.Server.Services {
             await WaitForReadingAtThePoleAsync(leaving, gen, ct).ConfigureAwait(false);
             var off = await RunReadingAsync(gen, MountReadKind.Full, ct, foldPastPole: true).ConfigureAwait(false);
             var offPole = 90.0 - (poleSign * off.DecDeg);
-            if (offPole < LeavePoleDeg - LeavePoleSlackDeg) {
+            if (offPole < LeavePoleDeg) {
                 throw new RoutineFailedException(TurnMismatch, string.Create(CultureInfo.InvariantCulture,
                     $"the first Dec move left the scope {offPole:F2}° from the pole, not {LeavePoleDeg:F1}° — check the mount, then point it 2–5° from the pole with its own controls"));
             }

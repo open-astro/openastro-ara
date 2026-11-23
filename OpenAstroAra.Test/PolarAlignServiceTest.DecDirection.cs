@@ -176,15 +176,16 @@ namespace OpenAstroAra.Test {
 
         [Test]
         public async Task A_pier_side_and_RA_reading_that_never_stand_still_after_a_probe_at_the_pole_fail_after_30_s() {
-            // #2189 review: the wait at the pole is bounded. After the probe the RA reading steps 1.5° every 5 s (a driver
-            // whose pointing model shifts next to the pole): never still for 10 s, and small on the sky (ΔRA × cos Dec), so
-            // the RA guard does not trip first. After 30 s the move fails turn_mismatch with the Dec motor stopped.
+            // #2189 review: the wait at the pole is bounded. After the leg that leaves the pole the RA reading steps 1.2° every
+            // 6 s (a driver whose pointing model shifts next to the pole): never still for 10 s, and small on the sky (ΔRA ×
+            // cos Dec, 0.7° off the pole), so the RA guard does not trip first. After 30 s the move fails turn_mismatch with
+            // the Dec motor stopped.
             var mount = PolledGemNearThePole(90.0);
             TimeSpan? since = null;
             mount.OnFullRead = () => {
                 if (DecMoves(mount).Length == 1 && !mount.IsMoving) {
                     since ??= mount.Now;
-                    mount.RaJumpHours = 0.1 * Math.Floor((mount.Now - since.Value).TotalSeconds / 5.0);
+                    mount.RaJumpHours = 0.08 * Math.Floor((mount.Now - since.Value).TotalSeconds / 6.0);
                 }
             };
             using var svc = NewGemService(mount, new WsRecorder());
@@ -287,6 +288,79 @@ namespace OpenAstroAra.Test {
                 Assert.That(OffOwnPoleDeg(mount), Is.InRange(3.9, 4.5), "4° from the pole");
             });
             mount.AssertEndedStopped(tracking: true);
+        }
+
+        [Test]
+        public async Task A_probe_from_half_a_degree_off_the_pole_that_reads_over_it_fails_as_pier_changed() {
+            // From 0.5° off the pole a 0.3° probe cannot cross it; a reading that says it did (the RA reading flipped by 12 h
+            // and the pier side with it) is a mount that did not do what it was told: the move fails, never flips the mount.
+            var mount = PolledGemNearThePole(89.5);
+            var flipped = false;
+            mount.OnFullRead = () => {
+                if (!flipped && DecMoves(mount).Length == 1 && !mount.IsMoving) {
+                    flipped = true;
+                    mount.RaJumpHours = 12.0;
+                    mount.ReportedSideOverride = mount.InitialTrueSide == PierSide.pierEast ? PierSide.pierWest : PierSide.pierEast;
+                }
+            };
+            using var svc = NewGemService(mount, new WsRecorder());
+
+            var result = await svc.MoveToStartAsync(MoveConfirmed, CancellationToken.None).ConfigureAwait(false);
+
+            Assert.Multiple(() => {
+                Assert.That(result.Outcome, Is.EqualTo(PolarAlignMoveToStartOutcomes.Failed), result.Message + " " + mount.Describe());
+                Assert.That(result.Reason, Is.EqualTo(PolarAlignService.PierChanged), result.Message);
+                Assert.That(result.Message, Does.Contain("the Dec probe went over the pole"));
+                Assert.That(DecMoves(mount), Has.Length.EqualTo(1), "no move after the probe. " + mount.Describe());
+                Assert.That(mount.IsMoving, Is.False);
+            });
+        }
+
+        [Test]
+        public async Task A_first_leg_from_Home_that_reads_under_0_4_degrees_off_the_pole_fails_as_turn_mismatch() {
+            // After the leg that leaves the pole the reported Dec stays 0.2° from it (a reading that did not follow): the
+            // move does not go on from a start that still has no side.
+            var mount = PolledGemNearThePole(90.0);
+            var shifted = false;
+            mount.OnFullRead = () => {
+                if (!shifted && DecMoves(mount).Length == 1 && !mount.IsMoving) {
+                    shifted = true;
+                    mount.ReportedDecOffsetDeg = 0.3;
+                }
+            };
+            using var svc = NewGemService(mount, new WsRecorder());
+
+            var result = await svc.MoveToStartAsync(MoveConfirmed, CancellationToken.None).ConfigureAwait(false);
+
+            Assert.Multiple(() => {
+                Assert.That(result.Outcome, Is.EqualTo(PolarAlignMoveToStartOutcomes.Failed), result.Message + " " + mount.Describe());
+                Assert.That(result.Reason, Is.EqualTo(PolarAlignService.TurnMismatch), result.Message);
+                Assert.That(result.Message, Does.Contain("the first Dec move left the scope"));
+                Assert.That(DecMoves(mount), Has.Length.EqualTo(1), "nothing moves after the leg. " + mount.Describe());
+            });
+        }
+
+        [Test]
+        public async Task An_RA_reading_that_moves_during_the_leg_that_leaves_the_pole_fails_as_ra_moved() {
+            // The leg that leaves the pole judges no side and no pass over the pole, but the RA axis must still not turn: an
+            // RA reading that moves 80° 0.3° from the pole (0.4° on the sky) stops it.
+            var mount = PolledGemNearThePole(90.0);
+            var reads = 0;
+            mount.OnPoseRead = () => {
+                if (DecMoves(mount).Length == 1 && mount.IsMoving && Interlocked.Increment(ref reads) == 3) {
+                    mount.RaJumpHours = 80.0 / 15.0;
+                }
+            };
+            using var svc = NewGemService(mount, new WsRecorder());
+
+            var result = await svc.MoveToStartAsync(MoveConfirmed, CancellationToken.None).ConfigureAwait(false);
+
+            Assert.Multiple(() => {
+                Assert.That(result.Outcome, Is.EqualTo(PolarAlignMoveToStartOutcomes.Failed), result.Message + " " + mount.Describe());
+                Assert.That(result.Reason, Is.EqualTo(PolarAlignService.RaMoved), result.Message);
+                Assert.That(DecMoves(mount), Has.Length.EqualTo(1), mount.Describe());
+                Assert.That(mount.IsMoving, Is.False);
+            });
         }
 
         [Test]
