@@ -315,8 +315,11 @@ namespace OpenAstroAra.Server.Services {
                         await MoveDecAxisUntilAsync(savedAway, MoveToStartProbeDeg, track,
                             (start, now) => now - start, checkDirection: true, gen, ct).ConfigureAwait(false);
                         await WaitForReadingAtThePoleAsync(track, gen, ct).ConfigureAwait(false);
-                        if (track.OverThePole) {
-                            LogDecSavedDirectionWentOver();
+                        // The leg must have gone away from the pole on the start's side: over it, or toward it (a 0.3° leg
+                        // toward the pole stays under the 0.5° wrong-way stop), the saved direction is wrong (#2189 review).
+                        var leg = track.SignedOffPoleDeg - startOffPole;
+                        if (track.OverThePole || leg < MoveToStartProbeDeg / 2) {
+                            LogDecSavedDirectionWentOver(leg);
                             throw new RoutineFailedException(TurnWrongWay, DecSavedWrongWayMessage);
                         }
                     }
@@ -602,7 +605,7 @@ namespace OpenAstroAra.Server.Services {
                     // Stopped by the clock: the settled reading says where the move really ended.
                     LogClockStop(axis, commanded, read, degrees);
                     var settledDeg = progress(from, track.SignedOffPoleDeg);
-                    if (checkDirection && settledDeg <= -WrongWayDeg) {
+                    if (checkDirection && settledDeg <= -SettledWrongWayDeg(commanded - segmentBase)) {
                         LogAxisMoveWrongWay(axis, -settledDeg, Rate(), direction);
                         throw new RoutineFailedException(TurnWrongWay, DecWrongWayMessage);
                     }
@@ -777,8 +780,8 @@ namespace OpenAstroAra.Server.Services {
         [LoggerMessage(Level = LogLevel.Information, Message = "§45 polar-align: the Dec motor direction (a positive rate goes {Way} the pole on the {Side} side) is saved for {Mount}")]
         private partial void LogDecDirectionSavedText(string way, string side, string mount);
 
-        [LoggerMessage(Level = LogLevel.Warning, Message = "§45 polar-align: the saved Dec direction took the scope over the pole — stopped, the saved direction is forgotten (turn_wrong_way)")]
-        private partial void LogDecSavedDirectionWentOver();
+        [LoggerMessage(Level = LogLevel.Warning, Message = "§45 polar-align: the saved Dec direction's first leg moved {LegDeg:+0.00;-0.00}° away from the pole (toward it, or over it) — stopped, the saved direction is forgotten (turn_wrong_way)")]
+        private partial void LogDecSavedDirectionWentOver(double legDeg);
 
         [LoggerMessage(Level = LogLevel.Information, Message = "§45 polar-align: the Dec probe went over the pole: back {Degrees:F2}°, past it onto the start's side, before the move off it")]
         private partial void LogMoveToStartReturnsToThePole(double degrees);

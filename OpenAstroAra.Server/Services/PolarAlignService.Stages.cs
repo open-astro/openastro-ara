@@ -675,7 +675,7 @@ namespace OpenAstroAra.Server.Services {
                     // Stopped by the clock: the settled reading says where the turn really ended.
                     LogClockStop(axis, commanded, read, degrees);
                     var settledDeg = progress(start, (after.RaDeg, after.DecDeg));
-                    if (checkDirection && settledDeg <= -WrongWayDeg) {
+                    if (checkDirection && settledDeg <= -SettledWrongWayDeg(commanded - segmentBase)) {
                         // #2081 — never reversed, as on a poll: the motor is stopped and the run fails (#2188 review).
                         LogAxisMoveWrongWay(axis, -settledDeg, Rate(), learnedSign);
                         throw new RoutineFailedException(TurnWrongWay, TurnWrongWayMessage);

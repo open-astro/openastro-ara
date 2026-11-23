@@ -151,6 +151,34 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task Half_a_degree_from_the_pole_a_wrong_saved_Dec_direction_is_caught_on_its_first_leg_and_forgotten() {
+            // #2189 review: from 0.5° off the pole a wrong 0.3° first leg goes toward the pole and stops short of it, under
+            // the 0.5° wrong-way stop and with no crossing. The leg must show 0.15° away, or the move fails there.
+            var store = TenDegreeStore();
+            var first = PolledGemNearThePole(88.0);
+            first.DecMotorSign = -1.0;
+            using (var svc = NewGemService(first, new WsRecorder(), store)) {
+                var learned = await svc.MoveToStartAsync(MoveConfirmed, CancellationToken.None).ConfigureAwait(false);
+                Assert.That(learned.Outcome, Is.EqualTo(PolarAlignMoveToStartOutcomes.Arrived), learned.Message);
+            }
+            var mount = PolledGemNearThePole(89.5);
+            mount.DecMotorSign = 1.0; // the motor now turns the other way from the saved direction
+            mount.RaAndSideLag = RigPierSideLag;
+            using var again = NewGemService(mount, new WsRecorder(), store);
+            again.PoleReadingQuietFor = TimeSpan.FromSeconds(10);
+
+            var result = await again.MoveToStartAsync(MoveConfirmed, CancellationToken.None).ConfigureAwait(false);
+
+            Assert.Multiple(() => {
+                Assert.That(result.Outcome, Is.EqualTo(PolarAlignMoveToStartOutcomes.Failed), result.Message + " " + mount.Describe());
+                Assert.That(result.Reason, Is.EqualTo(PolarAlignService.TurnWrongWay), result.Message);
+                Assert.That(store.GetPolarAlignDecMotorDirection(), Is.Null, "forgotten, so the next move probes again");
+                Assert.That(DecMoves(mount), Has.Length.EqualTo(1), "only the 0.3° first leg moved. " + mount.Describe());
+                Assert.That(mount.TrueSide, Is.EqualTo(mount.InitialTrueSide), "never over the pole");
+            });
+        }
+
+        [Test]
         public void A_saved_Dec_direction_stands_only_for_the_pier_side_it_was_learned_on() {
             var saved = new PolarAlignDecMotorDirectionDto(1, "west", "hae29c-unique-id", "AlpacaBridge", "6.0.0", DateTimeOffset.UtcNow);
 
