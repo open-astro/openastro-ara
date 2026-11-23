@@ -139,9 +139,10 @@ namespace OpenAstroAra.Server.Services {
             return due < AxisMovePoll ? due : AxisMovePoll;
         }
 
-        /// <summary>A move the clock stopped whose reading stood still for the second half of the move and, settled, moved
-        /// under <see cref="ClockStopFollowFraction"/> of what the motor was told: the reading froze (or the mount did), so
-        /// the move fails as <see cref="SlewStalled"/>. A reading that crept on gets its top-ups, and the move's time bound
+        /// <summary>A segment of a move stopped by the clock (the first move, or one top-up) whose reading made no progress
+        /// for its second half and, settled, moved under <see cref="ClockStopFollowFraction"/> of what the motor was told in
+        /// that segment (<paramref name="moved"/> and <paramref name="commanded"/> are the segment's own): the reading froze
+        /// (or the mount did), so the move fails as <see cref="SlewStalled"/>. A reading that crept on gets its top-ups, and the move's time bound
         /// (<see cref="SlewTimeout"/>) ends a mount slower than its speed, as before.</summary>
         private void ThrowIfReadingDidNotFollow(TelescopeAxes axis, double moved, double commanded, double degrees, bool stoodStill, string unit) {
             if (!stoodStill || moved >= ClockStopFollowFraction * commanded) {
