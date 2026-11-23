@@ -179,6 +179,35 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task A_pier_side_and_RA_reading_that_never_stand_still_after_a_probe_at_the_pole_fail_after_30_s() {
+            // #2189 review: the wait at the pole is bounded. After the probe the RA reading steps 1.5° every 5 s (a driver
+            // whose pointing model shifts next to the pole): never still for 10 s, and small on the sky (ΔRA × cos Dec), so
+            // the RA guard does not trip first. After 30 s the move fails turn_mismatch with the Dec motor stopped.
+            var mount = PolledGemNearThePole(90.0);
+            TimeSpan? since = null;
+            mount.OnFullRead = () => {
+                if (DecMoves(mount).Length == 1 && !mount.IsMoving) {
+                    since ??= mount.Now;
+                    mount.RaJumpHours = 0.1 * Math.Floor((mount.Now - since.Value).TotalSeconds / 5.0);
+                }
+            };
+            using var svc = NewGemService(mount, new WsRecorder());
+            svc.PoleReadingQuietFor = TimeSpan.FromSeconds(10);
+            svc.PoleReadingWaitMax = TimeSpan.FromSeconds(30);
+
+            var result = await svc.MoveToStartAsync(MoveConfirmed, CancellationToken.None).WaitAsync(TimeSpan.FromMinutes(1)).ConfigureAwait(false);
+
+            Assert.Multiple(() => {
+                Assert.That(result.Outcome, Is.EqualTo(PolarAlignMoveToStartOutcomes.Failed), result.Message + " " + mount.Describe());
+                Assert.That(result.Reason, Is.EqualTo(PolarAlignService.TurnMismatch), result.Message);
+                Assert.That(result.Message, Does.Contain("did not stand still within 30 s"));
+                Assert.That(DecMoves(mount), Has.Length.EqualTo(1), "only the probe moved. " + mount.Describe());
+                Assert.That(mount.IsMoving, Is.False);
+                Assert.That(mount.MotionOwner, Is.Null, "the motion owner is given back");
+            });
+        }
+
+        [Test]
         public void A_saved_Dec_direction_stands_only_for_the_pier_side_it_was_learned_on() {
             var saved = new PolarAlignDecMotorDirectionDto(1, "west", "hae29c-unique-id", "AlpacaBridge", "6.0.0", DateTimeOffset.UtcNow);
 
