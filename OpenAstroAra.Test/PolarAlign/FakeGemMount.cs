@@ -212,6 +212,17 @@ namespace OpenAstroAra.Test.PolarAlign {
         /// <summary>The driver's Dec motor sign: +1 = a positive rate lowers the Dec axis angle (from the pole toward the
         /// equator on the normal side), the way PA's tilt off the axis assumes; −1 inverts it.</summary>
         public double DecMotorSign { get; set; } = 1.0;
+        /// <summary>#2189 rig check — the Dec MoveAxis rate is sky-relative, as AlpacaBridge iOptron's: a positive rate moves
+        /// the pointing north on either side of the pier (the driver picks <c>:mn#</c> or <c>:ms#</c> from the pier side),
+        /// and the axis direction is picked when a move starts, then held while it runs (renewals do not re-pick). At the
+        /// pole either sign moves away from it, onto the side <see cref="PoleMovePicksOver"/> says. Northern sites only.</summary>
+        public bool DecRateSkyRelative { get; set; }
+        /// <summary>With <see cref="DecRateSkyRelative"/>: a move that starts at the pole goes over it (the Dec axis past 90°,
+        /// the other side of the pier) when true, or stays on the side the mount is on when false.</summary>
+        public bool PoleMovePicksOver { get; set; }
+        // The Dec axis direction a sky-relative move picked when it started, and the rate sign it picked it for.
+        private double _skyDecAxisDir;
+        private int _skyDecRateSign;
         /// <summary>The firmware GoTo's speed on each axis (degrees per second; the slew rate).</summary>
         public double GoToRateDegPerSec { get; set; } = 4.0;
         /// <summary>The fastest motor rate the mount takes; a faster one is clamped (TelescopeService snaps into AxisRates).</summary>
@@ -1428,6 +1439,24 @@ namespace OpenAstroAra.Test.PolarAlign {
             }
         }
 
+        /// <summary>The Dec axis direction of a sky-relative move (<see cref="DecRateSkyRelative"/>): picked when the rate's sign
+        /// changes (a move starts), from where the mount believes it points: north is toward 90° on the normal side and away
+        /// from it through the pole; at the pole (within 0.01°) the mount's own pick.</summary>
+        private double SkyRelativeDecAxisDirLocked(GemPose believed, double decRate) {
+            var sign = Math.Sign(decRate);
+            if (sign == 0) {
+                _skyDecRateSign = 0;
+                return 0.0;
+            }
+            if (sign != _skyDecRateSign) {
+                _skyDecRateSign = sign;
+                _skyDecAxisDir = Math.Abs(believed.DecAxisDeg - 90.0) < 0.01 ? (PoleMovePicksOver ? 1.0 : -1.0)
+                    : believed.DecAxisDeg < 90.0 ? sign
+                    : -sign;
+            }
+            return _skyDecAxisDir;
+        }
+
         private void StepLocked(TimeSpan dt) {
             var s = dt.TotalSeconds;
             var before = _true;
@@ -1449,7 +1478,8 @@ namespace OpenAstroAra.Test.PolarAlign {
             var raRate = EffectiveRateLocked(0);
             var decRate = EffectiveRateLocked(1);
             var dHa = -RaMotorSign * raRate * s;
-            var dDec = (-(South ? -1.0 : 1.0) * DecMotorSign * decRate * s) + (raRate != 0 ? DecDriftDegPerSec * s : 0.0);
+            var dDec = (DecRateSkyRelative ? SkyRelativeDecAxisDirLocked(believedBefore, decRate) * Math.Abs(decRate) * s
+                    : -(South ? -1.0 : 1.0) * DecMotorSign * decRate * s) + (raRate != 0 ? DecDriftDegPerSec * s : 0.0);
             travel += Math.Abs(raRate * s) + Math.Abs(dDec);
             if (_tracking && !_atPark && _goto is null) {
                 dHa += GemGeometry.SiderealDegPerSecond * s;

@@ -593,16 +593,19 @@ namespace OpenAstroAra.Test {
         [TestCase(90.0, 1.0)]
         [TestCase(90.0, -1.0)]
         [TestCase(89.9, -1.0)]
-        public async Task From_Home_or_next_to_the_pole_the_move_arrives_on_the_side_it_started_whichever_way_the_Dec_motor_turns(
+        public async Task From_Home_or_next_to_the_pole_the_first_leg_leaves_the_pole_and_the_move_arrives_on_that_side_whichever_way_the_Dec_motor_turns(
                 double decDeg, double decMotorSign) {
+            // #2189 rig check — within 0.5° of the pole a start has no side: the first leg only leaves the pole, and the side
+            // the mount then reports is the start's. The move never crosses the pole after it.
             var mount = PolledGemNearThePole(decDeg);
             mount.DecMotorSign = decMotorSign;
             var phiBefore = mount.TruePhiDeg;
+            var sideAfterLeaving = SideAfterTheFirstLeg(mount);
             using var svc = NewGemService(mount, new WsRecorder());
 
             var result = await svc.MoveToStartAsync(MoveConfirmed, CancellationToken.None).ConfigureAwait(false);
 
-            AssertArrivedOnItsSide(result, mount, phiBefore);
+            AssertLeftThePoleAndArrived(result, mount, sideAfterLeaving(), phiBefore);
             mount.AssertEndedStopped(tracking: true);
         }
 
@@ -612,12 +615,13 @@ namespace OpenAstroAra.Test {
             mount.DecMotorSign = -1.0; // a positive rate raises the Dec axis: over the pole from Home
             mount.DecPastPoleUnfolded = true;
             var phiBefore = mount.TruePhiDeg;
+            var sideAfterLeaving = SideAfterTheFirstLeg(mount);
             using var svc = NewGemService(mount, new WsRecorder());
 
             var result = await svc.MoveToStartAsync(MoveConfirmed, CancellationToken.None).ConfigureAwait(false);
 
-            AssertArrivedOnItsSide(result, mount, phiBefore);
-            Assert.That(DecMoves(mount)[0].TrueTo.DecAxisDeg, Is.GreaterThan(90.0), "the probe went over the pole. " + mount.Describe());
+            AssertLeftThePoleAndArrived(result, mount, sideAfterLeaving(), phiBefore);
+            Assert.That(DecMoves(mount)[0].TrueTo.DecAxisDeg, Is.GreaterThan(90.0), "the first leg went over the pole. " + mount.Describe());
         }
 
         // ── the RA guard on the sky ──────────────────────────────────────────────────────────

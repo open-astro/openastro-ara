@@ -239,9 +239,10 @@ framing/focus loop when you need to point or focus by eye.
   the counterweights stay where they are. The first time on a mount it moves Dec 0.3° to learn which
   way the Dec motor turns, and Ara saves that for the mount and the side of the pier, so later moves
   go straight off the pole (**Test direction again** forgets it too; a saved direction that turns out
-  wrong is forgotten). From Home or within about 1° of the pole it waits about
-  10 seconds after that small move, because some mounts report a pass over the pole a few seconds
-  late; if the small move went over the pole, it comes back past the pole before the move off it.
+  wrong is forgotten). From Home or within half a degree of the pole the scope has no side yet: the
+  first small move only takes it off the pole, onto whichever side the mount picks, and the move
+  carries on from that side. Next to the pole it waits about 10 seconds after a small move, because
+  some mounts report a pass over the pole a few seconds late.
   While the mount is parked, the site is not set, its position is not trusted, the clearance
   is not confirmed, it is an alt-az mount or it cannot turn Dec by motor speed, the button is off and
   the reason is written beside it. A tap asks first ("Move to the start position?"); nothing moves
