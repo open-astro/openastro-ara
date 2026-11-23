@@ -220,7 +220,7 @@ namespace OpenAstroAra.Test {
             using var svc = NewGemService(mount, new WsRecorder(), store);
             svc.PoleReadingQuietFor = TimeSpan.FromSeconds(10);
 
-            var result = await svc.MoveToStartAsync(MoveConfirmed, CancellationToken.None).ConfigureAwait(false);
+            var result = await svc.MoveToStartAsync(MoveConfirmed, CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(30)).ConfigureAwait(false);
 
             Assert.Multiple(() => {
                 Assert.That(result.Outcome, Is.EqualTo(PolarAlignMoveToStartOutcomes.Arrived), result.Message + " " + mount.Describe());
