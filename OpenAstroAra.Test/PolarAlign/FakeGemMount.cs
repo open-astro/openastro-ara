@@ -97,6 +97,8 @@ namespace OpenAstroAra.Test.PolarAlign {
         private TimeSpan _motionStartedAt;
         private (double RaDeg, double DecDeg)? _frozenReading;
         private DriverSample? _sample;
+        // The live RA and pier side samples, oldest first, for RaAndSideLag.
+        private readonly System.Collections.Generic.List<(TimeSpan At, double RaDeg, PierSide Side)> _raSideHistory = [];
         private double _motorTravelDeg;
         private double _maxPhiDeg;
         private bool _limitHit;
@@ -175,6 +177,10 @@ namespace OpenAstroAra.Test.PolarAlign {
         /// <summary>The driver answers position and Slewing from a cache refreshed at most this often (<c>cache_ms</c>;
         /// AlpacaBridge iOptron: 1 s). Zero: every read is live.</summary>
         public TimeSpan DriverCache { get; set; }
+        /// <summary>#2166 rig check — the reported RA and pier side trail the mount by this much while its Dec reading is
+        /// live (the HAE29C on AlpacaBridge 6.0.0-beta.4 showed a pole crossing in them ~6 s after its Dec reading moved).
+        /// Zero: no lag.</summary>
+        public TimeSpan RaAndSideLag { get; set; }
         /// <summary>Slewing reads false once a motion has run this long, while it still moves (<c>slewing_false_early</c>).</summary>
         public TimeSpan? SlewingFalseAfter { get; set; }
         /// <summary>Slewing reads true from the first motion on, whatever the mount does (<c>slewing_stuck</c>).</summary>
@@ -1565,7 +1571,17 @@ namespace OpenAstroAra.Test.PolarAlign {
                 return cached;
             }
             var (ra, dec) = ReportedLiveLocked();
-            var fresh = new DriverSample(_t, ra, dec, TrulyMovingLocked(), ReportedSideLocked(ra));
+            var side = ReportedSideLocked(ra);
+            if (RaAndSideLag > TimeSpan.Zero) {
+                _raSideHistory.Add((_t, ra, side));
+                // The newest sample at least the lag old answers; the very first one until then.
+                var due = _t - RaAndSideLag;
+                while (_raSideHistory.Count > 1 && _raSideHistory[1].At <= due) {
+                    _raSideHistory.RemoveAt(0);
+                }
+                (ra, side) = (_raSideHistory[0].RaDeg, _raSideHistory[0].Side);
+            }
+            var fresh = new DriverSample(_t, ra, dec, TrulyMovingLocked(), side);
             _sample = fresh;
             return fresh;
         }

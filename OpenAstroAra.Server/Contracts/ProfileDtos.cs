@@ -714,6 +714,23 @@ public sealed record PolarAlignMotorDirectionDto(int Sign, string MountKey, stri
         && string.Equals(DriverVersion ?? string.Empty, driverVersion ?? string.Empty, StringComparison.Ordinal);
 }
 
+/// <summary>#2166 rig check — the Dec motor direction the move to the start position learned on this profile's mount,
+/// and saved (profile section <c>polar_align_dec_motor_direction</c>, daemon-owned, null until a move arrived after a
+/// probe). <c>TowardPoleSignWest</c> +1: a positive secondary-axis MoveAxis rate moves the scope toward the pole while
+/// the mount reports its west pier side (on the east side the same rate moves it away: the Dec axis is turned over);
+/// −1: the other way. Keyed like <see cref="PolarAlignMotorDirectionDto"/> (the mount's key and its driver's name and
+/// version), so another mount or driver probes again. With a saved direction the move skips its 0.3° probe, which from
+/// Home cannot tell which way it went until the mount's pier side catches up.</summary>
+public sealed record PolarAlignDecMotorDirectionDto(int TowardPoleSignWest, string MountKey, string DriverInfo, string DriverVersion, DateTimeOffset TestedUtc) {
+    /// <summary>As <see cref="PolarAlignMotorDirectionDto.IsFor"/>: the saved direction stands for this mount and driver.</summary>
+    public bool IsFor(string? mountKey, string? driverInfo, string? driverVersion) =>
+        TowardPoleSignWest is 1 or -1
+        && !string.IsNullOrWhiteSpace(MountKey)
+        && string.Equals(MountKey, mountKey, StringComparison.Ordinal)
+        && string.Equals(DriverInfo ?? string.Empty, driverInfo ?? string.Empty, StringComparison.Ordinal)
+        && string.Equals(DriverVersion ?? string.Empty, driverVersion ?? string.Empty, StringComparison.Ordinal);
+}
+
 /// <summary>#2081 — <c>GET /api/v1/equipment/polaralign/motor-direction</c>: the saved test (null = never tested, or
 /// forgotten by "Test direction again"), and whether it stands for the mount connected now (null = no mount connected).
 /// A start whose mount it does not stand for tests the direction first (a 0.5° turn the confirm step shows).</summary>

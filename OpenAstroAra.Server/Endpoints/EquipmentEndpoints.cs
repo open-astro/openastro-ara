@@ -1388,7 +1388,8 @@ public static partial class EquipmentEndpoints {
         "polar alignment is running, and its motor-direction test could save a direction right after this — stop it first, then tap Test direction again";
 
     /// <summary>#2081 — <c>POST /polaralign/motor-direction/retest</c>: forget the saved direction, so the next start tests
-    /// it again; a <c>polar-align-already-running</c> Refusal while a run is going.</summary>
+    /// it again; a <c>polar-align-already-running</c> Refusal while a run is going. #2166 rig check — the saved Dec motor
+    /// direction is forgotten too, so the next move to the start position probes again.</summary>
     internal static IResult RetestPolarAlignMotorDirection(IProfileStore profiles, IPolarAlignService svc) {
         ArgumentNullException.ThrowIfNull(profiles);
         ArgumentNullException.ThrowIfNull(svc);
@@ -1396,6 +1397,7 @@ public static partial class EquipmentEndpoints {
             throw new RefusalException(RefusalCatalog.PolarAlignAlreadyRunning, RetestWhileRunningMessage);
         }
         profiles.PutPolarAlignMotorDirection(null);
+        profiles.PutPolarAlignDecMotorDirection(null);
         return Results.NoContent();
     }
 

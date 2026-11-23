@@ -314,6 +314,7 @@ namespace OpenAstroAra.Server;
 [JsonSerializable(typeof(IReadOnlyList<FocusCalibrationSampleDto>))]
 [JsonSerializable(typeof(TrackingCalibrationDto))]
 [JsonSerializable(typeof(PolarAlignMotorDirectionDto))]
+[JsonSerializable(typeof(PolarAlignDecMotorDirectionDto))]
 [JsonSerializable(typeof(PolarAlignMotorDirectionStateDto))]
 // #1140 P2 — sky-model calibration store.
 [JsonSerializable(typeof(SkyModelCalibrationDto))]

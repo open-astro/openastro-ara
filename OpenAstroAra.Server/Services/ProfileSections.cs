@@ -432,6 +432,19 @@ internal static class ProfileSections {
         stripped: ["Sign", "MountKey", "DriverInfo", "DriverVersion", "TestedUtc"],
         strip: _ => null);
 
+    /// <summary>Null until a move to the start position learns the Dec motor direction (#2166). Measured on the donor's
+    /// mount and driver.</summary>
+    public static readonly ProfileSection<PolarAlignDecMotorDirectionDto> PolarAlignDecMotorDirection = new(
+        "PolarAlignDecMotorDirection",
+        s => s.PolarAlignDecMotorDirection,
+        (s, v) => s with { PolarAlignDecMotorDirection = v },
+        st => st.GetPolarAlignDecMotorDirection(),
+        (st, v) => st.PutPolarAlignDecMotorDirection(v),
+        null,
+        kept: [],
+        stripped: ["TowardPoleSignWest", "MountKey", "DriverInfo", "DriverVersion", "TestedUtc"],
+        strip: _ => null);
+
     /// <summary>Guard thresholds and probe ladder: tuning judgement.</summary>
     public static readonly ProfileSection<UnguidedSettingsDto> Unguided = new(
         "Unguided",
@@ -589,6 +602,7 @@ internal static class ProfileSections {
         FilterFocusOffsets,
         Dome,
         PolarAlignMotorDirection,
+        PolarAlignDecMotorDirection,
     ];
 
     /// <summary>

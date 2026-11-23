@@ -14806,6 +14806,30 @@ components:
             - number
             - string
           format: double
+    PolarAlignDecMotorDirectionDto:
+      required:
+        - toward_pole_sign_west
+        - mount_key
+        - driver_info
+        - driver_version
+        - tested_utc
+      type: object
+      properties:
+        toward_pole_sign_west:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - integer
+            - string
+          format: int32
+        mount_key:
+          type: string
+        driver_info:
+          type: string
+        driver_version:
+          type: string
+        tested_utc:
+          type: string
+          format: date-time
     PolarAlignerCapabilitiesDto:
       required:
         - device_name
@@ -15895,6 +15919,10 @@ components:
           oneOf:
             - type: 'null'
             - $ref: '#/components/schemas/PolarAlignMotorDirectionDto'
+        polar_align_dec_motor_direction:
+          oneOf:
+            - type: 'null'
+            - $ref: '#/components/schemas/PolarAlignDecMotorDirectionDto'
     QualityScoreBreakdownDto:
       required:
         - composite

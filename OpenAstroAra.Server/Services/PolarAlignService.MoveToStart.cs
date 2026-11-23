@@ -59,6 +59,24 @@ namespace OpenAstroAra.Server.Services {
         /// <summary>Within this of the pole a reading whose RA and pier side flip is the Dec axis going over the pole.</summary>
         internal const double PoleCrossingDeg = 1.0;
 
+        /// <summary>#2166 rig check — a probe that starts this close to the pole (the probe plus a margin) may go over it,
+        /// so its way is read only once the pier side and RA reading stand still (<see cref="WaitForReadingAtThePoleAsync"/>).</summary>
+        internal const double PoleCrossingRiskDeg = MoveToStartProbeDeg + 0.5;
+
+        /// <summary>How long the pier side and RA reading must stand still after such a probe: longer than the ~6 s the
+        /// HAE29C's showed a pole crossing late.</summary>
+        internal TimeSpan PoleReadingQuietFor { get; set; } = TimeSpan.FromSeconds(10);
+
+        /// <summary>The most the move waits for them to stand still before it fails.</summary>
+        internal TimeSpan PoleReadingWaitMax { get; set; } = TimeSpan.FromSeconds(30);
+
+        /// <summary>After a probe that went over the pole, the move back goes this far past the pole onto the side the move
+        /// started on, so the move off the pole after it never crosses the pole (and never reads a crossing late).</summary>
+        internal const double PoleCrossBackDeg = 0.3;
+
+        /// <summary>An RA reading change under this is still (the flip of a crossing is 180°).</summary>
+        internal const double PoleReadingQuietRaDeg = 1.0;
+
         /// <summary>The most the RA reading may move east or west on the sky during a Dec move (degrees, ΔRA × cos Dec).</summary>
         internal const double DecMoveRaSkyLimitDeg = 0.1;
 
@@ -66,6 +84,9 @@ namespace OpenAstroAra.Server.Services {
         internal const string RaMoved = "ra_moved";
 
         private const string MoveToStartWhy = "move_to_start";
+
+        private const string DecSavedWrongWayMessage =
+            "the mount's Dec went toward the pole, the other way from its saved Dec direction, so Polar Align stopped it and never turned it back; the saved direction is forgotten, so the next move probes again — check the mount, then try again";
 
         private const string DecWrongWayMessage =
             "the mount's Dec went toward the pole, the other way from the probe's lesson, so Polar Align stopped it and never turned it back — check the mount, then point it 2–5° from the pole with its own controls";
@@ -276,8 +297,39 @@ namespace OpenAstroAra.Server.Services {
             ThrowIfMoveToStartTooSlow();
             await EnsureTrackingOnAsync(gen, ct).ConfigureAwait(false);
             var track = new DecMoveTrack(poleSign);
+            // #2166 rig check — which way the Dec motor goes, saved for this mount and driver by an earlier move: the move
+            // goes straight off the pole, with no probe. A probe from Home went over the pole on the HAE29C, and its pier
+            // side and RA reading showed it only ~6 s later, so the probe read as "away" and the move went on over the pole.
+            var driver = ReadMountDriver();
+            var startReading = await RunReadingAsync(gen, MountReadKind.Full, ct, foldPastPole: true).ConfigureAwait(false);
+            var startSide = startReading.Side;
+            if (SavedDecTowardPoleSign(driver, startSide) is double savedToward) {
+                var savedAway = -savedToward;
+                var startOffPole = 90.0 - (poleSign * startReading.DecDeg);
+                LogMoveToStartSavedDirection(savedAway, driver.Identity);
+                var toGo = MoveToStartOffPoleDeg - startOffPole;
+                if (toGo > StopStillDeg) {
+                    try {
+                        await MoveDecAxisUntilAsync(savedAway, toGo, track,
+                            (start, now) => now - start, checkDirection: true, gen, ct).ConfigureAwait(false);
+                    } catch (RoutineFailedException ex) when (ex.Reason == TurnWrongWay) {
+                        // The saved direction no longer holds (another driver build, a re-wired motor): forget it, so the
+                        // next move probes again. Never reversed here.
+                        _profileStore.PutPolarAlignDecMotorDirection(null);
+                        throw new RoutineFailedException(TurnWrongWay, DecSavedWrongWayMessage);
+                    }
+                }
+                EndMoveToStartOnItsSide(track, await RunReadingAsync(gen, MountReadKind.Full, ct, foldPastPole: true).ConfigureAwait(false));
+                return;
+            }
             var (from, probed) = await MoveDecAxisUntilAsync(1.0, MoveToStartProbeDeg, track,
                 (start, now) => Math.Abs(now - start), checkDirection: false, gen, ct).ConfigureAwait(false);
+            if (from < PoleCrossingRiskDeg) {
+                // A probe this close to the pole may have gone over it, and the mount may show that late: wait until its
+                // pier side and RA reading stand still long enough before reading which way the probe went.
+                await WaitForReadingAtThePoleAsync(track, gen, ct).ConfigureAwait(false);
+                probed = track.SignedOffPoleDeg;
+            }
             var towardPole = from - probed;
             if (Math.Abs(towardPole) < MoveToStartProbeDeg / 2) {
                 throw new RoutineFailedException(TurnMismatch, string.Create(CultureInfo.InvariantCulture,
@@ -286,16 +338,45 @@ namespace OpenAstroAra.Server.Services {
             // A probe toward (or over) the pole has stopped and settled: the next move is a new one, the other way.
             var awaySign = towardPole > 0 ? -1.0 : 1.0;
             LogMoveToStartProbed(towardPole, awaySign);
+            if (track.OverThePole) {
+                // #2166 rig check — the probe went over the pole. Back to it first, then wait again: a move that crossed
+                // the pole on the way would read its crossing late (the pier side trails), and read late as a wrong-way
+                // move or a pier flip. From the pole the move off it never crosses it.
+                var back = -probed + PoleCrossBackDeg;
+                LogMoveToStartReturnsToThePole(back);
+                // Progress is the Dec reading's path (|Δ| summed), which reads a pass through the pole right whatever the
+                // late pier side says; the clock stops it on time. The way is known now, from the settled probe.
+                var lastOffPole = track.LastOffPoleDeg;
+                var path = 0.0;
+                await MoveDecAxisUntilAsync(awaySign, back, track,
+                    (_, _) => {
+                        path += Math.Abs(track.LastOffPoleDeg - lastOffPole);
+                        lastOffPole = track.LastOffPoleDeg;
+                        return path;
+                    }, checkDirection: false, gen, ct).ConfigureAwait(false);
+                await WaitForReadingAtThePoleAsync(track, gen, ct).ConfigureAwait(false);
+                if (track.OverThePole) {
+                    throw new RoutineFailedException(PierChanged,
+                        "the Dec axis did not come back over the pole after the probe — Polar Align never flips the mount; check where it points, then point it 2–5° from the pole with its own controls");
+                }
+                probed = track.SignedOffPoleDeg;
+            }
             var remaining = MoveToStartOffPoleDeg - probed;
             if (remaining > StopStillDeg) {
                 await MoveDecAxisUntilAsync(awaySign, remaining, track,
                     (start, now) => now - start, checkDirection: true, gen, ct).ConfigureAwait(false);
             }
-            var final = await RunReadingAsync(gen, MountReadKind.Full, ct, foldPastPole: true).ConfigureAwait(false);
+            EndMoveToStartOnItsSide(track, await RunReadingAsync(gen, MountReadKind.Full, ct, foldPastPole: true).ConfigureAwait(false));
+            // Arrived on its side the way the probe said: the probe's lesson holds, so it is saved for this mount and driver.
+            SaveDecTowardPoleSign(driver, track.OriginSide, towardPole > 0 ? 1.0 : -1.0);
+        }
+
+        /// <summary>The final reading: the move must end on the side of the pier it started on, 2–5° from the pole.</summary>
+        private void EndMoveToStartOnItsSide(DecMoveTrack track, FreshPointing final) {
             ObserveDecMove(track, final);
             if (track.OverThePole) {
                 var (origin, ended) = (track.OriginSide, track.ExpectedSide(overThePole: true));
-                LogTurnPierChanged(origin, ended);
+                LogDecMovePierChanged(origin, ended);
                 throw new RoutineFailedException(PierChanged,
                     "the move to the start position ended over the pole, on the other side of the pier — Polar Align never flips the mount; check where it points, then point it 2–5° from the pole with its own controls");
             }
@@ -305,6 +386,66 @@ namespace OpenAstroAra.Server.Services {
                     $"the move ended with the scope {offPole:F1}° from the pole, not 2–5° — check the mount, then point it with its own controls"));
             }
             LogMoveToStartArrived(offPole);
+        }
+
+        /// <summary>#2166 rig check — the saved Dec direction for <paramref name="driver"/>, as the sign of a positive rate
+        /// toward the pole on <paramref name="side"/> (the Dec axis is turned over on the east side); null with none saved
+        /// for this mount and driver, or a side the mount does not report.</summary>
+        private double? SavedDecTowardPoleSign(MountDriverKey driver, PierSide side) {
+            if (side is not (PierSide.pierWest or PierSide.pierEast)
+                    || _profileStore.GetPolarAlignDecMotorDirection() is not { } saved
+                    || !saved.IsFor(driver.Mount, driver.Info, driver.Version)) {
+                return null;
+            }
+            return side == PierSide.pierWest ? saved.TowardPoleSignWest : -saved.TowardPoleSignWest;
+        }
+
+        /// <summary>Save the probe's lesson (a positive rate went toward the pole on <paramref name="side"/> when
+        /// <paramref name="towardOnSide"/> is +1) for <paramref name="driver"/>, as the west side's sign. Nothing is saved
+        /// with no mount key or a side the mount did not report.</summary>
+        private void SaveDecTowardPoleSign(MountDriverKey driver, PierSide side, double towardOnSide) {
+            if (driver.Mount.Length == 0 || side is not (PierSide.pierWest or PierSide.pierEast)) {
+                return;
+            }
+            var west = (int)(side == PierSide.pierWest ? towardOnSide : -towardOnSide);
+            _profileStore.PutPolarAlignDecMotorDirection(
+                new PolarAlignDecMotorDirectionDto(west, driver.Mount, driver.Info, driver.Version, DateTimeOffset.UtcNow));
+            LogDecDirectionSaved(west, driver.Identity);
+        }
+
+        /// <summary>
+        /// #2166 rig check — after a probe that started within <see cref="PoleCrossingRiskDeg"/> of the pole: fresh full
+        /// readings every <see cref="AxisMovePoll"/> (each through <see cref="ObserveDecMove"/>, so a late flip of the RA
+        /// reading and the pier side is read as the crossing it is) until the pier side and the RA reading have stood still
+        /// for <see cref="PoleReadingQuietFor"/>. On the HAE29C (AlpacaBridge 6.0.0-beta.4) they showed a crossing ~6 s after
+        /// the Dec reading did. Not still within <see cref="PoleReadingWaitMax"/>: the probe's way is not known, and the move
+        /// fails before anything else moves.
+        /// </summary>
+        private async Task WaitForReadingAtThePoleAsync(DecMoveTrack track, int gen, CancellationToken ct) {
+            var began = Clock.GetTimestamp();
+            var quietSince = began;
+            (double Ra, PierSide Side)? last = null;
+            LogMoveToStartWaitsAtThePole(PoleReadingQuietFor.TotalSeconds);
+            while (true) {
+                await Task.Delay(AxisMovePoll, ct).ConfigureAwait(false);
+                if (!IsCurrent(gen)) {
+                    throw new OperationCanceledException("the move was stopped while it waited at the pole");
+                }
+                ThrowIfStoppedFromOutside(gen);
+                var r = await RunReadingAsync(gen, MountReadKind.Full, ct, foldPastPole: true).ConfigureAwait(false);
+                var at = Clock.GetTimestamp();
+                ObserveDecMove(track, r);
+                if (last is not { } l || l.Side != r.Side || Math.Abs(Wrap180(r.RawRaDeg - l.Ra)) > PoleReadingQuietRaDeg) {
+                    last = (r.RawRaDeg, r.Side);
+                    quietSince = at;
+                } else if (Clock.GetElapsedTime(quietSince, at) >= PoleReadingQuietFor) {
+                    return;
+                }
+                if (Clock.GetElapsedTime(began, at) > PoleReadingWaitMax) {
+                    throw new RoutineFailedException(TurnMismatch, string.Create(CultureInfo.InvariantCulture,
+                        $"the mount's pier side and RA reading did not stand still within {PoleReadingWaitMax.TotalSeconds:F0} s of the Dec probe next to the pole, so which way it went is not known — check the mount, then try again"));
+                }
+            }
         }
 
         /// <summary>The longest the probe and the move may take together by their own time bounds (twice the planned time
@@ -566,7 +707,7 @@ namespace OpenAstroAra.Server.Services {
                 var expected = track.ExpectedSide(over);
                 if (r.Side != expected) {
                     var reported = r.Side;
-                    LogTurnPierChanged(expected, reported);
+                    LogDecMovePierChanged(expected, reported);
                     throw new RoutineFailedException(PierChanged,
                         "the mount reported a different side of the pier during the Dec move — Polar Align never flips the mount; check where it points, then try again");
                 }
@@ -608,5 +749,23 @@ namespace OpenAstroAra.Server.Services {
 
         [LoggerMessage(Level = LogLevel.Information, Message = "§45 polar-align: the Dec axis went {Which} the pole during the move to the start position")]
         private partial void LogDecMoveCrossedPole(string which);
+
+        [LoggerMessage(Level = LogLevel.Warning, Message = "§45 polar-align: pier side changed from {From} to {To} during a Dec move — stopped (pier_changed)")]
+        private partial void LogDecMovePierChanged(PierSide from, PierSide to);
+
+        [LoggerMessage(Level = LogLevel.Information, Message = "§45 polar-align: the move to the start position goes at Dec sign {Sign:+0;-0}, the direction saved for {Mount} (no probe)")]
+        private partial void LogMoveToStartSavedDirection(double sign, string mount);
+
+        [LoggerMessage(Level = LogLevel.Information, Message = "§45 polar-align: the Dec motor direction (a positive rate goes {Way} the pole on the west side) is saved for {Mount}")]
+        private partial void LogDecDirectionSavedText(string way, string mount);
+
+        private void LogDecDirectionSaved(int towardPoleSignWest, string mount) =>
+            LogDecDirectionSavedText(towardPoleSignWest > 0 ? "toward" : "away from", mount);
+
+        [LoggerMessage(Level = LogLevel.Information, Message = "§45 polar-align: the Dec probe went over the pole: back {Degrees:F2}°, past it onto the start's side, before the move off it")]
+        private partial void LogMoveToStartReturnsToThePole(double degrees);
+
+        [LoggerMessage(Level = LogLevel.Information, Message = "§45 polar-align: the Dec probe started next to the pole: waiting until the pier side and RA reading stand still for {Seconds:F0} s")]
+        private partial void LogMoveToStartWaitsAtThePole(double seconds);
     }
 }

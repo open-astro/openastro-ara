@@ -104,4 +104,7 @@ public sealed record ProfileSnapshotDto(
     DomeSettingsDto? Dome = null,
     // #2081 — the RA motor direction Polar Align's 0.5° test learned on this profile's mount, keyed by the driver's name
     // and version. Daemon-owned; null (every pre-#2081 file, and after "Test direction again") = never tested.
-    PolarAlignMotorDirectionDto? PolarAlignMotorDirection = null);
+    PolarAlignMotorDirectionDto? PolarAlignMotorDirection = null,
+    // #2166 rig check — the Dec motor direction the move to the start position learned on this profile's mount, keyed
+    // like the RA one. Daemon-owned; null (every older file, and after "Test direction again") = never learned.
+    PolarAlignDecMotorDirectionDto? PolarAlignDecMotorDirection = null);
