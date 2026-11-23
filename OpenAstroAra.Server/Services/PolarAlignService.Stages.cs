@@ -597,16 +597,35 @@ namespace OpenAstroAra.Server.Services {
                 while (true) {
                     var byClock = false;
                     var read = 0.0;
+                    var lastStep = 0.0;
+                    var prevP = double.NaN;
+                    Task? pendingRead = null;
                     while (true) {
-                        await Task.Delay(NextAxisPoll(travel, degrees), ct).ConfigureAwait(false);
+                        // #2189 rig check — the clock also ends the fast phase (at the slow zone), not the reading alone.
+                        // A fast phase with no more than a top-up's worth left is no phase: the rest runs to the distance.
+                        var target = fast && degrees - AxisSlowZoneDeg > segmentBase + ClockStopTopUpDeg ? degrees - AxisSlowZoneDeg : degrees;
+                        await Task.Delay(NextAxisPoll(travel, target), ct).ConfigureAwait(false);
                         if (!IsCurrent(gen)) {
                             throw new OperationCanceledException("the run was superseded while the mount moved");
                         }
                         ThrowIfStoppedFromOutside(gen);
+                        // #2189 rig check — the clock stop never waits on a read: a read that blocks past the due time (the
+                        // HAE29C's reads took 0.6 s and more while the motor ran on) loses the race, and the motor stops.
+                        var dueFrom = Clock.GetTimestamp();
+                        if (travel.DegreesAt(dueFrom) >= target - 1e-9) {
+                            byClock = true;
+                            break;
+                        }
                         // #2089 — noted as Polar Align's own move, so the next start does not read it as "moved by other means".
                         // #2067 — the poll reads the position and the pier side (no Slewing round trip): a turn that changes
                         // the pier side, or moves the Dec reading, stops at that reading.
-                        var (nowRa, nowDec, nowSide) = await RunPoseJnowAsync(gen, ct, MountReadKind.Pose).ConfigureAwait(false);
+                        var readTask = RunPoseJnowAsync(gen, ct, MountReadKind.Pose);
+                        if (await ClockDueBeforeReadAsync(readTask, travel.TimeTo(target, dueFrom)).ConfigureAwait(false)) {
+                            byClock = true;
+                            pendingRead = readTask;
+                            break;
+                        }
+                        var (nowRa, nowDec, nowSide) = await readTask.ConfigureAwait(false);
                         var at = Clock.GetTimestamp();
                         var now = (nowRa, nowDec);
                         NoteMountLeft(now, nowSide is PierSide.pierUnknown ? startSide : nowSide);
@@ -619,6 +638,10 @@ namespace OpenAstroAra.Server.Services {
                         ThrowIfTurnLeftItsAxis(startDec, startSide, nowDec, nowSide);
                         var p = progress(start, now);
                         read = p;
+                        if (!double.IsNaN(prevP)) {
+                            lastStep = p - prevP;
+                        }
+                        prevP = p;
                         if (p >= degrees - 1e-9) {
                             break;
                         }
@@ -641,12 +664,12 @@ namespace OpenAstroAra.Server.Services {
                                 $"the mount turned only {Math.Max(best, 0):F1}° of {degrees:F0}° in {bound.TotalSeconds:F0} s, twice the time the turn takes at its speed — check it, then start again"));
                         }
                         // #2166 rig check — the motor has been told the whole step: stop it now, whatever the reading says.
-                        var told = travel.DegreesAt(at);
-                        if (told >= degrees - 1e-9) {
+                        // The reading reached the slow zone itself (within a still reading's 0.05°): its speed change below holds, no stop by the clock.
+                        if (p < target - StopStillDeg && travel.DegreesAt(at) >= target - 1e-9) {
                             byClock = true;
                             break;
                         }
-                        if (fast && degrees - p <= AxisSlowZoneDeg) {
+                        if (fast && degrees - p <= AxisSlowZoneDeg + 1e-9) {
                             fast = false; // the last few degrees at the slow speed: the stop lands close to the target
                         }
                         if (!IsCurrent(gen)) {
@@ -666,6 +689,9 @@ namespace OpenAstroAra.Server.Services {
                     var stoppedAt = Clock.GetTimestamp();
                     var commanded = travel.DegreesAt(stoppedAt);
                     await StopAxisBestEffortAsync(axis).ConfigureAwait(false);
+                    if (pendingRead is not null) {
+                        await DrainReadAsync(pendingRead).ConfigureAwait(false);
+                    }
                     settled = true;
                     after = await SettleAfterTurnAsync(start, startSide, degrees, progress, gen, ct).ConfigureAwait(false);
                     settledFor += Clock.GetElapsedTime(stoppedAt, Clock.GetTimestamp());
@@ -680,9 +706,7 @@ namespace OpenAstroAra.Server.Services {
                         LogAxisMoveWrongWay(axis, -settledDeg, Rate(), learnedSign);
                         throw new RoutineFailedException(TurnWrongWay, TurnWrongWayMessage);
                     }
-                    // The reading made no progress for the second half of the segment: it froze, not lagged.
-                    var stoodStill = Clock.GetElapsedTime(bestAt, stoppedAt) * 2 >= Clock.GetElapsedTime(segmentBegan, stoppedAt);
-                    ThrowIfReadingDidNotFollow(axis, settledDeg - segmentBase, commanded - segmentBase, degrees, stoodStill, "turn");
+                    ThrowIfReadingDidNotFollow(axis, settledDeg - segmentBase, commanded - segmentBase, degrees, lastStep > ClockStopAdvancingDeg, "turn");
                     var rest = degrees - settledDeg;
                     if (rest <= ClockStopTopUpDeg) {
                         break;
@@ -693,7 +717,7 @@ namespace OpenAstroAra.Server.Services {
                     if (!IsCurrent(gen)) {
                         throw new OperationCanceledException("the run was superseded while the mount moved");
                     }
-                    fast = rest > AxisSlowZoneDeg;
+                    fast = rest > AxisSlowZoneDeg + ClockStopTopUpDeg; // a rest at the slow zone (3° and a rounding hair) runs slow
                     best = Math.Max(best, settledDeg);
                     settled = false;
                     await RunAxisAsync(axis, Rate(), abortEpoch).ConfigureAwait(false);

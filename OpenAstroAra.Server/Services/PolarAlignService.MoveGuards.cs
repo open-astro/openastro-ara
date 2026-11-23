@@ -14,6 +14,7 @@
 
 using Microsoft.Extensions.Logging;
 using System;
+using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Linq;
 using System.Threading;
@@ -95,9 +96,19 @@ namespace OpenAstroAra.Server.Services {
         /// move counts as arrived where it stands.</summary>
         internal const double ClockStopTopUpDeg = 0.1;
 
-        /// <summary>A move stopped by the clock whose settled reading moved under this fraction of what the motor was told,
-        /// on a reading that stood still, did not follow its motor (<see cref="SlewStalled"/>).</summary>
-        internal const double ClockStopFollowFraction = 0.5;
+        /// <summary>A segment stopped by the clock (the fast phase, the move, or a top-up) whose settled reading moved under
+        /// this fraction of what the motor was told did not follow it: the mount stopped (a soft limit) or the reading froze.
+        /// No top-up goes out then (no new motor command toward a limit), unless the reading was still moving at the stop
+        /// (<see cref="ClockStopAdvancingDeg"/>): a mount slower than its speed creeps on to the time bound. A reading that
+        /// lags but catches up in the settle reads nearly all of it (the rig: 0.38° for a 0.3° probe).</summary>
+        internal const double ClockStopFollowFraction = 0.8;
+
+        /// <summary>A reading step at the last poll before a clock stop above this is a reading still moving (creeping).</summary>
+        internal const double ClockStopAdvancingDeg = 0.001;
+
+        /// <summary>The fraction of a short move's commanded travel its settled reading may go the wrong way before it is
+        /// wrong-way (<see cref="SettledWrongWayDeg"/>).</summary>
+        internal const double SettledWrongWayFraction = 0.5;
 
         /// <summary>
         /// #2166 rig check — how far a move's motor has been told to turn: the rates commanded, times how long each ran, on
@@ -134,10 +145,11 @@ namespace OpenAstroAra.Server.Services {
 
         /// <summary>After a stop by the clock, how far a Dec move's settled reading may go the other way before the move is
         /// wrong-way: <see cref="WrongWayDeg"/>, or less for a short move: a reading that followed the motor (half of what it
-        /// was told, <see cref="ClockStopFollowFraction"/>) the wrong way. A 0.3° leg never reaches 0.5° (#2189 review). An
+        /// was told, <see cref="SettledWrongWayFraction"/>) the wrong way, but never under <see cref="ClockStopTopUpDeg"/>, so a
+        /// tiny segment's noise is not wrong-way. A 0.3° leg never reaches 0.5° (#2189 review). An
         /// RA turn is at least 1°, so it keeps <see cref="WrongWayDeg"/>.</summary>
         private static double SettledWrongWayDeg(double commandedDeg) =>
-            Math.Min(WrongWayDeg, ClockStopFollowFraction * Math.Abs(commandedDeg));
+            Math.Max(ClockStopTopUpDeg, Math.Min(WrongWayDeg, SettledWrongWayFraction * Math.Abs(commandedDeg)));
 
         /// <summary>The next poll's wait: <see cref="AxisMovePoll"/>, or sooner when the motor's commanded travel reaches the
         /// move's distance before then, so the clock's stop lands on time.</summary>
@@ -146,19 +158,44 @@ namespace OpenAstroAra.Server.Services {
             return due < AxisMovePoll ? due : AxisMovePoll;
         }
 
-        /// <summary>A segment of a move stopped by the clock (the first move, or one top-up) whose reading made no progress
-        /// for its second half and, settled, moved under <see cref="ClockStopFollowFraction"/> of what the motor was told in
-        /// that segment (<paramref name="moved"/> and <paramref name="commanded"/> are the segment's own): the reading froze
-        /// (or the mount did), so the move fails as <see cref="SlewStalled"/>. A reading that crept on gets its top-ups, and the move's time bound
-        /// (<see cref="SlewTimeout"/>) ends a mount slower than its speed, as before.</summary>
-        private void ThrowIfReadingDidNotFollow(TelescopeAxes axis, double moved, double commanded, double degrees, bool stoodStill, string unit) {
-            if (!stoodStill || moved >= ClockStopFollowFraction * commanded) {
+        /// <summary>A segment stopped by the clock that, settled, moved under <see cref="ClockStopFollowFraction"/> of what the
+        /// motor was told in that segment (<paramref name="moved"/> and <paramref name="commanded"/> are the segment's own),
+        /// on a reading that was not moving at the stop: the mount stopped short (a soft limit) or its reading froze. The move
+        /// fails as <see cref="SlewStalled"/> with no top-up, so nothing is commanded toward a limit again. A reading still
+        /// moving (<paramref name="advancing"/>) creeps on: its top-ups end at the time bound (<see cref="SlewTimeout"/>).</summary>
+        private void ThrowIfReadingDidNotFollow(TelescopeAxes axis, double moved, double commanded, double degrees, bool advancing, string unit) {
+            if (advancing || moved >= ClockStopFollowFraction * commanded) {
                 return;
             }
             LogClockStopNotFollowed(axis, moved, commanded);
             throw new RoutineFailedException(SlewStalled, string.Create(CultureInfo.InvariantCulture,
                 $"the mount's reading stopped changing after {Math.Max(moved, 0):F1}° of the {degrees:F1}° {unit} while its motor was told {commanded:F1}° — check it can move freely and its connection, then try again"));
         }
+
+        /// <summary>#2189 rig check — true when the clock's stop is due before <paramref name="read"/> answers: a read that
+        /// blocks (the HAE29C's took 0.6 s and more right after a motor command) must not hold the motor on past its distance.</summary>
+        private static async Task<bool> ClockDueBeforeReadAsync(Task read, TimeSpan due) {
+            if (read.IsCompleted || due == TimeSpan.MaxValue) {
+                return false;
+            }
+            var first = await Task.WhenAny(read, Task.Delay(due > TimeSpan.Zero ? due : TimeSpan.Zero, CancellationToken.None)).ConfigureAwait(false);
+            return first != read;
+        }
+
+        /// <summary>The read that lost the race to the clock's stop: waited for after the stop, so it never overlaps the
+        /// settle's reads; whatever it answers or throws is set aside (the settle reads afresh).</summary>
+        [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+            Justification = "The read that lost the race to a stop is set aside; its fault must not mask the stop or the settle.")]
+        private async Task DrainReadAsync(Task read) {
+            try {
+                await read.ConfigureAwait(false);
+            } catch (Exception ex) {
+                LogDrainedReadFailed(ex);
+            }
+        }
+
+        [LoggerMessage(EventId = 4653, Level = LogLevel.Debug, Message = "§45 polar-align: a read that lost the race to the clock's stop failed (set aside)")]
+        private partial void LogDrainedReadFailed(Exception exception);
 
         [LoggerMessage(EventId = 4597, Level = LogLevel.Information, Message = "§45 polar-align: {Axis} move stopped by the clock at {Commanded:F2}° commanded (the reading showed {Read:F2}° of {Degrees:F2}°)")]
         private partial void LogClockStop(TelescopeAxes axis, double commanded, double read, double degrees);

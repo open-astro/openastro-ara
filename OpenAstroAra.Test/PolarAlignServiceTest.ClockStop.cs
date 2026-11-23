@@ -147,5 +147,77 @@ namespace OpenAstroAra.Test {
                 Assert.That(mount.IsMoving, Is.False);
             });
         }
+
+        // ── #2189 rig check: reads that block while the motor runs ──────────────────────────────
+
+        /// <summary>The rig's readings on a fake in real time: a driver cache and a blocking read together up to 2 s old (the
+        /// HAE29C's reads took 0.6 s and more right after a motor command), at its matched speeds and the daemon's 2 s stall.</summary>
+        private static PolarAlignService NewBlockingReadService(FakeGemMount mount, WsRecorder ws, InMemoryProfileStore? store = null) {
+            mount.DriverCache = TimeSpan.FromSeconds(1.4);
+            mount.SlowReads = TimeSpan.FromSeconds(0.6);
+            var svc = NewGemService(mount, ws, store, benchMotors: false);
+            svc.AxisFastRateDegPerSec = 2.13;
+            svc.AxisSlowRateDegPerSec = 0.53;
+            svc.AxisMoveStall = TimeSpan.FromSeconds(2);
+            svc.AxisMovePoll = TimeSpan.FromMilliseconds(250);
+            // The daemon's stop confirmation: reads of 0.6 s need its 8 s window, not the bench's 0.5 s.
+            svc.StopVerifyPoll = TimeSpan.FromMilliseconds(250);
+            svc.StopVerifyStillFor = TimeSpan.FromSeconds(1.5);
+            svc.StopVerifyNotBefore = TimeSpan.FromSeconds(2);
+            svc.StopResendAfter = TimeSpan.FromSeconds(2);
+            svc.StopVerifyWindow = TimeSpan.FromSeconds(8);
+            return svc;
+        }
+
+        /// <summary>A real-time move stops within this of its distance: the clock's stop lands on its timer (tens of ms at
+        /// 0.53°/s is under 0.05°), whatever a read in flight is doing.</summary>
+        private const double BlockingReadToleranceDeg = 0.1;
+
+        [Test]
+        public async Task Behind_blocking_reads_the_3_6_degree_move_off_the_pole_stops_by_the_clock_and_ends_4_degrees_off_it() {
+            // Rig run 1 on d27bba26d: after the probe the 3.6° move off the pole at 2.13°/s ran on 1.4° past its distance (ended
+            // 5.33° off the pole) on reads that took ~0.6 s: the clock's stop waited for the read. A real-time fake: the probe
+            // goes toward the pole from 0.7° off to 0.4°, then the 3.6° move: fast, stopped by the clock at the slow zone, then
+            // slow for the rest.
+            var mount = FakeGemMount.CounterweightDownAt(2.0, 89.3, lstHours: 20.0, latitudeDeg: SiteLatDeg);
+            mount.DecMotorSign = -1.0; // a positive rate goes toward the pole
+            using var svc = NewBlockingReadService(mount, new WsRecorder());
+
+            var result = await svc.MoveToStartAsync(MoveConfirmed, CancellationToken.None).WaitAsync(TimeSpan.FromMinutes(2)).ConfigureAwait(false);
+
+            Assert.Multiple(() => {
+                Assert.That(result.Outcome, Is.EqualTo(PolarAlignMoveToStartOutcomes.Arrived), result.Message + " " + mount.Describe());
+                Assert.That(OffPoleDeg(mount), Is.EqualTo(PolarAlignService.MoveToStartOffPoleDeg).Within(BlockingReadToleranceDeg),
+                    "4° from the pole, not 5.3°. " + mount.Describe());
+            });
+            mount.AssertEndedStopped(tracking: true);
+        }
+
+        [Test]
+        public async Task Behind_blocking_reads_each_10_degree_RA_turn_stops_by_the_clock_at_its_step() {
+            var mount = FakeGemMount.CounterweightDownAt(-4.0, 85.0, lstHours: 20.0);
+            var ws = new WsRecorder();
+            using var svc = NewBlockingReadService(mount, ws);
+
+            // In real time two turns behind 0.6 s reads take longer than the bench's event wait: wait for adjusting here.
+            var plan = await svc.GetStartPlanAsync(PolarAlignStages.Fine, CancellationToken.None).ConfigureAwait(false);
+            await svc.StartAsync(PolarAlignStages.Fine, new PolarAlignStartConfirmation(plan.Direction, plan.NewOrigin), null, CancellationToken.None).ConfigureAwait(false);
+            await ws.WhenAsync(events => events.Any(e => e.Type == WsEventCatalog.PolarAlignProgress || e.Type == WsEventCatalog.PolarAlignError))
+                .WaitAsync(TimeSpan.FromMinutes(3)).ConfigureAwait(false);
+            var state = await svc.GetStatusAsync(CancellationToken.None).ConfigureAwait(false);
+            Assert.That(state.State, Is.EqualTo("adjusting"), mount.Describe());
+            await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
+
+            var turns = RaTurns(mount);
+            Assert.Multiple(() => {
+                // Each turn is a fast phase stopped by the clock at the slow zone and a slow top-up; the sky turns ~0.04° west
+                // under a 9 s turn, which the motor's travel does not count.
+                Assert.That(mount.TotalTrueRaSweepDeg, Is.EqualTo(20.0).Within(2 * (BlockingReadToleranceDeg + 0.05)),
+                    "two 10° turns, each where it was told. " + mount.Describe());
+                Assert.That(turns.Select(t => Math.Abs(t.TrueDeltaHaDeg)), Has.All.LessThanOrEqualTo(10.0 + BlockingReadToleranceDeg),
+                    mount.Describe());
+            });
+            mount.AssertEndedStopped(tracking: false);
+        }
     }
 }
