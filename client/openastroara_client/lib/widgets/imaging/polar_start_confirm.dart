@@ -86,11 +86,7 @@ class PolarMoveToStartConfirmDialog extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.only(bottom: 8),
             child: Text(
-              l10n.polarMoveToStartConfirmBody(
-                format.format(offer.targetOffPoleDeg),
-                // The rig's reach is the target plus the probe it moves first.
-                format.format(offer.reachDeg - offer.targetOffPoleDeg),
-              ),
+              l10n.polarMoveToStartConfirmBody(format.format(offer.targetOffPoleDeg)),
             ),
           ),
           Text(l10n.polarConfirmPower),

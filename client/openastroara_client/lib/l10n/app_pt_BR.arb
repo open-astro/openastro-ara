@@ -2041,7 +2041,7 @@
   "polarMoveToStartMoving": "Movendo o telescópio para a posição inicial…",
   "polarMoveToStartStop": "Parar",
   "polarMoveToStartTitle": "Mover para a posição inicial?",
-  "polarMoveToStartConfirmBody": "O alinhamento polar gira só o eixo de Dec até o telescópio apontar a cerca de {deg}° do polo. O eixo de AR e os contrapesos ficam onde estão. Primeiro ele move a Dec {probe}° para descobrir para que lado o motor gira.",
+  "polarMoveToStartConfirmBody": "O alinhamento polar gira só o eixo de Dec até o telescópio apontar a cerca de {deg}° do polo. O eixo de AR e os contrapesos ficam onde estão. Bem perto do polo, primeiro ele tira o telescópio do polo, para o lado que a montagem escolher. Se o Ara ainda não salvou para que lado o motor de Dec gira nesta montagem, ele primeiro faz um pequeno movimento de Dec para descobrir.",
   "polarMoveToStartBlockedParked": "Destrave a montagem do estacionamento primeiro: o alinhamento polar nunca faz isso.",
   "polarMoveToStartBlockedSite": "Defina primeiro a latitude do local, para o alinhamento polar saber de qual polo se afastar.",
   "polarMoveToStartBlockedPose": "Confirme primeiro a posição Home da montagem: a posição dela não é confiável.",

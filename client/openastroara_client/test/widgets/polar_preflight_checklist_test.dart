@@ -1068,7 +1068,7 @@ void main() {
     },
   );
 
-  testWidgets('The move confirm names the probe the rig sends with its offer', (
+  testWidgets('The move confirm says the scope leaves the pole first and learns the Dec direction when none is saved', (
     tester,
   ) async {
     await _pumpMoveToStart(
@@ -1083,9 +1083,14 @@ void main() {
     await tester.tap(find.byKey(const Key('polar-move-to-start-button')));
     await tester.pumpAndSettle();
     expect(
-      find.textContaining('It first moves Dec 0.5° to learn'),
+      find.textContaining('about 4° from the pole'),
       findsOneWidget,
-      reason: 'the probe is the reach past the target',
+      reason: "the offer's target",
+    );
+    expect(
+      find.textContaining('Right next to the pole it first moves the scope off the pole'),
+      findsOneWidget,
+      reason: 'a start at the pole has no side until it leaves it (#2189)',
     );
   });
 }

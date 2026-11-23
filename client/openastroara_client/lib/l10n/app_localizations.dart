@@ -12358,11 +12358,11 @@ abstract class AppLocalizations {
   /// **'Move to the start position?'**
   String get polarMoveToStartTitle;
 
-  /// Polar align (#2166): the confirm dialog's body; {deg} is the target distance from the pole and {probe} the small first move, in degrees
+  /// Polar align (#2166, #2189): the confirm dialog's body; {deg} is the target distance from the pole, in degrees
   ///
   /// In en, this message translates to:
-  /// **'Polar align turns the Dec axis alone until the scope points about {deg}° from the pole. The RA axis and the counterweights stay where they are. It first moves Dec {probe}° to learn which way its motor turns.'**
-  String polarMoveToStartConfirmBody(String deg, String probe);
+  /// **'Polar align turns the Dec axis alone until the scope points about {deg}° from the pole. The RA axis and the counterweights stay where they are. Right next to the pole it first moves the scope off the pole, onto the side the mount picks. If Ara has not saved which way the Dec motor turns on this mount, it first makes a small Dec move to learn it.'**
+  String polarMoveToStartConfirmBody(String deg);
 
   /// Polar align (#2166): why Move to start position is off: the mount is parked
   ///

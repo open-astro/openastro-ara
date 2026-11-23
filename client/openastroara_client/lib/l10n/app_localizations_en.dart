@@ -7448,8 +7448,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get polarMoveToStartTitle => 'Move to the start position?';
 
   @override
-  String polarMoveToStartConfirmBody(String deg, String probe) {
-    return 'Polar align turns the Dec axis alone until the scope points about $deg° from the pole. The RA axis and the counterweights stay where they are. It first moves Dec $probe° to learn which way its motor turns.';
+  String polarMoveToStartConfirmBody(String deg) {
+    return 'Polar align turns the Dec axis alone until the scope points about $deg° from the pole. The RA axis and the counterweights stay where they are. Right next to the pole it first moves the scope off the pole, onto the side the mount picks. If Ara has not saved which way the Dec motor turns on this mount, it first makes a small Dec move to learn it.';
   }
 
   @override

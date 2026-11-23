@@ -7448,8 +7448,8 @@ class AppLocalizationsPt extends AppLocalizations {
   String get polarMoveToStartTitle => 'Move to the start position?';
 
   @override
-  String polarMoveToStartConfirmBody(String deg, String probe) {
-    return 'Polar align turns the Dec axis alone until the scope points about $deg° from the pole. The RA axis and the counterweights stay where they are. It first moves Dec $probe° to learn which way its motor turns.';
+  String polarMoveToStartConfirmBody(String deg) {
+    return 'Polar align turns the Dec axis alone until the scope points about $deg° from the pole. The RA axis and the counterweights stay where they are. Right next to the pole it first moves the scope off the pole, onto the side the mount picks. If Ara has not saved which way the Dec motor turns on this mount, it first makes a small Dec move to learn it.';
   }
 
   @override
@@ -15076,8 +15076,8 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String get polarMoveToStartTitle => 'Mover para a posição inicial?';
 
   @override
-  String polarMoveToStartConfirmBody(String deg, String probe) {
-    return 'O alinhamento polar gira só o eixo de Dec até o telescópio apontar a cerca de $deg° do polo. O eixo de AR e os contrapesos ficam onde estão. Primeiro ele move a Dec $probe° para descobrir para que lado o motor gira.';
+  String polarMoveToStartConfirmBody(String deg) {
+    return 'O alinhamento polar gira só o eixo de Dec até o telescópio apontar a cerca de $deg° do polo. O eixo de AR e os contrapesos ficam onde estão. Bem perto do polo, primeiro ele tira o telescópio do polo, para o lado que a montagem escolher. Se o Ara ainda não salvou para que lado o motor de Dec gira nesta montagem, ele primeiro faz um pequeno movimento de Dec para descobrir.';
   }
 
   @override
