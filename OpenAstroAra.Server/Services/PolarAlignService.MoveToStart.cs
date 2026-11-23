@@ -422,9 +422,9 @@ namespace OpenAstroAra.Server.Services {
                         if (!IsCurrent(gen)) {
                             throw new OperationCanceledException("the move was stopped while the mount moved");
                         }
-                        var renewedAt = Clock.GetTimestamp();
                         await RunAxisAsync(axis, Rate(), abortEpoch).ConfigureAwait(false);
-                        travel.Run(Rate(), renewedAt);
+                        // Timed once the mount took it: the old rate ran until then, so a slowdown never under-counts (#2188 review).
+                        travel.Run(Rate(), Clock.GetTimestamp());
                     }
                     if (RunStopsFenced(gen)) {
                         throw new OperationCanceledException("the move was fenced as it arrived");

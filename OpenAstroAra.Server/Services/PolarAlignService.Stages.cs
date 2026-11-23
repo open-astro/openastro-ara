@@ -653,9 +653,9 @@ namespace OpenAstroAra.Server.Services {
                             // Checked again just before the renewal: a Stop during the read above must not get a motor restart.
                             throw new OperationCanceledException("the run was superseded while the mount moved");
                         }
-                        var renewedAt = Clock.GetTimestamp();
                         await RunAxisAsync(axis, Rate(), abortEpoch).ConfigureAwait(false); // a new speed, or the lease renewed
-                        travel.Run(Rate(), renewedAt);
+                        // Timed once the mount took it: the old rate ran until then, so a slowdown never under-counts (#2188 review).
+                        travel.Run(Rate(), Clock.GetTimestamp());
                     }
                     // Arrived on the reading (or the clock): stop the motor, then see the mount stand still. The motion stays
                     // marked until it does (ARA-3): a Stop meanwhile still sends AbortSlew, whatever an early "not slewing" says.

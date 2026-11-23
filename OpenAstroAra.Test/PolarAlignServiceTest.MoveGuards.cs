@@ -434,8 +434,9 @@ namespace OpenAstroAra.Test {
         [Test]
         public async Task Behind_a_1_s_driver_cache_a_mount_still_turning_after_the_stop_is_never_taken_for_still() {
             // iOptron's 1 s cache, a Slewing that already reads false, and a mount that runs on slowly after the turn's
-            // MoveAxis 0: two readings 10 ms apart are the same cached one. The settle wants two still readings 1.5 s apart,
-            // so the cache refreshes between them, the motion shows, and the run fails on this turn (never a second one).
+            // MoveAxis 0: two readings 10 ms apart are the same cached one. The settle wants two still readings 2.5 s apart
+            // (the daemon's, #2166), so the cache refreshes between them, the motion shows, and the run fails on this turn
+            // (never a second one).
             var mount = PolledGemAt(-4.0);
             mount.DriverCache = TimeSpan.FromSeconds(1);
             mount.SlewingFalseAfter = TimeSpan.Zero;
@@ -443,7 +444,7 @@ namespace OpenAstroAra.Test {
             mount.RunawayDegPerSec = 0.5;
             var ws = new WsRecorder();
             using var svc = NewGuardedService(mount, ws);
-            svc.AxisSettle = TimeSpan.FromSeconds(1.5); // the daemon's (the bench runs with none)
+            svc.AxisSettle = TimeSpan.FromSeconds(2.5); // the daemon's (the bench runs with none)
             svc.AxisFastRateDegPerSec = 3.0; // and its motor speeds: a 1 s cache trails them by a degree or so
             svc.AxisSlowRateDegPerSec = 1.0;
 
