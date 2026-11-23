@@ -66,7 +66,10 @@ namespace OpenAstroAra.Test {
             Assert.That(withCaps!.Capabilities!.SensorWidth, Is.GreaterThan(0), "sensor size should be read from the sim");
             // #1185 — the §25.5.5 wire fields come from the simulator too (OmniSim implements them all).
             Assert.Multiple(() => {
-                Assert.That(withCaps.Capabilities.SensorType, Is.Not.Null.And.Not.Empty, "SensorType name is read");
+                // #1134 — a real driver may not name its sensor type: OmniSim only.
+                if (!OnRealGear) {
+                    Assert.That(withCaps.Capabilities.SensorType, Is.Not.Null.And.Not.Empty, "SensorType name is read");
+                }
                 Assert.That(withCaps.Capabilities.ExposureResolutionSec, Is.GreaterThanOrEqualTo(0));
                 Assert.That(withCaps.Capabilities.Gains, Is.Null.Or.Not.Empty, "a gain list is either absent (range mode) or non-empty");
                 Assert.That(withCaps.Capabilities.Offsets, Is.Null.Or.Not.Empty);
@@ -75,7 +78,9 @@ namespace OpenAstroAra.Test {
             try {
                 // §28 widening: sub-second on purpose — this is the ONLY test that drives
                 // RegisterFrameAsync, and 0.5 used to be rounded up to a catalogued 1 s.
-                var response = await svc.StartExposureAsync(new ExposureRequestDto(ExposureSec: 0.5, Gain: null), idempotencyKey: null, CancellationToken.None).ConfigureAwait(false);
+                // #1134 — a real camera whose shortest exposure is above 0.5 s gets its own minimum.
+                var exposureSec = OnRealGear ? Math.Max(0.5, withCaps.Capabilities.MinExposureSec) : 0.5;
+                var response = await svc.StartExposureAsync(new ExposureRequestDto(ExposureSec: exposureSec, Gain: null), idempotencyKey: null, CancellationToken.None).ConfigureAwait(false);
                 Assert.That(response.FrameId, Is.Not.Empty);
                 var frameId = Guid.Parse(response.FrameId);
                 Assert.That(response.PreviewUrl.ToString(), Does.Contain(response.FrameId));
@@ -90,7 +95,7 @@ namespace OpenAstroAra.Test {
                     }
                 }
                 Assert.That(frame, Is.Not.Null, "the captured frame never appeared in the catalog");
-                Assert.That(frame!.ExposureSeconds, Is.EqualTo(0.5), "the real capture path must catalog sub-second exposures verbatim (§28)");
+                Assert.That(frame!.ExposureSeconds, Is.EqualTo(exposureSec), "the real capture path must catalog sub-second exposures verbatim (§28)");
                 Assert.That(frame.Gain, Is.Null, "a request without gain must catalog NULL, not a sentinel (§28)");
                 Assert.That(frame.Width, Is.GreaterThan(0));
                 Assert.That(frame.Height, Is.GreaterThan(0));

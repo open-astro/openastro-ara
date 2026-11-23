@@ -112,7 +112,7 @@ namespace OpenAstroAra.Test {
                 // Slew to a coordinate near the current pointing so the OmniSim settles quickly, then
                 // confirm the read-back lands near the target.
                 var startRa = tracking.Runtime.RightAscensionHours ?? 6.0;
-                var targetRa = NormalizeRaHours(startRa + 0.2);
+                var targetRa = NormalizeRaHours(startRa + RaOffsetHours);
                 var targetDec = TargetDec(tracking.Runtime.DeclinationDegrees);
                 await svc.SlewAsync(new SlewRequestDto(targetRa, targetDec), null, CancellationToken.None).ConfigureAwait(false);
                 var slewed = await PollUntilAsync(svc,
@@ -168,7 +168,7 @@ namespace OpenAstroAra.Test {
                 var current = ((ITelescopeMediator)svc).GetCurrentPosition();
                 var targetDec = TargetDec(current.Dec);
                 var target = new Coordinates(
-                    Angle.ByHours(NormalizeRaHours(current.RA + 0.2)), Angle.ByDegree(targetDec), current.Epoch);
+                    Angle.ByHours(NormalizeRaHours(current.RA + RaOffsetHours)), Angle.ByDegree(targetDec), current.Epoch);
                 var slewed = await ((ITelescopeMediator)svc).SlewToCoordinatesAsync(target, CancellationToken.None).ConfigureAwait(false);
                 Assert.That(slewed, Is.True, "mediator slew should confirm arrival at the target");
 
@@ -182,8 +182,11 @@ namespace OpenAstroAra.Test {
             Assert.That(disconnected!.State, Is.EqualTo(EquipmentConnectionState.Disconnected));
         }
 
-        // OmniSim: a fixed +45°. Real gear (#1134): two degrees from where the mount points, so the
-        // slew stays short and above the horizon the mount is already at.
+        // OmniSim: 0.2 h east in RA. Real gear (#1134): no RA step, so the slew is the 2° Dec step alone.
+        private double RaOffsetHours => OnRealGear ? 0.0 : 0.2;
+
+        // OmniSim: a fixed +45°. Real gear (#1134): 2° in Dec from where the mount points, a short slew
+        // next to the current pointing (not a horizon check: the mount's own limits still apply).
         private double TargetDec(double? currentDec) {
             if (!OnRealGear) {
                 return 45.0;

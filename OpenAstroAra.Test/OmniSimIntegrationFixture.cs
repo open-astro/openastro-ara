@@ -95,6 +95,10 @@ namespace OpenAstroAra.Test {
             using var management = new AlpacaManagementClient();
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
             var configured = await management.GetConfiguredDevicesAsync(rig.Host, rig.Port, cts.Token).ConfigureAwait(false);
+            if (configured.Count == 0) {
+                // The client reads a failed or unparsable configureddevices as empty: say so, not "no camera".
+                Assert.Ignore($"The Alpaca server at {rig.Url} listed no devices (configureddevices empty, failed or unreadable) — skipping live {DeviceName} test.");
+            }
             _rigDevice = rig.Pick(DeviceType, configured);
             if (_rigDevice is null) {
                 Assert.Ignore(rig.MissingDeviceMessage(DeviceType));

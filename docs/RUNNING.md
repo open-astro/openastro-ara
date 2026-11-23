@@ -414,10 +414,12 @@ does not have skips with a message (a base rig without a rotator skips the rotat
 cases run on real gear. Every case that slews, unparks or tracks the mount, moves the focuser,
 rotator or filter wheel (a plain wheel connect homes it to slot 0), opens the dome or a cover,
 turns a flat light on, or writes a switch output skips and says so. The camera case takes one
-0.5 s exposure and never touches the cooler. With the opt-in, stand at the rig: the moves stay
-small (the mount slews about 2° from where it points, the focuser 50 steps and back, the rotator
-10° and back), and a switch write flips one port and puts it back, so unplug anything a switch
-port powers that must not lose power.
+short exposure (0.5 s, or the camera's minimum if that is longer) and never touches the cooler.
+With the opt-in, stand at the rig: the moves stay small (the mount slews 2° in Dec at the same
+RA, the focuser 50 steps and back, the rotator 10° and back), and a switch write flips one port
+and puts it back, so unplug anything a switch port powers that must not lose power. The mount
+cases unpark the mount and turn tracking on, and leave it that way: park it yourself after the
+run. The mount's own slew limits still apply; the tests do not check the horizon.
 
 Base rig (camera, mount, focuser, switch), no motion:
 
