@@ -103,6 +103,10 @@ namespace OpenAstroAra.Server.Services {
         /// lags but catches up in the settle reads nearly all of it (the rig: 0.38° for a 0.3° probe).</summary>
         internal const double ClockStopFollowFraction = 0.8;
 
+        /// <summary>#2189 review — how much of a segment's travel a mount that ramps its motor up may lose (its rate times
+        /// this): a shortfall within it is never a stall. Twice a linear 0.5 s ramp's loss.</summary>
+        internal TimeSpan MotorRampAllowance { get; set; } = TimeSpan.FromSeconds(0.5);
+
         /// <summary>A reading step at the last poll before a clock stop above this is a reading still moving (creeping).</summary>
         internal const double ClockStopAdvancingDeg = 0.001;
 
@@ -162,12 +166,16 @@ namespace OpenAstroAra.Server.Services {
         /// motor was told in that segment (<paramref name="moved"/> and <paramref name="commanded"/> are the segment's own),
         /// on a reading that was not moving at the stop: the mount stopped short (a soft limit) or its reading froze. The move
         /// fails as <see cref="SlewStalled"/> with no top-up, so nothing is commanded toward a limit again. A reading still
-        /// moving (<paramref name="advancing"/>) creeps on: its top-ups end at the time bound (<see cref="SlewTimeout"/>). A
-        /// segment that saw no completed reading while its motor ran (<paramref name="sawReading"/> false: a short fast
-        /// phase that ended before a read landed) gives no verdict: a mount that takes ~0.5 s to reach its speed settles
-        /// short there, and the top-up goes on under the time bound (#2189 review, Joey).</summary>
-        private void ThrowIfReadingDidNotFollow(TelescopeAxes axis, double moved, double commanded, double degrees, bool advancing, bool sawReading, string unit) {
-            if (!sawReading || advancing || moved >= ClockStopFollowFraction * commanded) {
+        /// moving (<paramref name="advancing"/>) creeps on: its top-ups end at the time bound (<see cref="SlewTimeout"/>). Only a
+        /// reading that was current at the stop (<paramref name="readingWasCurrent"/>: the settle shows the mount within
+        /// <see cref="StopStillDeg"/> of the segment's last reading) gives a verdict. A segment with no completed reading (a
+        /// short fast phase that ended before a read landed), or whose last reading was stale (a lag, a driver's cached
+        /// sample: the settle shows the mount past it), gives none; nor does a shortfall a slow start explains (the segment's
+        /// rate times <see cref="MotorRampAllowance"/>): a mount that takes ~0.5 s to reach its speed settles short there,
+        /// and the top-up goes on under the time bound (#2189 review, Joey).</summary>
+        private void ThrowIfReadingDidNotFollow(TelescopeAxes axis, double moved, double commanded, double degrees, double rate, bool advancing, bool readingWasCurrent, string unit) {
+            if (!readingWasCurrent || advancing || moved >= ClockStopFollowFraction * commanded
+                    || commanded - moved <= Math.Abs(rate) * MotorRampAllowance.TotalSeconds) {
                 return;
             }
             LogClockStopNotFollowed(axis, moved, commanded);
@@ -181,8 +189,13 @@ namespace OpenAstroAra.Server.Services {
             if (read.IsCompleted || due == TimeSpan.MaxValue) {
                 return false;
             }
-            var first = await Task.WhenAny(read, Task.Delay(due > TimeSpan.Zero ? due : TimeSpan.Zero, CancellationToken.None)).ConfigureAwait(false);
-            return first != read;
+            using var timer = new CancellationTokenSource();
+            var first = await Task.WhenAny(read, Task.Delay(due > TimeSpan.Zero ? due : TimeSpan.Zero, timer.Token)).ConfigureAwait(false);
+            if (first == read) {
+                await timer.CancelAsync().ConfigureAwait(false); // the read won: the timer is not needed
+                return false;
+            }
+            return true;
         }
 
         /// <summary>The read that lost the race to the clock's stop: waited for after the stop, so it never overlaps the

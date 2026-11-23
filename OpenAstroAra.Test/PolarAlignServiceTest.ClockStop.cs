@@ -160,6 +160,7 @@ namespace OpenAstroAra.Test {
             svc.AxisSlowRateDegPerSec = 0.53;
             svc.AxisMoveStall = TimeSpan.FromSeconds(2);
             svc.AxisMovePoll = TimeSpan.FromMilliseconds(250);
+            svc.MotorRampAllowance = TimeSpan.FromSeconds(0.5); // the daemon's
             // The daemon's stop confirmation: reads of 0.6 s need its 8 s window, not the bench's 0.5 s.
             svc.StopVerifyPoll = TimeSpan.FromMilliseconds(250);
             svc.StopVerifyStillFor = TimeSpan.FromSeconds(1.5);
@@ -236,6 +237,33 @@ namespace OpenAstroAra.Test {
                 Assert.That(result.Outcome, Is.EqualTo(PolarAlignMoveToStartOutcomes.Arrived), result.Message + " " + mount.Describe());
                 Assert.That(result.Reason, Is.Not.EqualTo(PolarAlignService.SlewStalled));
                 Assert.That(OffPoleDeg(mount), Is.EqualTo(PolarAlignService.MoveToStartOffPoleDeg).Within(BlockingReadToleranceDeg),
+                    "4° from the pole. " + mount.Describe());
+            });
+            mount.AssertEndedStopped(tracking: true);
+        }
+
+        [Test]
+        public async Task A_ramping_mount_behind_fast_reads_of_a_cached_sample_arrives_with_no_stall_verdict() {
+            // #2189 review: with reads every 10 ms from a 1.4 s driver cache, the 0.28 s fast phase sees readings, but every
+            // one is the same cached sample (no step between them), while the mount ramps up over 0.5 s and moves ~0.17° of
+            // the 0.6° told. The settle shows the mount past the last reading: it was stale, so no verdict; the top-ups go on.
+            var mount = PolledGemNearThePole(89.3);
+            mount.DecMotorSign = -1.0; // a positive rate goes toward the pole: the probe ends 0.4° off, then the 3.6° move
+            mount.MotorRampUp = TimeSpan.FromSeconds(0.5);
+            mount.DriverCache = TimeSpan.FromSeconds(1.4);
+            var svc = NewGemService(mount, new WsRecorder(), benchMotors: false);
+            using var disposable = svc;
+            svc.AxisFastRateDegPerSec = 2.13;
+            svc.AxisSlowRateDegPerSec = 0.53;
+            svc.AxisMoveStall = TimeSpan.FromSeconds(2);
+            svc.AxisSettle = TimeSpan.FromSeconds(2.5);
+            svc.MotorRampAllowance = TimeSpan.FromSeconds(0.5); // the daemon's
+
+            var result = await svc.MoveToStartAsync(MoveConfirmed, CancellationToken.None).WaitAsync(TimeSpan.FromMinutes(1)).ConfigureAwait(false);
+
+            Assert.Multiple(() => {
+                Assert.That(result.Outcome, Is.EqualTo(PolarAlignMoveToStartOutcomes.Arrived), result.Message + " " + mount.Describe());
+                Assert.That(OffPoleDeg(mount), Is.EqualTo(PolarAlignService.MoveToStartOffPoleDeg).Within(ClockStopToleranceDeg),
                     "4° from the pole. " + mount.Describe());
             });
             mount.AssertEndedStopped(tracking: true);

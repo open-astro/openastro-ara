@@ -346,13 +346,17 @@ namespace OpenAstroAra.Server.Services {
                         await MoveDecAxisUntilAsync(savedAway, toGo, track,
                             (start, now) => now - start, checkDirection: true, gen, ct).ConfigureAwait(false);
                     }
+                    EndMoveToStartOnItsSide(track, await RunReadingAsync(gen, MountReadKind.Full, ct, foldPastPole: true).ConfigureAwait(false));
                 } catch (RoutineFailedException ex) when (ex.Reason == TurnWrongWay) {
                     // The saved direction does not hold (another driver build, a re-wired motor): forget it, so the next
                     // move probes again. Never reversed here.
                     _profileStore.PutPolarAlignDecMotorDirection(null);
                     throw new RoutineFailedException(TurnWrongWay, DecSavedWrongWayMessage);
+                } catch (RoutineFailedException ex) when (ex.Reason == PierChanged) {
+                    // Over the pole on the saved direction: it does not hold either (#2189 review). Forget it; the failure stands.
+                    _profileStore.PutPolarAlignDecMotorDirection(null);
+                    throw;
                 }
-                EndMoveToStartOnItsSide(track, await RunReadingAsync(gen, MountReadKind.Full, ct, foldPastPole: true).ConfigureAwait(false));
                 return;
             }
             var (from, probed) = await MoveDecAxisUntilAsync(1.0, MoveToStartProbeDeg, track,
@@ -669,8 +673,10 @@ namespace OpenAstroAra.Server.Services {
                         LogAxisMoveWrongWay(axis, -settledDeg, Rate(), direction);
                         throw new RoutineFailedException(TurnWrongWay, DecWrongWayMessage);
                     }
-                    ThrowIfReadingDidNotFollow(axis, settledDeg - segmentBase, commanded - segmentBase, degrees, lastStep > ClockStopAdvancingDeg,
-                        sawReading: !double.IsNaN(prevP), "move");
+                    // The last reading was current when the settle shows the mount where that reading had it: a stale one (a lag, a
+                    // cached sample) shows the mount past it, and gives no verdict.
+                    ThrowIfReadingDidNotFollow(axis, settledDeg - segmentBase, commanded - segmentBase, degrees, Rate(), lastStep > ClockStopAdvancingDeg,
+                        readingWasCurrent: !double.IsNaN(prevP) && settledDeg - prevP <= StopStillDeg, "move");
                     var rest = degrees - settledDeg;
                     if (rest <= ClockStopTopUpDeg) {
                         break;

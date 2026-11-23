@@ -706,8 +706,10 @@ namespace OpenAstroAra.Server.Services {
                         LogAxisMoveWrongWay(axis, -settledDeg, Rate(), learnedSign);
                         throw new RoutineFailedException(TurnWrongWay, TurnWrongWayMessage);
                     }
-                    ThrowIfReadingDidNotFollow(axis, settledDeg - segmentBase, commanded - segmentBase, degrees, lastStep > ClockStopAdvancingDeg,
-                        sawReading: !double.IsNaN(prevP), "turn");
+                    // The last reading was current when the settle shows the mount where that reading had it: a stale one (a lag, a
+                    // cached sample) shows the mount past it, and gives no verdict.
+                    ThrowIfReadingDidNotFollow(axis, settledDeg - segmentBase, commanded - segmentBase, degrees, Rate(), lastStep > ClockStopAdvancingDeg,
+                        readingWasCurrent: !double.IsNaN(prevP) && settledDeg - prevP <= StopStillDeg, "turn");
                     var rest = degrees - settledDeg;
                     if (rest <= ClockStopTopUpDeg) {
                         break;
