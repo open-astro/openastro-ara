@@ -403,7 +403,7 @@ default and skip when none answers. To run them against real gear through Alpaca
 
 | Variable | Meaning |
 |---|---|
-| `ARA_ALPACA_URL` | The Alpaca server, `http://host:port` (for example `http://openastro.lan:6800`). Unset: the OmniSim path, unchanged. |
+| `ARA_ALPACA_URL` | The Alpaca server, `http://host:port` (for example `http://openastro.lan:6800`); a path after the port is ignored. Unset: the OmniSim path, unchanged. |
 | `ARA_ALPACA_<TYPE>` | Optional device number per type: `CAMERA`, `TELESCOPE`, `FOCUSER`, `FILTERWHEEL`, `ROTATOR`, `SWITCH`, `DOME`, `COVERCALIBRATOR` (flat panel), `OBSERVINGCONDITIONS`, `SAFETYMONITOR`. Unset: the lowest-numbered device of that type. |
 | `ARA_ALPACA_ALLOW_MOTION` | `1` also runs the cases that move or switch gear. Off by default. |
 

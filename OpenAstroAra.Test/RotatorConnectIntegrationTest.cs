@@ -75,16 +75,19 @@ namespace OpenAstroAra.Test {
             // Move to a mechanical angle (UseSkyAngle defaults false) and confirm the read-back.
             var start = OnRealGear ? await ReadMechanicalAngleAsync(svc).ConfigureAwait(false) : null;
             var target = TargetFrom(start, 90.0);
-            await svc.MoveAsync(new RotatorMoveRequestDto(target), idempotencyKey: null, CancellationToken.None).ConfigureAwait(false);
+            try {
+                await svc.MoveAsync(new RotatorMoveRequestDto(target), idempotencyKey: null, CancellationToken.None).ConfigureAwait(false);
 
-            var moved = await PollUntilMechanicalAngleAsync(svc, target).ConfigureAwait(false);
-            Assert.That(moved, Is.Not.Null, "rotator never reported the target mechanical angle");
-            Assert.That(moved!.Runtime.MechanicalAngleDeg, Is.EqualTo(target).Within(0.5),
-                "the cached mechanical angle should reflect the move");
-            if (start is double back) {
-                // Real gear: leave the framing where it was.
-                await svc.MoveAsync(new RotatorMoveRequestDto(back), idempotencyKey: null, CancellationToken.None).ConfigureAwait(false);
-                await PollUntilMechanicalAngleAsync(svc, back).ConfigureAwait(false);
+                var moved = await PollUntilMechanicalAngleAsync(svc, target).ConfigureAwait(false);
+                Assert.That(moved, Is.Not.Null, "rotator never reported the target mechanical angle");
+                Assert.That(moved!.Runtime.MechanicalAngleDeg, Is.EqualTo(target).Within(0.5),
+                    "the cached mechanical angle should reflect the move");
+            } finally {
+                if (start is double back) {
+                    // Real gear: leave the framing where it was.
+                    await svc.MoveAsync(new RotatorMoveRequestDto(back), idempotencyKey: null, CancellationToken.None).ConfigureAwait(false);
+                    await PollUntilMechanicalAngleAsync(svc, back).ConfigureAwait(false);
+                }
             }
 
             await svc.DisconnectAsync(idempotencyKey: null, CancellationToken.None).ConfigureAwait(false);
@@ -117,12 +120,15 @@ namespace OpenAstroAra.Test {
             var start = OnRealGear ? await ReadMechanicalAngleAsync(svc).ConfigureAwait(false) : null;
             var target = (float)TargetFrom(start, 120.0);
             // Blocking move via the mediator — returns once the device settles at the target.
-            var settled = await svc.MoveMechanical(target, CancellationToken.None).ConfigureAwait(false);
-            Assert.That(settled, Is.EqualTo(target).Within(0.5f), "MoveMechanical should return the settled mechanical angle");
-            Assert.That(svc.GetInfo().MechanicalPosition, Is.EqualTo(target).Within(0.5f),
-                "the mediator snapshot should reflect the move");
-            if (start is double back) {
-                await svc.MoveMechanical((float)back, CancellationToken.None).ConfigureAwait(false);
+            try {
+                var settled = await svc.MoveMechanical(target, CancellationToken.None).ConfigureAwait(false);
+                Assert.That(settled, Is.EqualTo(target).Within(0.5f), "MoveMechanical should return the settled mechanical angle");
+                Assert.That(svc.GetInfo().MechanicalPosition, Is.EqualTo(target).Within(0.5f),
+                    "the mediator snapshot should reflect the move");
+            } finally {
+                if (start is double back) {
+                    await svc.MoveMechanical((float)back, CancellationToken.None).ConfigureAwait(false);
+                }
             }
 
             await svc.DisconnectAsync(idempotencyKey: null, CancellationToken.None).ConfigureAwait(false);

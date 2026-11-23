@@ -95,7 +95,7 @@ namespace OpenAstroAra.Test {
                     }
                 }
                 Assert.That(frame, Is.Not.Null, "the captured frame never appeared in the catalog");
-                Assert.That(frame!.ExposureSeconds, Is.EqualTo(exposureSec), "the real capture path must catalog sub-second exposures verbatim (§28)");
+                Assert.That(frame!.ExposureSeconds, Is.EqualTo(exposureSec), "the real capture path must catalog the requested exposure verbatim, sub-second included (§28)");
                 Assert.That(frame.Gain, Is.Null, "a request without gain must catalog NULL, not a sentinel (§28)");
                 Assert.That(frame.Width, Is.GreaterThan(0));
                 Assert.That(frame.Height, Is.GreaterThan(0));

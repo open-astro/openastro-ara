@@ -89,15 +89,18 @@ namespace OpenAstroAra.Test {
             var current = withCaps.Runtime.Position ?? 0;
             var target = TargetFrom(current, max);
 
-            await svc.MoveAsync(new FocuserMoveRequestDto(target), idempotencyKey: null, CancellationToken.None).ConfigureAwait(false);
+            try {
+                await svc.MoveAsync(new FocuserMoveRequestDto(target), idempotencyKey: null, CancellationToken.None).ConfigureAwait(false);
 
-            var moved = await PollUntilPositionAsync(svc, target, Tolerance).ConfigureAwait(false);
-            Assert.That(moved, Is.Not.Null, "focuser never reported the target position");
-            Assert.That(moved!.Runtime.Position, Is.EqualTo(target).Within(Tolerance), "the cached position should reflect the move");
-            if (OnRealGear) {
-                // Leave the rig where it was focused.
-                await svc.MoveAsync(new FocuserMoveRequestDto(current), idempotencyKey: null, CancellationToken.None).ConfigureAwait(false);
-                await PollUntilPositionAsync(svc, current, Tolerance).ConfigureAwait(false);
+                var moved = await PollUntilPositionAsync(svc, target, Tolerance).ConfigureAwait(false);
+                Assert.That(moved, Is.Not.Null, "focuser never reported the target position");
+                Assert.That(moved!.Runtime.Position, Is.EqualTo(target).Within(Tolerance), "the cached position should reflect the move");
+            } finally {
+                if (OnRealGear) {
+                    // Leave the rig where it was focused.
+                    await svc.MoveAsync(new FocuserMoveRequestDto(current), idempotencyKey: null, CancellationToken.None).ConfigureAwait(false);
+                    await PollUntilPositionAsync(svc, current, Tolerance).ConfigureAwait(false);
+                }
             }
 
             await svc.DisconnectAsync(idempotencyKey: null, CancellationToken.None).ConfigureAwait(false);
@@ -138,11 +141,14 @@ namespace OpenAstroAra.Test {
             // Exact equality is safe against the OmniSim (no step-size quantisation, so it lands
             // exactly on the requested integer position); a physical focuser that rounds to the
             // nearest motor step could settle a step or two off, so real gear (#1134) gets a small tolerance.
-            var settled = await svc.MoveFocuser(target, CancellationToken.None).ConfigureAwait(false);
-            Assert.That(settled, Is.EqualTo(target).Within(Tolerance), "MoveFocuser should return the settled position");
-            Assert.That(svc.GetInfo().Position, Is.EqualTo(target).Within(Tolerance), "the mediator snapshot should reflect the move");
-            if (OnRealGear) {
-                await svc.MoveFocuser(current, CancellationToken.None).ConfigureAwait(false);
+            try {
+                var settled = await svc.MoveFocuser(target, CancellationToken.None).ConfigureAwait(false);
+                Assert.That(settled, Is.EqualTo(target).Within(Tolerance), "MoveFocuser should return the settled position");
+                Assert.That(svc.GetInfo().Position, Is.EqualTo(target).Within(Tolerance), "the mediator snapshot should reflect the move");
+            } finally {
+                if (OnRealGear) {
+                    await svc.MoveFocuser(current, CancellationToken.None).ConfigureAwait(false);
+                }
             }
 
             await svc.DisconnectAsync(idempotencyKey: null, CancellationToken.None).ConfigureAwait(false);
