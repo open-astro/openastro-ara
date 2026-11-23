@@ -220,6 +220,11 @@ namespace OpenAstroAra.Test.PolarAlign {
         /// <summary>With <see cref="DecRateSkyRelative"/>: a move that starts at the pole goes over it (the Dec axis past 90°,
         /// the other side of the pier) when true, or stays on the side the mount is on when false.</summary>
         public bool PoleMovePicksOver { get; set; }
+        /// <summary>#2189 review — a motor move reaches its speed this long after it starts (linearly from rest), as a mount
+        /// that ramps its MoveAxis up. Zero: at once.</summary>
+        public TimeSpan MotorRampUp { get; set; }
+        // When each axis's current motor move started, for MotorRampUp.
+        private readonly TimeSpan[] _rampStart = new TimeSpan[2];
         // The Dec axis direction a sky-relative move picked when it started, and the rate sign it picked it for.
         private double _skyDecAxisDir;
         private int _skyDecRateSign;
@@ -1199,6 +1204,7 @@ namespace OpenAstroAra.Test.PolarAlign {
                     }
                     _rate[axis] = effective;
                     _runaway[axis] = false;
+                    _rampStart[axis] = _t;
                     _openMotor[axis] = OpenMotionLocked(kind, rate, target: null, otherMotion);
                 }
                 _leaseUntil[axis] = leaseMs is int ms ? _t + TimeSpan.FromMilliseconds(Math.Clamp(ms, 250, 5000)) : null;
@@ -1402,7 +1408,8 @@ namespace OpenAstroAra.Test.PolarAlign {
             new(GemGeometry.Wrap180(believed.MechHaDeg - _zeroErrHaDeg), believed.DecAxisDeg - _zeroErrDecDeg);
 
         private double EffectiveRateLocked(int axis) =>
-            _runaway[axis] && RunawayDegPerSec is double r ? Math.CopySign(r, _rate[axis]) : _rate[axis];
+            (_runaway[axis] && RunawayDegPerSec is double r ? Math.CopySign(r, _rate[axis]) : _rate[axis])
+            * (MotorRampUp > TimeSpan.Zero ? Math.Min(1.0, (_t - _rampStart[axis]) / MotorRampUp) : 1.0);
 
         private bool TrulyMovingLocked() => _rate[0] != 0 || _rate[1] != 0 || _goto is not null;
 

@@ -219,5 +219,26 @@ namespace OpenAstroAra.Test {
             });
             mount.AssertEndedStopped(tracking: false);
         }
+
+        [Test]
+        public async Task A_mount_that_takes_half_a_second_to_reach_its_speed_arrives_after_a_short_fast_phase_with_no_reading() {
+            // #2189 review (Joey): the 3.6° move's fast phase is 0.6° at 2.13°/s, about 0.28 s, and ends by the clock before a
+            // 0.6 s read lands. A mount that ramps its motor up over 0.5 s has moved only ~0.17° by then: under 80% of what it
+            // was told, with no reading to judge. That segment gives no stall verdict; it settles and the top-ups go on.
+            var mount = FakeGemMount.CounterweightDownAt(2.0, 89.3, lstHours: 20.0, latitudeDeg: SiteLatDeg);
+            mount.DecMotorSign = -1.0; // a positive rate goes toward the pole: the probe ends 0.4° off, then the 3.6° move
+            mount.MotorRampUp = TimeSpan.FromSeconds(0.5);
+            using var svc = NewBlockingReadService(mount, new WsRecorder());
+
+            var result = await svc.MoveToStartAsync(MoveConfirmed, CancellationToken.None).WaitAsync(TimeSpan.FromMinutes(3)).ConfigureAwait(false);
+
+            Assert.Multiple(() => {
+                Assert.That(result.Outcome, Is.EqualTo(PolarAlignMoveToStartOutcomes.Arrived), result.Message + " " + mount.Describe());
+                Assert.That(result.Reason, Is.Not.EqualTo(PolarAlignService.SlewStalled));
+                Assert.That(OffPoleDeg(mount), Is.EqualTo(PolarAlignService.MoveToStartOffPoleDeg).Within(BlockingReadToleranceDeg),
+                    "4° from the pole. " + mount.Describe());
+            });
+            mount.AssertEndedStopped(tracking: true);
+        }
     }
 }

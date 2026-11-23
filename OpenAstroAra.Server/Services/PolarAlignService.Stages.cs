@@ -706,7 +706,8 @@ namespace OpenAstroAra.Server.Services {
                         LogAxisMoveWrongWay(axis, -settledDeg, Rate(), learnedSign);
                         throw new RoutineFailedException(TurnWrongWay, TurnWrongWayMessage);
                     }
-                    ThrowIfReadingDidNotFollow(axis, settledDeg - segmentBase, commanded - segmentBase, degrees, lastStep > ClockStopAdvancingDeg, "turn");
+                    ThrowIfReadingDidNotFollow(axis, settledDeg - segmentBase, commanded - segmentBase, degrees, lastStep > ClockStopAdvancingDeg,
+                        sawReading: !double.IsNaN(prevP), "turn");
                     var rest = degrees - settledDeg;
                     if (rest <= ClockStopTopUpDeg) {
                         break;

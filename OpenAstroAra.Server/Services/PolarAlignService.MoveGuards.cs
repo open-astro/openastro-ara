@@ -162,9 +162,12 @@ namespace OpenAstroAra.Server.Services {
         /// motor was told in that segment (<paramref name="moved"/> and <paramref name="commanded"/> are the segment's own),
         /// on a reading that was not moving at the stop: the mount stopped short (a soft limit) or its reading froze. The move
         /// fails as <see cref="SlewStalled"/> with no top-up, so nothing is commanded toward a limit again. A reading still
-        /// moving (<paramref name="advancing"/>) creeps on: its top-ups end at the time bound (<see cref="SlewTimeout"/>).</summary>
-        private void ThrowIfReadingDidNotFollow(TelescopeAxes axis, double moved, double commanded, double degrees, bool advancing, string unit) {
-            if (advancing || moved >= ClockStopFollowFraction * commanded) {
+        /// moving (<paramref name="advancing"/>) creeps on: its top-ups end at the time bound (<see cref="SlewTimeout"/>). A
+        /// segment that saw no completed reading while its motor ran (<paramref name="sawReading"/> false: a short fast
+        /// phase that ended before a read landed) gives no verdict: a mount that takes ~0.5 s to reach its speed settles
+        /// short there, and the top-up goes on under the time bound (#2189 review, Joey).</summary>
+        private void ThrowIfReadingDidNotFollow(TelescopeAxes axis, double moved, double commanded, double degrees, bool advancing, bool sawReading, string unit) {
+            if (!sawReading || advancing || moved >= ClockStopFollowFraction * commanded) {
                 return;
             }
             LogClockStopNotFollowed(axis, moved, commanded);
