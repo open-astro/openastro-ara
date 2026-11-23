@@ -237,8 +237,9 @@ framing/focus loop when you need to point or focus by eye.
   because the tube points within 3° of the pole, a **Move to start position** button shows under it.
   It moves only the Dec axis, never RA and never a GoTo, until the tube points about 4° from the pole;
   the counterweights stay where they are. The first time on a mount it moves Dec 0.3° to learn which
-  way the Dec motor turns, and Ara saves that for the mount, so later moves go straight off the pole
-  (**Test direction again** forgets it too). From Home or within about 1° of the pole it waits about
+  way the Dec motor turns, and Ara saves that for the mount and the side of the pier, so later moves
+  go straight off the pole (**Test direction again** forgets it too; a saved direction that turns out
+  wrong is forgotten). From Home or within about 1° of the pole it waits about
   10 seconds after that small move, because some mounts report a pass over the pole a few seconds
   late; if the small move went over the pole, it comes back past the pole before the move off it.
   While the mount is parked, the site is not set, its position is not trusted, the clearance

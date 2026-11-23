@@ -52,7 +52,7 @@ internal static class ProfileSectionSamples {
         ["FilterFocusOffsets"] = new FilterFocusOffsetsDto([new FilterFocusOffsetDto(2, 14)]),
         ["CoolingFan"] = new CoolingFanDto("sample-switch", 2),
         ["PolarAlignMotorDirection"] = new PolarAlignMotorDirectionDto(-1, "sample-mount-id", "AlpacaBridge iOptron", "6.0.0", Now),
-        ["PolarAlignDecMotorDirection"] = new PolarAlignDecMotorDirectionDto(1, "sample-mount-id", "AlpacaBridge iOptron", "6.0.0", Now),
+        ["PolarAlignDecMotorDirection"] = new PolarAlignDecMotorDirectionDto(1, "west", "sample-mount-id", "AlpacaBridge iOptron", "6.0.0", Now),
     };
 
     public static object Sample(PropertyInfo section, object defaultValue) {

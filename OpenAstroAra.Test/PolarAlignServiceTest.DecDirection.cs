@@ -87,12 +87,14 @@ namespace OpenAstroAra.Test {
             mount.RaAndSideLag = RigPierSideLag;
             var phiBefore = mount.TruePhiDeg;
             using var again = NewGemService(mount, new WsRecorder(), store);
-            again.PoleReadingQuietFor = TimeSpan.FromSeconds(10); // the daemon's (no wait is due: no probe)
+            again.PoleReadingQuietFor = TimeSpan.FromSeconds(10); // the daemon's: the first leg's wait outlasts the 6 s lag
 
             var result = await again.MoveToStartAsync(MoveConfirmed, CancellationToken.None).ConfigureAwait(false);
 
             AssertArrivedOnItsSide(result, mount, phiBefore);
-            Assert.That(DecMoves(mount), Has.Length.EqualTo(1), "the saved direction: no probe, one move off the pole. " + mount.Describe());
+            var moves = DecMoves(mount);
+            Assert.That(moves, Has.Length.EqualTo(2), "the saved direction: a 0.3° first leg, the wait, then the rest. " + mount.Describe());
+            Assert.That(Math.Sign(moves[0].Rate), Is.EqualTo(Math.Sign(moves[1].Rate)), "both legs go the saved way: no probe, no turn back");
             Assert.That(mount.TrueSide, Is.EqualTo(mount.InitialTrueSide), "never over the pole");
         }
 
@@ -120,9 +122,50 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task From_Home_a_wrong_saved_Dec_direction_is_caught_0_3_degrees_over_the_pole_and_forgotten() {
+            // #2189 review: from Home the Dec reading falls whichever way the axis goes, and the pass over the pole shows
+            // 6 s late. A saved direction is proved on a 0.3° first leg and the wait before the rest of the move, so a
+            // wrong one stops 0.3° over the pole (never 4°), fails, and is forgotten.
+            var store = TenDegreeStore();
+            var first = PolledGemNearThePole(88.0);
+            first.DecMotorSign = -1.0;
+            using (var svc = NewGemService(first, new WsRecorder(), store)) {
+                var learned = await svc.MoveToStartAsync(MoveConfirmed, CancellationToken.None).ConfigureAwait(false);
+                Assert.That(learned.Outcome, Is.EqualTo(PolarAlignMoveToStartOutcomes.Arrived), learned.Message);
+            }
+            var mount = PolledGemNearThePole(90.0);
+            mount.DecMotorSign = 1.0; // the motor now turns the other way from the saved direction
+            mount.RaAndSideLag = RigPierSideLag;
+            using var again = NewGemService(mount, new WsRecorder(), store);
+            again.PoleReadingQuietFor = TimeSpan.FromSeconds(10);
+
+            var result = await again.MoveToStartAsync(MoveConfirmed, CancellationToken.None).ConfigureAwait(false);
+
+            Assert.Multiple(() => {
+                Assert.That(result.Outcome, Is.EqualTo(PolarAlignMoveToStartOutcomes.Failed), result.Message + " " + mount.Describe());
+                Assert.That(result.Reason, Is.EqualTo(PolarAlignService.TurnWrongWay), result.Message);
+                Assert.That(store.GetPolarAlignDecMotorDirection(), Is.Null, "forgotten, so the next move probes again");
+                Assert.That(DecMoves(mount), Has.Length.EqualTo(1), "only the 0.3° first leg moved. " + mount.Describe());
+                Assert.That(OffOwnPoleDeg(mount), Is.LessThanOrEqualTo(PolarAlignService.MoveToStartProbeDeg + 0.1), "0.3° over the pole at most");
+            });
+        }
+
+        [Test]
+        public void A_saved_Dec_direction_stands_only_for_the_pier_side_it_was_learned_on() {
+            var saved = new PolarAlignDecMotorDirectionDto(1, "west", "hae29c-unique-id", "AlpacaBridge", "6.0.0", DateTimeOffset.UtcNow);
+
+            Assert.Multiple(() => {
+                Assert.That(saved.IsFor("hae29c-unique-id", "AlpacaBridge", "6.0.0", "west"), Is.True);
+                Assert.That(saved.IsFor("hae29c-unique-id", "AlpacaBridge", "6.0.0", "east"), Is.False,
+                    "a driver may map the Dec rate to the axis or to the sky: the other side probes again");
+                Assert.That(saved.IsFor("hae29c-unique-id", "AlpacaBridge", "6.0.1", "west"), Is.False, "another driver version");
+            });
+        }
+
+        [Test]
         public void Test_direction_again_forgets_the_saved_Dec_direction_too() {
             var store = TenDegreeStore();
-            store.PutPolarAlignDecMotorDirection(new PolarAlignDecMotorDirectionDto(1, "hae29c-unique-id", string.Empty, "6.0.0", DateTimeOffset.UtcNow));
+            store.PutPolarAlignDecMotorDirection(new PolarAlignDecMotorDirectionDto(1, "west", "hae29c-unique-id", string.Empty, "6.0.0", DateTimeOffset.UtcNow));
             var idle = new Mock<IPolarAlignService>();
             idle.SetupGet(s => s.IsActive).Returns(false);
 

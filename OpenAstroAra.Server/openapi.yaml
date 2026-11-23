@@ -14808,19 +14808,22 @@ components:
           format: double
     PolarAlignDecMotorDirectionDto:
       required:
-        - toward_pole_sign_west
+        - toward_pole_sign
+        - pier_side
         - mount_key
         - driver_info
         - driver_version
         - tested_utc
       type: object
       properties:
-        toward_pole_sign_west:
+        toward_pole_sign:
           pattern: '^-?(?:0|[1-9]\d*)$'
           type:
             - integer
             - string
           format: int32
+        pier_side:
+          type: string
         mount_key:
           type: string
         driver_info:

@@ -307,17 +307,29 @@ namespace OpenAstroAra.Server.Services {
                 var savedAway = -savedToward;
                 var startOffPole = 90.0 - (poleSign * startReading.DecDeg);
                 LogMoveToStartSavedDirection(savedAway, driver.Identity);
-                var toGo = MoveToStartOffPoleDeg - startOffPole;
-                if (toGo > StopStillDeg) {
-                    try {
+                try {
+                    if (startOffPole < PoleCrossingRiskDeg) {
+                        // From next to the pole the Dec reading falls whichever way the axis goes, and a pass over the pole
+                        // shows late: a short first leg, then the wait, proves the saved direction before the rest. A
+                        // wrong one ends this leg 0.3° over the pole, never 4° (#2189 review).
+                        await MoveDecAxisUntilAsync(savedAway, MoveToStartProbeDeg, track,
+                            (start, now) => now - start, checkDirection: true, gen, ct).ConfigureAwait(false);
+                        await WaitForReadingAtThePoleAsync(track, gen, ct).ConfigureAwait(false);
+                        if (track.OverThePole) {
+                            LogDecSavedDirectionWentOver();
+                            throw new RoutineFailedException(TurnWrongWay, DecSavedWrongWayMessage);
+                        }
+                    }
+                    var toGo = MoveToStartOffPoleDeg - (track.Started ? track.SignedOffPoleDeg : startOffPole);
+                    if (toGo > StopStillDeg) {
                         await MoveDecAxisUntilAsync(savedAway, toGo, track,
                             (start, now) => now - start, checkDirection: true, gen, ct).ConfigureAwait(false);
-                    } catch (RoutineFailedException ex) when (ex.Reason == TurnWrongWay) {
-                        // The saved direction no longer holds (another driver build, a re-wired motor): forget it, so the
-                        // next move probes again. Never reversed here.
-                        _profileStore.PutPolarAlignDecMotorDirection(null);
-                        throw new RoutineFailedException(TurnWrongWay, DecSavedWrongWayMessage);
                     }
+                } catch (RoutineFailedException ex) when (ex.Reason == TurnWrongWay) {
+                    // The saved direction does not hold (another driver build, a re-wired motor): forget it, so the next
+                    // move probes again. Never reversed here.
+                    _profileStore.PutPolarAlignDecMotorDirection(null);
+                    throw new RoutineFailedException(TurnWrongWay, DecSavedWrongWayMessage);
                 }
                 EndMoveToStartOnItsSide(track, await RunReadingAsync(gen, MountReadKind.Full, ct, foldPastPole: true).ConfigureAwait(false));
                 return;
@@ -388,30 +400,36 @@ namespace OpenAstroAra.Server.Services {
             LogMoveToStartArrived(offPole);
         }
 
-        /// <summary>#2166 rig check — the saved Dec direction for <paramref name="driver"/>, as the sign of a positive rate
-        /// toward the pole on <paramref name="side"/> (the Dec axis is turned over on the east side); null with none saved
-        /// for this mount and driver, or a side the mount does not report.</summary>
+        /// <summary>#2166 rig check — the saved Dec direction for <paramref name="driver"/> on <paramref name="side"/>: the
+        /// sign of a positive rate toward the pole there. Null with none saved for this mount, driver and side, or a side the
+        /// mount does not report.</summary>
         private double? SavedDecTowardPoleSign(MountDriverKey driver, PierSide side) {
-            if (side is not (PierSide.pierWest or PierSide.pierEast)
+            if (SideName(side) is not { } name
                     || _profileStore.GetPolarAlignDecMotorDirection() is not { } saved
-                    || !saved.IsFor(driver.Mount, driver.Info, driver.Version)) {
+                    || !saved.IsFor(driver.Mount, driver.Info, driver.Version, name)) {
                 return null;
             }
-            return side == PierSide.pierWest ? saved.TowardPoleSignWest : -saved.TowardPoleSignWest;
+            return saved.TowardPoleSign;
         }
 
         /// <summary>Save the probe's lesson (a positive rate went toward the pole on <paramref name="side"/> when
-        /// <paramref name="towardOnSide"/> is +1) for <paramref name="driver"/>, as the west side's sign. Nothing is saved
-        /// with no mount key or a side the mount did not report.</summary>
+        /// <paramref name="towardOnSide"/> is +1) for <paramref name="driver"/> and that side. Nothing is saved with no
+        /// mount key or a side the mount did not report.</summary>
         private void SaveDecTowardPoleSign(MountDriverKey driver, PierSide side, double towardOnSide) {
-            if (driver.Mount.Length == 0 || side is not (PierSide.pierWest or PierSide.pierEast)) {
+            if (driver.Mount.Length == 0 || SideName(side) is not { } name) {
                 return;
             }
-            var west = (int)(side == PierSide.pierWest ? towardOnSide : -towardOnSide);
+            var sign = towardOnSide > 0 ? 1 : -1;
             _profileStore.PutPolarAlignDecMotorDirection(
-                new PolarAlignDecMotorDirectionDto(west, driver.Mount, driver.Info, driver.Version, DateTimeOffset.UtcNow));
-            LogDecDirectionSaved(west, driver.Identity);
+                new PolarAlignDecMotorDirectionDto(sign, name, driver.Mount, driver.Info, driver.Version, DateTimeOffset.UtcNow));
+            LogDecDirectionSavedText(sign > 0 ? "toward" : "away from", name, driver.Identity);
         }
+
+        private static string? SideName(PierSide side) => side switch {
+            PierSide.pierWest => "west",
+            PierSide.pierEast => "east",
+            _ => null,
+        };
 
         /// <summary>
         /// #2166 rig check — after a probe that started within <see cref="PoleCrossingRiskDeg"/> of the pole: fresh full
@@ -756,11 +774,11 @@ namespace OpenAstroAra.Server.Services {
         [LoggerMessage(Level = LogLevel.Information, Message = "§45 polar-align: the move to the start position goes at Dec sign {Sign:+0;-0}, the direction saved for {Mount} (no probe)")]
         private partial void LogMoveToStartSavedDirection(double sign, string mount);
 
-        [LoggerMessage(Level = LogLevel.Information, Message = "§45 polar-align: the Dec motor direction (a positive rate goes {Way} the pole on the west side) is saved for {Mount}")]
-        private partial void LogDecDirectionSavedText(string way, string mount);
+        [LoggerMessage(Level = LogLevel.Information, Message = "§45 polar-align: the Dec motor direction (a positive rate goes {Way} the pole on the {Side} side) is saved for {Mount}")]
+        private partial void LogDecDirectionSavedText(string way, string side, string mount);
 
-        private void LogDecDirectionSaved(int towardPoleSignWest, string mount) =>
-            LogDecDirectionSavedText(towardPoleSignWest > 0 ? "toward" : "away from", mount);
+        [LoggerMessage(Level = LogLevel.Warning, Message = "§45 polar-align: the saved Dec direction took the scope over the pole — stopped, the saved direction is forgotten (turn_wrong_way)")]
+        private partial void LogDecSavedDirectionWentOver();
 
         [LoggerMessage(Level = LogLevel.Information, Message = "§45 polar-align: the Dec probe went over the pole: back {Degrees:F2}°, past it onto the start's side, before the move off it")]
         private partial void LogMoveToStartReturnsToThePole(double degrees);
