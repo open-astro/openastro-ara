@@ -363,6 +363,39 @@ namespace OpenAstroAra.Test {
             });
         }
 
+        /// <summary>The angle on the sky between two (RA, Dec) pointings, degrees.</summary>
+        private static double SkyAngleDeg((double RaDeg, double DecDeg) a, (double RaDeg, double DecDeg) b) {
+            static double R(double d) => d * Math.PI / 180.0;
+            var cos = (Math.Sin(R(a.DecDeg)) * Math.Sin(R(b.DecDeg))) + (Math.Cos(R(a.DecDeg)) * Math.Cos(R(b.DecDeg)) * Math.Cos(R(a.RaDeg - b.RaDeg)));
+            return Math.Acos(Math.Clamp(cos, -1.0, 1.0)) * 180.0 / Math.PI;
+        }
+
+        [Test]
+        public async Task A_start_just_off_the_pole_that_leaves_it_onto_the_other_side_stays_within_the_confirmed_reach() {
+            // #2189 review: from 0.45° off the pole a sky-relative positive rate goes north, over the pole, and the move ends
+            // 4° off it on the other side: 4.45° from where it started. The confirmed reach (the target plus 0.5°) covers it.
+            var mount = PolledGemNearThePole(89.55);
+            mount.DecRateSkyRelative = true;
+            var start = mount.TrueSky;
+            var farthest = 0.0;
+            void Sample() => farthest = Math.Max(farthest, SkyAngleDeg(start, mount.TrueSky));
+            mount.OnPoseRead = Sample;
+            mount.OnFullRead = Sample;
+            using var svc = NewGemService(mount, new WsRecorder());
+            svc.PoleReadingQuietFor = TimeSpan.FromSeconds(10);
+            var offer = (await svc.GetPreflightAsync(null, CancellationToken.None).ConfigureAwait(false)).MoveToStart!;
+
+            var result = await svc.MoveToStartAsync(new PolarAlignMoveToStartConfirmation(offer.TargetOffPoleDeg, offer.ReachDeg), CancellationToken.None).ConfigureAwait(false);
+            Sample();
+
+            Assert.Multiple(() => {
+                Assert.That(result.Outcome, Is.EqualTo(PolarAlignMoveToStartOutcomes.Arrived), result.Message + " " + mount.Describe());
+                Assert.That(mount.TrueSide, Is.Not.EqualTo(mount.InitialTrueSide), "the first leg went over the pole");
+                Assert.That(farthest, Is.GreaterThan(4.3), "farther than the old 4.3° reach");
+                Assert.That(farthest, Is.LessThanOrEqualTo(offer.ReachDeg + 0.05), "never past the reach the user confirmed");
+            });
+        }
+
         [Test]
         public void A_saved_Dec_direction_stands_only_for_the_pier_side_it_was_learned_on() {
             var saved = new PolarAlignDecMotorDirectionDto(1, "west", "hae29c-unique-id", "AlpacaBridge", "6.0.0", DateTimeOffset.UtcNow);

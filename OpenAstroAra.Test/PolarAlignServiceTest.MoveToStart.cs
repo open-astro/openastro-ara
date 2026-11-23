@@ -85,7 +85,7 @@ namespace OpenAstroAra.Test {
                 Assert.That(preflight.MoveToStart, Is.Not.Null, "within 3° of the pole: the move is offered");
                 Assert.That(preflight.MoveToStart!.BlockedBy, Is.Null);
                 Assert.That(preflight.MoveToStart.TargetOffPoleDeg, Is.EqualTo(4.0));
-                Assert.That(preflight.MoveToStart.ReachDeg, Is.EqualTo(4.3).Within(1e-9));
+                Assert.That(preflight.MoveToStart.ReachDeg, Is.EqualTo(4.5).Within(1e-9), "the target plus the 0.5° a start may leave the pole by (#2189)");
                 Assert.That(mount.Motions, Is.Empty, "the offer moves nothing. " + mount.Describe());
                 Assert.That(mount.Commands.Where(c => c.IsMotion), Is.Empty);
             });

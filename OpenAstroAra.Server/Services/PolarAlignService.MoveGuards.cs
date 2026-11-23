@@ -132,9 +132,10 @@ namespace OpenAstroAra.Server.Services {
                 _rate <= 0 ? TimeSpan.MaxValue : TimeSpan.FromSeconds(Math.Max(0.0, (degrees - DegreesAt(at)) / _rate));
         }
 
-        /// <summary>After a stop by the clock, how far the settled reading may go the other way before the move is wrong-way:
-        /// <see cref="WrongWayDeg"/>, or less for a short move: a reading that followed the motor (half of what it was told,
-        /// <see cref="ClockStopFollowFraction"/>) the wrong way. A 0.3° leg never reaches 0.5° (#2189 review).</summary>
+        /// <summary>After a stop by the clock, how far a Dec move's settled reading may go the other way before the move is
+        /// wrong-way: <see cref="WrongWayDeg"/>, or less for a short move: a reading that followed the motor (half of what it
+        /// was told, <see cref="ClockStopFollowFraction"/>) the wrong way. A 0.3° leg never reaches 0.5° (#2189 review). An
+        /// RA turn is at least 1°, so it keeps <see cref="WrongWayDeg"/>.</summary>
         private static double SettledWrongWayDeg(double commandedDeg) =>
             Math.Min(WrongWayDeg, ClockStopFollowFraction * Math.Abs(commandedDeg));
 

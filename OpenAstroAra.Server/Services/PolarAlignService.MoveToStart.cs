@@ -35,10 +35,13 @@ namespace OpenAstroAra.Server.Services {
     /// every <see cref="AxisMovePoll"/>, the stall bound, twice the planned time plus slack, Stop, Stop Mount and Emergency
     /// Stop obeyed, MoveAxis 0 on every exit, a pier side that changes stops and fails it, and the RA reading may not move
     /// more than <see cref="DecMoveRaSkyLimitDeg"/> on the sky (<see cref="RaMoved"/>, the mirror of <c>dec_moved</c>).
-    /// ASCOM leaves the Dec motor's sign to the driver, so a <see cref="MoveToStartProbeDeg"/> probe goes first; a probe
-    /// that took Dec toward the pole, or over it from Home, is stopped and settled, and a new move then goes the other way
-    /// (never a reversal mid-move) and must end on the side of the pier it started on. Then the exit's confirmed stop,
-    /// the tracking the mount had handed back, and a fresh pre-flight list.
+    /// A start within <see cref="LeavePoleDeg"/> of the pole has no side (#2189: AlpacaBridge iOptron's Dec rate is
+    /// sky-relative, so at the pole either sign moves away onto the side the mount picks): its first leg only leaves the
+    /// pole, and the side the mount then reports is the start's side. ASCOM leaves the Dec motor's sign to the driver, so
+    /// a direction saved for this mount, driver and side is used, or a <see cref="MoveToStartProbeDeg"/> probe goes first;
+    /// a probe that took Dec toward the pole is stopped and settled, and a new move then goes the other way (never a
+    /// reversal mid-move). From the start's side the move never crosses the pole and must end on that side. Then the
+    /// exit's confirmed stop, the tracking the mount had handed back, and a fresh pre-flight list.
     /// </summary>
     public sealed partial class PolarAlignService {
 
@@ -48,9 +51,10 @@ namespace OpenAstroAra.Server.Services {
         /// <summary>The first, small Dec move that learns which way the Dec motor turns.</summary>
         internal const double MoveToStartProbeDeg = 0.3;
 
-        /// <summary>The most the move takes the Dec axis from where it starts: the target plus the probe. The mount's
-        /// clearance must be confirmed for at least this.</summary>
-        internal const double MoveToStartReachDeg = MoveToStartOffPoleDeg + MoveToStartProbeDeg;
+        /// <summary>The most the move takes the pointing from where it starts: the target plus the larger of the probe and
+        /// <see cref="LeavePoleDeg"/> (a start just under it may leave the pole onto the other side, #2189: 0.5° + 4°). The
+        /// mount's clearance must be confirmed for at least this.</summary>
+        internal const double MoveToStartReachDeg = MoveToStartOffPoleDeg + LeavePoleDeg;
 
         /// <summary>The band, from the pole, the start asks for: the move must end inside it.</summary>
         internal const double StartBandNearDeg = 2.0;
@@ -294,11 +298,11 @@ namespace OpenAstroAra.Server.Services {
             return stopped;
         }
 
-        /// <summary>The probe, then the move off the pole, then the check that the scope points 2–5° from it, on the side
-        /// of the pier it started on. Tracking is on first, so the RA reading stands still while the Dec axis turns (the
-        /// RA guard reads it). Distances are signed from the pole on the start's side (<see cref="DecMoveTrack"/>): a probe
-        /// at or within <see cref="MoveToStartProbeDeg"/> of the pole that goes over it reads as having gone toward it, and
-        /// the move the other way comes back over the pole first.</summary>
+        /// <summary>Next to the pole, the leg that leaves it (<see cref="LeaveThePoleAsync"/>); then the saved direction's
+        /// move or the probe and the move off the pole; then the check that the scope points 2–5° from it, on the start's
+        /// side. Tracking is on first, so the RA reading stands still while the Dec axis turns (the RA guard reads it).
+        /// Distances are signed from the pole on the start's side (<see cref="DecMoveTrack"/>); from at least
+        /// <see cref="LeavePoleDeg"/> off a probe cannot cross the pole, and one that reads as having crossed fails.</summary>
         private async Task MoveDecToStartAsync(double poleSign, int gen, CancellationToken ct) {
             ThrowIfStoppedFromOutside(gen);
             ThrowIfMoveToStartTooSlow();
