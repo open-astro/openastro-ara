@@ -90,6 +90,77 @@ namespace OpenAstroAra.Server.Services {
         /// <summary>How long a stopped turn may take to stand still on fresh readings before its stop counts as not obeyed.</summary>
         internal TimeSpan AxisSteadyWindow { get; set; } = TimeSpan.FromSeconds(8);
 
+        /// <summary>#2166 rig check (HAE29C, AlpacaBridge 6.0.0-beta.4) — a move stopped by the clock that the settled
+        /// reading shows short by more than this gets a top-up move for the rest, until the move's time bound. Under it the
+        /// move counts as arrived where it stands.</summary>
+        internal const double ClockStopTopUpDeg = 0.1;
+
+        /// <summary>A move stopped by the clock whose settled reading moved under this fraction of what the motor was told,
+        /// on a reading that stood still, did not follow its motor (<see cref="SlewStalled"/>).</summary>
+        internal const double ClockStopFollowFraction = 0.5;
+
+        /// <summary>
+        /// #2166 rig check — how far a move's motor has been told to turn: the rates commanded, times how long each ran, on
+        /// the run's monotonic clock. The HAE29C's readings trailed its motor by up to 2 s (no RA change for 2 s of a
+        /// 2.13°/s turn; a 0.3° Dec probe ran 1.9 s, 1°, before a hand Stop), so a move that stopped only on its reading
+        /// overshot by the rate times that lag. Each move also stops once this reaches its distance; the settle's fresh
+        /// readings then say where it ended.
+        /// </summary>
+        private sealed class CommandedTravel(TimeProvider clock) {
+            private double _done;
+            private double _rate;
+            private long _since;
+
+            /// <summary>A new segment from <paramref name="baseDeg"/> (the settled progress so far) at <paramref name="rate"/>.</summary>
+            public void Reset(double baseDeg, double rate, long at) {
+                _done = baseDeg;
+                _rate = Math.Abs(rate);
+                _since = at;
+            }
+
+            /// <summary>The motor now runs at <paramref name="rate"/> (a new speed, or the same one renewed).</summary>
+            public void Run(double rate, long at) {
+                _done = DegreesAt(at);
+                _rate = Math.Abs(rate);
+                _since = at;
+            }
+
+            public double DegreesAt(long at) => _done + (_rate * clock.GetElapsedTime(_since, at).TotalSeconds);
+
+            /// <summary>How long until it reaches <paramref name="degrees"/> at the current rate (zero once it has).</summary>
+            public TimeSpan TimeTo(double degrees, long at) =>
+                _rate <= 0 ? TimeSpan.MaxValue : TimeSpan.FromSeconds(Math.Max(0.0, (degrees - DegreesAt(at)) / _rate));
+        }
+
+        /// <summary>The next poll's wait: <see cref="AxisMovePoll"/>, or sooner when the motor's commanded travel reaches the
+        /// move's distance before then, so the clock's stop lands on time.</summary>
+        private TimeSpan NextAxisPoll(CommandedTravel travel, double degrees) {
+            var due = travel.TimeTo(degrees, Clock.GetTimestamp());
+            return due < AxisMovePoll ? due : AxisMovePoll;
+        }
+
+        /// <summary>A move the clock stopped whose reading stood still for the second half of the move and, settled, moved
+        /// under <see cref="ClockStopFollowFraction"/> of what the motor was told: the reading froze (or the mount did), so
+        /// the move fails as <see cref="SlewStalled"/>. A reading that crept on gets its top-ups, and the move's time bound
+        /// (<see cref="SlewTimeout"/>) ends a mount slower than its speed, as before.</summary>
+        private void ThrowIfReadingDidNotFollow(TelescopeAxes axis, double moved, double commanded, double degrees, bool stoodStill, string unit) {
+            if (!stoodStill || moved >= ClockStopFollowFraction * commanded) {
+                return;
+            }
+            LogClockStopNotFollowed(axis, moved, commanded);
+            throw new RoutineFailedException(SlewStalled, string.Create(CultureInfo.InvariantCulture,
+                $"the mount's reading stopped changing after {Math.Max(moved, 0):F1}° of the {degrees:F1}° {unit} while its motor was told {commanded:F1}° — check it can move freely and its connection, then try again"));
+        }
+
+        [LoggerMessage(EventId = 4597, Level = LogLevel.Information, Message = "§45 polar-align: {Axis} move stopped by the clock at {Commanded:F2}° commanded (the reading showed {Read:F2}° of {Degrees:F2}°)")]
+        private partial void LogClockStop(TelescopeAxes axis, double commanded, double read, double degrees);
+
+        [LoggerMessage(EventId = 4598, Level = LogLevel.Information, Message = "§45 polar-align: {Axis} move settled at {Moved:F2}° of {Degrees:F2}°: a {Rest:F2}° top-up")]
+        private partial void LogClockStopTopUp(TelescopeAxes axis, double moved, double degrees, double rest);
+
+        [LoggerMessage(EventId = 4599, Level = LogLevel.Warning, Message = "§45 polar-align: {Axis} reading moved {Moved:F2}° while the motor was told {Commanded:F2}° — the reading did not follow the motor")]
+        private partial void LogClockStopNotFollowed(TelescopeAxes axis, double moved, double commanded);
+
         // The mount's Dec spread across the current measurement's three points, when it is over DecSpreadWarnArcsec (the
         // warning); null otherwise. Guarded by _gate; cleared per measurement (SetStageAsync).
         private double? _decSpreadArcsec;

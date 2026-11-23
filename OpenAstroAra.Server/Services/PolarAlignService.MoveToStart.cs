@@ -359,60 +359,110 @@ namespace OpenAstroAra.Server.Services {
                 var began = Clock.GetTimestamp();
                 var bestAt = began;
                 var last = (OffPole: from, At: began);
+                // #2166 rig check — the motor's commanded travel: the move also stops once it reaches its distance, however
+                // far the reading trails the motor (the HAE29C's 0.3° probe ran 1.9 s, 1°, on a reading 2 s behind).
+                var travel = new CommandedTravel(Clock);
+                travel.Reset(0.0, Rate(), began);
+                var segmentBegan = began;
                 while (true) {
-                    await Task.Delay(AxisMovePoll, ct).ConfigureAwait(false);
-                    if (!IsCurrent(gen)) {
-                        throw new OperationCanceledException("the move was stopped while the mount moved");
+                    var byClock = false;
+                    var read = 0.0;
+                    while (true) {
+                        await Task.Delay(NextAxisPoll(travel, degrees), ct).ConfigureAwait(false);
+                        if (!IsCurrent(gen)) {
+                            throw new OperationCanceledException("the move was stopped while the mount moved");
+                        }
+                        ThrowIfStoppedFromOutside(gen);
+                        var r = await RunReadingAsync(gen, MountReadKind.Pose, ct, foldPastPole: true).ConfigureAwait(false);
+                        var at = Clock.GetTimestamp();
+                        NoteMountLeft((r.RaDeg, r.DecDeg), r.Side is PierSide.pierUnknown ? startSide : r.Side);
+                        ObserveDecMove(track, r);
+                        var now = track.SignedOffPoleDeg;
+                        var change = now - last.OffPole;
+                        if (change != 0) {
+                            ThrowIfReadingJumped(change, fastRate, Clock.GetElapsedTime(last.At, at), "Dec");
+                            last = (now, at);
+                        }
+                        var p = progress(from, now);
+                        read = p;
+                        if (p >= degrees - 1e-9) {
+                            break;
+                        }
+                        if (checkDirection && p <= -WrongWayDeg) {
+                            var wrongRate = Rate();
+                            LogAxisMoveWrongWay(axis, -p, wrongRate, direction);
+                            throw new RoutineFailedException(TurnWrongWay, DecWrongWayMessage);
+                        }
+                        if (p > best + 0.05) {
+                            best = p;
+                            bestAt = at;
+                        } else if (Clock.GetElapsedTime(bestAt, at) > AxisMoveStall) {
+                            LogAxisMoveStalled(axis, Math.Max(best, 0), degrees, AxisMoveStall.TotalSeconds);
+                            throw new RoutineFailedException(SlewStalled, string.Create(CultureInfo.InvariantCulture,
+                                $"the mount's Dec reading stopped changing after {Math.Max(best, 0):F1}° of the {degrees:F1}° move (no progress for {AxisMoveStall.TotalSeconds:F0} s) — check it can move freely and its connection, then try again"));
+                        }
+                        if (Clock.GetElapsedTime(began, at) > bound) {
+                            LogAxisMoveTimedOut(axis, Math.Max(best, 0), degrees, bound.TotalSeconds);
+                            throw new RoutineFailedException(SlewTimeout, string.Create(CultureInfo.InvariantCulture,
+                                $"the mount moved Dec only {Math.Max(best, 0):F1}° of {degrees:F1}° in {bound.TotalSeconds:F0} s, twice the time the move takes at its speed — check it, then try again"));
+                        }
+                        // #2166 rig check — the motor has been told the whole distance: stop it now, whatever the reading says.
+                        var told = travel.DegreesAt(at);
+                        if (told >= degrees - 1e-9) {
+                            byClock = true;
+                            break;
+                        }
+                        if (fast && degrees - p <= AxisSlowZoneDeg) {
+                            fast = false;
+                        }
+                        if (!IsCurrent(gen)) {
+                            throw new OperationCanceledException("the move was stopped while the mount moved");
+                        }
+                        var renewedAt = Clock.GetTimestamp();
+                        await RunAxisAsync(axis, Rate(), abortEpoch).ConfigureAwait(false);
+                        travel.Run(Rate(), renewedAt);
                     }
-                    ThrowIfStoppedFromOutside(gen);
-                    var r = await RunReadingAsync(gen, MountReadKind.Pose, ct, foldPastPole: true).ConfigureAwait(false);
-                    var at = Clock.GetTimestamp();
-                    NoteMountLeft((r.RaDeg, r.DecDeg), r.Side is PierSide.pierUnknown ? startSide : r.Side);
-                    ObserveDecMove(track, r);
-                    var now = track.SignedOffPoleDeg;
-                    var change = now - last.OffPole;
-                    if (change != 0) {
-                        ThrowIfReadingJumped(change, fastRate, Clock.GetElapsedTime(last.At, at), "Dec");
-                        last = (now, at);
+                    if (RunStopsFenced(gen)) {
+                        throw new OperationCanceledException("the move was fenced as it arrived");
                     }
-                    var p = progress(from, now);
-                    if (p >= degrees - 1e-9) {
+                    var stoppedAt = Clock.GetTimestamp();
+                    var commanded = travel.DegreesAt(stoppedAt);
+                    await StopAxisBestEffortAsync(axis).ConfigureAwait(false);
+                    settled = true;
+                    // The settle's progress reads the track, which checkPose has just moved on to the settle's reading.
+                    await SettleAfterTurnAsync(start, startSide, degrees, (_, _) => progress(from, track.SignedOffPoleDeg), gen, ct,
+                        checkPose: r => ObserveDecMove(track, r), foldPastPole: true).ConfigureAwait(false);
+                    if (!byClock) {
                         break;
                     }
-                    if (checkDirection && p <= -WrongWayDeg) {
-                        var wrongRate = Rate();
-                        LogAxisMoveWrongWay(axis, -p, wrongRate, direction);
+                    // Stopped by the clock: the settled reading says where the move really ended.
+                    LogClockStop(axis, commanded, read, degrees);
+                    var settledDeg = progress(from, track.SignedOffPoleDeg);
+                    if (checkDirection && settledDeg <= -WrongWayDeg) {
+                        LogAxisMoveWrongWay(axis, -settledDeg, Rate(), direction);
                         throw new RoutineFailedException(TurnWrongWay, DecWrongWayMessage);
                     }
-                    if (p > best + 0.05) {
-                        best = p;
-                        bestAt = at;
-                    } else if (Clock.GetElapsedTime(bestAt, at) > AxisMoveStall) {
-                        LogAxisMoveStalled(axis, Math.Max(best, 0), degrees, AxisMoveStall.TotalSeconds);
-                        throw new RoutineFailedException(SlewStalled, string.Create(CultureInfo.InvariantCulture,
-                            $"the mount's Dec reading stopped changing after {Math.Max(best, 0):F1}° of the {degrees:F1}° move (no progress for {AxisMoveStall.TotalSeconds:F0} s) — check it can move freely and its connection, then try again"));
+                    var stoodStill = Clock.GetElapsedTime(bestAt, stoppedAt) * 2 >= Clock.GetElapsedTime(segmentBegan, stoppedAt);
+                    ThrowIfReadingDidNotFollow(axis, settledDeg, commanded, degrees, stoodStill, "move");
+                    var rest = degrees - settledDeg;
+                    if (rest <= ClockStopTopUpDeg) {
+                        break;
                     }
-                    if (Clock.GetElapsedTime(began, at) > bound) {
-                        LogAxisMoveTimedOut(axis, Math.Max(best, 0), degrees, bound.TotalSeconds);
-                        throw new RoutineFailedException(SlewTimeout, string.Create(CultureInfo.InvariantCulture,
-                            $"the mount moved Dec only {Math.Max(best, 0):F1}° of {degrees:F1}° in {bound.TotalSeconds:F0} s, twice the time the move takes at its speed — check it, then try again"));
-                    }
-                    if (fast && degrees - p <= AxisSlowZoneDeg) {
-                        fast = false;
-                    }
+                    // Short of the distance once the reading caught up: a top-up for the rest, under the same guards and bound.
+                    LogClockStopTopUp(axis, settledDeg, degrees, rest);
+                    ThrowIfStoppedFromOutside(gen);
                     if (!IsCurrent(gen)) {
                         throw new OperationCanceledException("the move was stopped while the mount moved");
                     }
+                    fast = rest > AxisSlowZoneDeg;
+                    best = Math.Max(best, settledDeg);
+                    settled = false;
                     await RunAxisAsync(axis, Rate(), abortEpoch).ConfigureAwait(false);
+                    segmentBegan = Clock.GetTimestamp();
+                    bestAt = segmentBegan;
+                    last = (track.SignedOffPoleDeg, segmentBegan);
+                    travel.Reset(settledDeg, Rate(), segmentBegan);
                 }
-                if (RunStopsFenced(gen)) {
-                    throw new OperationCanceledException("the move was fenced as it arrived");
-                }
-                await StopAxisBestEffortAsync(axis).ConfigureAwait(false);
-                settled = true;
-                // The settle's progress reads the track, which checkPose has just moved on to the settle's reading.
-                await SettleAfterTurnAsync(start, startSide, degrees, (_, _) => progress(from, track.SignedOffPoleDeg), gen, ct,
-                    checkPose: r => ObserveDecMove(track, r), foldPastPole: true).ConfigureAwait(false);
             } catch (OperationCanceledException) {
                 throw;
             } catch (Exception) when (!IsCurrent(gen)) {
