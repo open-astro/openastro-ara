@@ -13,9 +13,13 @@
 #endregion "copyright"
 
 using NUnit.Framework;
+using OpenAstroAra.Server.Contracts;
+using OpenAstroAra.Server.Services;
 using System;
 using System.IO;
+using System.Linq;
 using System.Net.Http;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace OpenAstroAra.Test {
@@ -28,6 +32,11 @@ namespace OpenAstroAra.Test {
     /// tears it down safely — <see cref="Assert.Ignore(string)"/> fires BEFORE the directory
     /// exists, and <c>Directory.Delete("")</c> in a teardown threw <c>ArgumentException</c>,
     /// failing a local run with every test green (#1198, from the #1211 review).
+    ///
+    /// #1134 — with <c>ARA_ALPACA_URL</c> set (<see cref="LiveAlpacaRig"/>) the fixture probes that
+    /// server instead, picks its device from <c>configureddevices</c> (no UDP discovery), and ignores
+    /// when the server has no device of the type. Cases that move gear or write switch outputs call
+    /// <see cref="RequireMotionOptIn"/>; OmniSim-only checks ask <see cref="OnRealGear"/>.
     /// </summary>
     public abstract class OmniSimIntegrationFixture {
 
@@ -42,8 +51,25 @@ namespace OpenAstroAra.Test {
         /// <summary>The scratch directory from <see cref="CreateTempDir"/>, or "" when none was made.</summary>
         protected string TempDir { get; private set; } = string.Empty;
 
+        /// <summary>The Alpaca type the fixture connects; the <see cref="DeviceName"/> token by default.</summary>
+        protected virtual DeviceType DeviceType => Enum.Parse<DeviceType>(DeviceName);
+
+        /// <summary>The real rig from <c>ARA_ALPACA_URL</c>, or null on the OmniSim path.</summary>
+        private protected LiveAlpacaRig? Rig { get; private set; }
+
+        /// <summary>Whether the fixture runs against real gear (<c>ARA_ALPACA_URL</c> set).</summary>
+        protected bool OnRealGear => Rig is not null;
+
+        private DiscoveredDeviceDto? _rigDevice;
+
         [OneTimeSetUp]
         public async Task ProbeOmniSim() {
+            Rig = LiveAlpacaRig.FromEnvironment(Environment.GetEnvironmentVariable);
+            if (Rig is not null) {
+                await ProbeRig(Rig).ConfigureAwait(false);
+                await OnOmniSimAvailable().ConfigureAwait(false);
+                return;
+            }
             using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(2) };
             try {
                 using var resp = await http.GetAsync(ManagementProbeUri).ConfigureAwait(false);
@@ -56,8 +82,58 @@ namespace OpenAstroAra.Test {
             await OnOmniSimAvailable().ConfigureAwait(false);
         }
 
-        /// <summary>Fixture-specific setup that runs only once a simulator answered.</summary>
+        private async Task ProbeRig(LiveAlpacaRig rig) {
+            using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(3) };
+            try {
+                using var resp = await http.GetAsync(new Uri(rig.Url, "/management/apiversions")).ConfigureAwait(false);
+                if (!resp.IsSuccessStatusCode) {
+                    Assert.Ignore($"The Alpaca server at {rig.Url} ({LiveAlpacaRig.UrlVariable}) returned {(int)resp.StatusCode} — skipping live {DeviceName} test.");
+                }
+            } catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException) {
+                Assert.Ignore($"No Alpaca server answering at {rig.Url} ({LiveAlpacaRig.UrlVariable}) — skipping live {DeviceName} test.");
+            }
+            using var management = new AlpacaManagementClient();
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+            var configured = await management.GetConfiguredDevicesAsync(rig.Host, rig.Port, cts.Token).ConfigureAwait(false);
+            _rigDevice = rig.Pick(DeviceType, configured);
+            if (_rigDevice is null) {
+                Assert.Ignore(rig.MissingDeviceMessage(DeviceType));
+            }
+            await TestContext.Progress.WriteLineAsync(
+                $"live {DeviceName} test on real gear: {_rigDevice.Name} ({LiveAlpacaRig.TypeKey(_rigDevice.Type)}/{_rigDevice.AlpacaDeviceNumber} at {rig.Url}), motion {(rig.AllowMotion ? "ALLOWED" : "off")}").ConfigureAwait(false);
+        }
+
+        /// <summary>Fixture-specific setup that runs only once a simulator (or the real rig) answered.</summary>
         protected virtual Task OnOmniSimAvailable() => Task.CompletedTask;
+
+        /// <summary>Ignore the case on real gear unless <c>ARA_ALPACA_ALLOW_MOTION=1</c>: call it first in
+        /// every case that moves gear or writes switch outputs. <paramref name="action"/> completes "this
+        /// case ... on the {device}" ("slews the mount", "writes outputs"). No-op on the OmniSim.</summary>
+        protected void RequireMotionOptIn(string action) {
+            if (Rig?.MotionSkipReason(DeviceName, action) is { } reason) {
+                Assert.Ignore(reason);
+            }
+        }
+
+        /// <summary>The device to connect: the rig's pick on real gear, else the first one UDP discovery
+        /// finds from the OmniSim (retried <see cref="MaxDiscoveryAttempts"/> times); null when none. #1134 —
+        /// the OmniSim path keeps only devices on the OmniSim port, so a broadcast on a LAN that also has a
+        /// rig never hands a motion case the real mount.</summary>
+        protected async Task<DiscoveredDeviceDto?> DiscoverAsync() {
+            if (_rigDevice is not null) {
+                return _rigDevice;
+            }
+            var discovery = new AlpacaEquipmentDiscoveryService();
+            for (var attempt = 1; attempt <= MaxDiscoveryAttempts; attempt++) {
+                using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+                var found = await discovery.DiscoverAsync(DeviceType, forceRefresh: true, cts.Token).ConfigureAwait(false);
+                if (found.FirstOrDefault(d => d.IpPort == ManagementProbeUri.Port) is { } device) {
+                    return device;
+                }
+                await Task.Delay(TimeSpan.FromMilliseconds(500)).ConfigureAwait(false);
+            }
+            return null;
+        }
 
         /// <summary>Create a per-fixture scratch directory that <see cref="RemoveTempDir"/> deletes.</summary>
         protected string CreateTempDir(string prefix) {

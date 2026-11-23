@@ -1,0 +1,2 @@
+### Added (tests)
+- **Live connect tests run on a real rig** (#1134): set `ARA_ALPACA_URL` to aim the `*ConnectIntegrationTest` fixtures at an AlpacaBridge instead of the OmniSim; a type the rig lacks skips, and the cases that move or switch gear skip unless `ARA_ALPACA_ALLOW_MOTION=1`. New read-only connect cases for the mount, focuser, filter wheel, rotator, switch, dome and flat panel; how to run them is in `docs/RUNNING.md`.

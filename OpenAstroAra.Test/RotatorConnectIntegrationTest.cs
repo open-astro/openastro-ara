@@ -26,7 +26,9 @@ namespace OpenAstroAra.Test {
     /// §14e — live integration test for <see cref="RotatorService"/>. Discovers a Rotator from a
     /// running ASCOM OmniSim, connects, reads its runtime, rotates to a target mechanical angle via
     /// <see cref="RotatorService.MoveAsync"/>, and verifies the cached angle reflects the move, then
-    /// disconnects. Runs in the <c>alpaca-sim-integration</c> CI job.
+    /// disconnects. Runs in the <c>alpaca-sim-integration</c> CI job. #1134 — on real gear only the
+    /// read-only case runs unless <c>ARA_ALPACA_ALLOW_MOTION=1</c>; the move cases then turn 10° from
+    /// the current angle and back.
     /// </summary>
     [TestFixture]
     [Category("Integration")]
@@ -34,8 +36,32 @@ namespace OpenAstroAra.Test {
 
         protected override string DeviceName => "Rotator";
 
+        /// <summary>#1134 — the case that runs on every rotator: connect, read the mechanical angle,
+        /// disconnect. Nothing is turned.</summary>
+        [Test]
+        public async Task Connect_reads_angle_without_moving_then_disconnects() {
+            var device = await DiscoverAsync().ConfigureAwait(false);
+            Assert.That(device, Is.Not.Null, "no Rotator found (OmniSim discovery or ARA_ALPACA_URL)");
+
+            using var svc = new RotatorService();
+            await svc.ConnectAsync(new ConnectRequestDto(device!), idempotencyKey: null, CancellationToken.None).ConfigureAwait(false);
+            var connected = await PollUntilAsync(svc, s => s != EquipmentConnectionState.Connecting).ConfigureAwait(false);
+            Assert.That(connected!.State, Is.EqualTo(EquipmentConnectionState.Connected));
+            try {
+                var angle = await ReadMechanicalAngleAsync(svc).ConfigureAwait(false);
+                Assert.That(angle, Is.Not.Null, "the mechanical angle is read from the rotator");
+                Assert.That(angle!.Value, Is.InRange(0.0, 360.0));
+                Assert.That(svc.GetInfo().Connected, Is.True, "the mediator should report connected");
+            } finally {
+                await svc.DisconnectAsync(idempotencyKey: null, CancellationToken.None).ConfigureAwait(false);
+            }
+            var disconnected = await PollUntilAsync(svc, s => s == EquipmentConnectionState.Disconnected).ConfigureAwait(false);
+            Assert.That(disconnected!.State, Is.EqualTo(EquipmentConnectionState.Disconnected));
+        }
+
         [Test]
         public async Task Connect_rotates_to_angle_then_disconnects() {
+            RequireMotionOptIn("turns the rotator");
             var device = await DiscoverAsync().ConfigureAwait(false);
             Assert.That(device, Is.Not.Null, "no Rotator device discovered from the running OmniSim");
 
@@ -47,13 +73,19 @@ namespace OpenAstroAra.Test {
             Assert.That(connected!.State, Is.EqualTo(EquipmentConnectionState.Connected));
 
             // Move to a mechanical angle (UseSkyAngle defaults false) and confirm the read-back.
-            const double target = 90.0;
+            var start = OnRealGear ? await ReadMechanicalAngleAsync(svc).ConfigureAwait(false) : null;
+            var target = TargetFrom(start, 90.0);
             await svc.MoveAsync(new RotatorMoveRequestDto(target), idempotencyKey: null, CancellationToken.None).ConfigureAwait(false);
 
             var moved = await PollUntilMechanicalAngleAsync(svc, target).ConfigureAwait(false);
             Assert.That(moved, Is.Not.Null, "rotator never reported the target mechanical angle");
             Assert.That(moved!.Runtime.MechanicalAngleDeg, Is.EqualTo(target).Within(0.5),
                 "the cached mechanical angle should reflect the move");
+            if (start is double back) {
+                // Real gear: leave the framing where it was.
+                await svc.MoveAsync(new RotatorMoveRequestDto(back), idempotencyKey: null, CancellationToken.None).ConfigureAwait(false);
+                await PollUntilMechanicalAngleAsync(svc, back).ConfigureAwait(false);
+            }
 
             await svc.DisconnectAsync(idempotencyKey: null, CancellationToken.None).ConfigureAwait(false);
             var disconnected = await PollUntilAsync(svc, s => s == EquipmentConnectionState.Disconnected).ConfigureAwait(false);
@@ -68,6 +100,7 @@ namespace OpenAstroAra.Test {
         /// </summary>
         [Test]
         public async Task Mediator_MoveMechanical_drives_the_live_device_and_returns_the_settled_angle() {
+            RequireMotionOptIn("turns the rotator");
             var device = await DiscoverAsync().ConfigureAwait(false);
             Assert.That(device, Is.Not.Null, "no Rotator device discovered from the running OmniSim");
 
@@ -81,27 +114,39 @@ namespace OpenAstroAra.Test {
             Assert.That(connected!.State, Is.EqualTo(EquipmentConnectionState.Connected));
             Assert.That(svc.GetInfo().Connected, Is.True, "the mediator should report connected once the REST connect lands");
 
-            const float target = 120.0f;
+            var start = OnRealGear ? await ReadMechanicalAngleAsync(svc).ConfigureAwait(false) : null;
+            var target = (float)TargetFrom(start, 120.0);
             // Blocking move via the mediator — returns once the device settles at the target.
             var settled = await svc.MoveMechanical(target, CancellationToken.None).ConfigureAwait(false);
             Assert.That(settled, Is.EqualTo(target).Within(0.5f), "MoveMechanical should return the settled mechanical angle");
             Assert.That(svc.GetInfo().MechanicalPosition, Is.EqualTo(target).Within(0.5f),
                 "the mediator snapshot should reflect the move");
+            if (start is double back) {
+                await svc.MoveMechanical((float)back, CancellationToken.None).ConfigureAwait(false);
+            }
 
             await svc.DisconnectAsync(idempotencyKey: null, CancellationToken.None).ConfigureAwait(false);
             var disconnected = await PollUntilAsync(svc, s => s == EquipmentConnectionState.Disconnected).ConfigureAwait(false);
             Assert.That(disconnected!.State, Is.EqualTo(EquipmentConnectionState.Disconnected));
         }
 
-        private static async Task<DiscoveredDeviceDto?> DiscoverAsync() {
-            var discovery = new AlpacaEquipmentDiscoveryService();
-            for (var attempt = 1; attempt <= MaxDiscoveryAttempts; attempt++) {
-                using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
-                var found = await discovery.DiscoverAsync(DeviceType.Rotator, forceRefresh: true, cts.Token).ConfigureAwait(false);
-                if (found.Count > 0) {
-                    return found[0];
+        // OmniSim: the fixed angle. Real gear: 10° from where the rotator is, away from the 0/360 wrap.
+        private double TargetFrom(double? start, double omniSimTarget) {
+            if (!OnRealGear) {
+                return omniSimTarget;
+            }
+            Assert.That(start, Is.Not.Null, "no mechanical angle read from the rotator to turn from");
+            return start!.Value < 340.0 ? start.Value + 10.0 : start.Value - 10.0;
+        }
+
+        // The first mechanical angle the cache reports (~10s), or null.
+        private static async Task<double?> ReadMechanicalAngleAsync(RotatorService svc) {
+            for (var i = 0; i < 50; i++) {
+                var dto = await svc.GetAsync(CancellationToken.None).ConfigureAwait(false);
+                if (dto?.Runtime.MechanicalAngleDeg is double angle) {
+                    return angle;
                 }
-                await Task.Delay(TimeSpan.FromMilliseconds(500)).ConfigureAwait(false);
+                await Task.Delay(TimeSpan.FromMilliseconds(200)).ConfigureAwait(false);
             }
             return null;
         }

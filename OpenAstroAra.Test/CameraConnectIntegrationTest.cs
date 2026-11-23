@@ -108,19 +108,6 @@ namespace OpenAstroAra.Test {
             Assert.That(disconnected!.State, Is.EqualTo(EquipmentConnectionState.Disconnected));
         }
 
-        private static async Task<DiscoveredDeviceDto?> DiscoverAsync() {
-            var discovery = new AlpacaEquipmentDiscoveryService();
-            for (var attempt = 1; attempt <= MaxDiscoveryAttempts; attempt++) {
-                using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
-                var found = await discovery.DiscoverAsync(DeviceType.Camera, forceRefresh: true, cts.Token).ConfigureAwait(false);
-                if (found.Count > 0) {
-                    return found[0];
-                }
-                await Task.Delay(TimeSpan.FromMilliseconds(500)).ConfigureAwait(false);
-            }
-            return null;
-        }
-
         private static async Task<CameraDto?> PollUntilAsync(CameraService svc, Func<CameraDto, bool> predicate) {
             for (var i = 0; i < 60; i++) {
                 var dto = await svc.GetAsync(CancellationToken.None).ConfigureAwait(false);

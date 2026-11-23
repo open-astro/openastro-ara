@@ -41,7 +41,7 @@ namespace OpenAstroAra.Test {
 
         [Test]
         public async Task Connect_reaches_connected_then_disconnect_returns_to_disconnected() {
-            var device = await DiscoverSafetyMonitorAsync().ConfigureAwait(false);
+            var device = await DiscoverAsync().ConfigureAwait(false);
             Assert.That(device, Is.Not.Null, "no SafetyMonitor was discovered from the running OmniSim");
 
             using var svc = new SafetyMonitorService();
@@ -82,19 +82,6 @@ namespace OpenAstroAra.Test {
             Assert.That(disconnected, Is.Not.Null);
             Assert.That(disconnected!.State, Is.EqualTo(EquipmentConnectionState.Disconnected),
                 "the device should return to Disconnected after DisconnectAsync");
-        }
-
-        private static async Task<DiscoveredDeviceDto?> DiscoverSafetyMonitorAsync() {
-            var discovery = new AlpacaEquipmentDiscoveryService();
-            for (var attempt = 1; attempt <= MaxDiscoveryAttempts; attempt++) {
-                using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
-                var found = await discovery.DiscoverAsync(DeviceType.SafetyMonitor, forceRefresh: true, cts.Token).ConfigureAwait(false);
-                if (found.Count > 0) {
-                    return found[0];
-                }
-                await Task.Delay(TimeSpan.FromMilliseconds(500)).ConfigureAwait(false);
-            }
-            return null;
         }
 
         // Polls GetAsync (~10s budget) until the connection state satisfies the predicate.
