@@ -516,15 +516,19 @@ namespace OpenAstroAra.Server.Services {
         /// <summary>How often a move reads the mount's position from the driver (fresh, not the 2 s refresh).</summary>
         internal TimeSpan AxisMovePoll { get; set; } = TimeSpan.FromMilliseconds(250);
         /// <summary>After the stop, how long two still readings must be apart before the turn counts as ended
-        /// (<see cref="SettleAfterTurnAsync"/>): longer than AlpacaBridge iOptron's 1 s status and position cache, as the
-        /// stop's own confirmation (<see cref="StopVerifyStillFor"/>).</summary>
-        internal TimeSpan AxisSettle { get; set; } = TimeSpan.FromSeconds(1.5);
+        /// (<see cref="SettleAfterTurnAsync"/>): longer than the mount's readings can trail it, so two answers from one
+        /// cached sample never pass for a mount standing still. #2166 rig check — the HAE29C on AlpacaBridge 6.0.0-beta.4
+        /// trailed its motor by up to 2 s (AlpacaBridge iOptron's 1 s cache plus its status polling), so 2.5 s (was 1.5 s).</summary>
+        internal TimeSpan AxisSettle { get; set; } = TimeSpan.FromSeconds(2.5);
 
         /// <summary>Run one axis's motor until <paramref name="progress"/> (start reading, current reading) reaches
-        /// <paramref name="degrees"/> by the mount's own position, read from the driver four times a second; fast
-        /// until the last <see cref="AxisSlowZoneDeg"/>, slow for the rest, at the rates the mount offers at or below the
-        /// routine's (never above, #2083). Then stop, wait for the mount to stand still, check the turn arrived, and return
-        /// the fresh reading. With <paramref name="checkDirection"/>, a move that runs the wrong way (progress below
+        /// <paramref name="degrees"/> by the mount's own position, read from the driver four times a second, or until the
+        /// motor has been told the distance (the commanded rates times how long they ran, #2166 rig check: a reading that
+        /// trails the motor no longer adds its lag to the turn); fast until the reading is within the last
+        /// <see cref="AxisSlowZoneDeg"/>, slow for the rest, at the rates the mount offers at or below the routine's (never
+        /// above, #2083). Then stop and wait for the mount to stand still; after a stop by the clock the settled reading says
+        /// where it ended, and a shortfall over <see cref="ClockStopTopUpDeg"/> gets a top-up move under the same guards and
+        /// time bound. Then check the turn arrived, and return the fresh reading. With <paramref name="checkDirection"/>, a move that runs the wrong way (progress below
         /// −<see cref="WrongWayDeg"/>) is stopped and fails the run (<see cref="TurnWrongWay"/>, #2081): it is never reversed,
         /// because a reversal trusts the reading's sign, and a wrong reading (a bad sync, counterweight up) would turn the
         /// motor toward the limit and call that the right way. The RA motor's sign is the run's saved or tested one
@@ -581,66 +585,124 @@ namespace OpenAstroAra.Server.Services {
                 var began = Clock.GetTimestamp();
                 var bestAt = began;
                 var last = (Ra: startRa, At: began);
+                // #2166 rig check — the motor's commanded travel: the turn also stops once it reaches the step, however far
+                // the reading trails the motor (the HAE29C's trailed it by up to 2 s).
+                var travel = new CommandedTravel(Clock);
+                travel.Reset(0.0, Rate(), began);
+                var segmentBegan = began;
+                // A top-up's settle is not motor time: the bound counts only the moves (#2188 review).
+                var settledFor = TimeSpan.Zero;
+                // Where the current segment started (the settled progress before a top-up): the follow check is per segment.
+                var segmentBase = 0.0;
                 while (true) {
-                    await Task.Delay(AxisMovePoll, ct).ConfigureAwait(false);
-                    if (!IsCurrent(gen)) {
-                        throw new OperationCanceledException("the run was superseded while the mount moved");
+                    var byClock = false;
+                    var read = 0.0;
+                    while (true) {
+                        await Task.Delay(NextAxisPoll(travel, degrees), ct).ConfigureAwait(false);
+                        if (!IsCurrent(gen)) {
+                            throw new OperationCanceledException("the run was superseded while the mount moved");
+                        }
+                        ThrowIfStoppedFromOutside(gen);
+                        // #2089 — noted as Polar Align's own move, so the next start does not read it as "moved by other means".
+                        // #2067 — the poll reads the position and the pier side (no Slewing round trip): a turn that changes
+                        // the pier side, or moves the Dec reading, stops at that reading.
+                        var (nowRa, nowDec, nowSide) = await RunPoseJnowAsync(gen, ct, MountReadKind.Pose).ConfigureAwait(false);
+                        var at = Clock.GetTimestamp();
+                        var now = (nowRa, nowDec);
+                        NoteMountLeft(now, nowSide is PierSide.pierUnknown ? startSide : nowSide);
+                        // A reading that jumped is checked first: its Dec and pier side are no more to be trusted than its RA.
+                        var change = Wrap180(nowRa - last.Ra);
+                        if (change != 0) {
+                            ThrowIfReadingJumped(change, fastRate, Clock.GetElapsedTime(last.At, at));
+                            last = (nowRa, at);
+                        }
+                        ThrowIfTurnLeftItsAxis(startDec, startSide, nowDec, nowSide);
+                        var p = progress(start, now);
+                        read = p;
+                        if (p >= degrees - 1e-9) {
+                            break;
+                        }
+                        if (checkDirection && p <= -WrongWayDeg) {
+                            // #2081 — never reversed: the motor stops (the finally below) and the run fails.
+                            LogAxisMoveWrongWay(axis, -p, Rate(), learnedSign);
+                            throw new RoutineFailedException(TurnWrongWay, TurnWrongWayMessage);
+                        }
+                        if (p > best + 0.05) {
+                            best = p;
+                            bestAt = at;
+                        } else if (Clock.GetElapsedTime(bestAt, at) > AxisMoveStall) {
+                            LogAxisMoveStalled(axis, Math.Max(best, 0), degrees, AxisMoveStall.TotalSeconds);
+                            throw new RoutineFailedException(SlewStalled, string.Create(CultureInfo.InvariantCulture,
+                                $"the mount's reading stopped changing after {Math.Max(best, 0):F1}° of the {degrees:F0}° turn (no progress for {AxisMoveStall.TotalSeconds:F0} s) — check it can turn freely and its connection, then start again"));
+                        }
+                        if (Clock.GetElapsedTime(began, at) - settledFor > bound) {
+                            LogAxisMoveTimedOut(axis, Math.Max(best, 0), degrees, bound.TotalSeconds);
+                            throw new RoutineFailedException(SlewTimeout, string.Create(CultureInfo.InvariantCulture,
+                                $"the mount turned only {Math.Max(best, 0):F1}° of {degrees:F0}° in {bound.TotalSeconds:F0} s, twice the time the turn takes at its speed — check it, then start again"));
+                        }
+                        // #2166 rig check — the motor has been told the whole step: stop it now, whatever the reading says.
+                        var told = travel.DegreesAt(at);
+                        if (told >= degrees - 1e-9) {
+                            byClock = true;
+                            break;
+                        }
+                        if (fast && degrees - p <= AxisSlowZoneDeg) {
+                            fast = false; // the last few degrees at the slow speed: the stop lands close to the target
+                        }
+                        if (!IsCurrent(gen)) {
+                            // Checked again just before the renewal: a Stop during the read above must not get a motor restart.
+                            throw new OperationCanceledException("the run was superseded while the mount moved");
+                        }
+                        await RunAxisAsync(axis, Rate(), abortEpoch).ConfigureAwait(false); // a new speed, or the lease renewed
+                        // Timed once the mount took it: the old rate ran until then, so a slowdown never under-counts (#2188 review).
+                        travel.Run(Rate(), Clock.GetTimestamp());
                     }
-                    ThrowIfStoppedFromOutside(gen);
-                    // #2089 — noted as Polar Align's own move, so the next start does not read it as "moved by other means".
-                    // #2067 — the poll reads the position and the pier side (no Slewing round trip): a turn that changes
-                    // the pier side, or moves the Dec reading, stops at that reading.
-                    var (nowRa, nowDec, nowSide) = await RunPoseJnowAsync(gen, ct, MountReadKind.Pose).ConfigureAwait(false);
-                    var at = Clock.GetTimestamp();
-                    var now = (nowRa, nowDec);
-                    NoteMountLeft(now, nowSide is PierSide.pierUnknown ? startSide : nowSide);
-                    // A reading that jumped is checked first: its Dec and pier side are no more to be trusted than its RA.
-                    var change = Wrap180(nowRa - last.Ra);
-                    if (change != 0) {
-                        ThrowIfReadingJumped(change, fastRate, Clock.GetElapsedTime(last.At, at));
-                        last = (nowRa, at);
+                    // Arrived on the reading (or the clock): stop the motor, then see the mount stand still. The motion stays
+                    // marked until it does (ARA-3): a Stop meanwhile still sends AbortSlew, whatever an early "not slewing" says.
+                    if (RunStopsFenced(gen)) {
+                        // #2066 — the arriving read hung past a takeover's bound: the mount is someone else's, no stop from here.
+                        throw new OperationCanceledException("the run was fenced as the turn arrived");
                     }
-                    ThrowIfTurnLeftItsAxis(startDec, startSide, nowDec, nowSide);
-                    var p = progress(start, now);
-                    if (p >= degrees - 1e-9) {
+                    var stoppedAt = Clock.GetTimestamp();
+                    var commanded = travel.DegreesAt(stoppedAt);
+                    await StopAxisBestEffortAsync(axis).ConfigureAwait(false);
+                    settled = true;
+                    after = await SettleAfterTurnAsync(start, startSide, degrees, progress, gen, ct).ConfigureAwait(false);
+                    settledFor += Clock.GetElapsedTime(stoppedAt, Clock.GetTimestamp());
+                    if (!byClock) {
                         break;
                     }
-                    if (checkDirection && p <= -WrongWayDeg) {
-                        // #2081 — never reversed: the motor stops (the finally below) and the run fails.
-                        LogAxisMoveWrongWay(axis, -p, Rate(), learnedSign);
+                    // Stopped by the clock: the settled reading says where the turn really ended.
+                    LogClockStop(axis, commanded, read, degrees);
+                    var settledDeg = progress(start, (after.RaDeg, after.DecDeg));
+                    if (checkDirection && settledDeg <= -WrongWayDeg) {
+                        // #2081 — never reversed, as on a poll: the motor is stopped and the run fails (#2188 review).
+                        LogAxisMoveWrongWay(axis, -settledDeg, Rate(), learnedSign);
                         throw new RoutineFailedException(TurnWrongWay, TurnWrongWayMessage);
                     }
-                    if (p > best + 0.05) {
-                        best = p;
-                        bestAt = at;
-                    } else if (Clock.GetElapsedTime(bestAt, at) > AxisMoveStall) {
-                        LogAxisMoveStalled(axis, Math.Max(best, 0), degrees, AxisMoveStall.TotalSeconds);
-                        throw new RoutineFailedException(SlewStalled, string.Create(CultureInfo.InvariantCulture,
-                            $"the mount's reading stopped changing after {Math.Max(best, 0):F1}° of the {degrees:F0}° turn (no progress for {AxisMoveStall.TotalSeconds:F0} s) — check it can turn freely and its connection, then start again"));
+                    // The reading made no progress for the second half of the segment: it froze, not lagged.
+                    var stoodStill = Clock.GetElapsedTime(bestAt, stoppedAt) * 2 >= Clock.GetElapsedTime(segmentBegan, stoppedAt);
+                    ThrowIfReadingDidNotFollow(axis, settledDeg - segmentBase, commanded - segmentBase, degrees, stoodStill, "turn");
+                    var rest = degrees - settledDeg;
+                    if (rest <= ClockStopTopUpDeg) {
+                        break;
                     }
-                    if (Clock.GetElapsedTime(began, at) > bound) {
-                        LogAxisMoveTimedOut(axis, Math.Max(best, 0), degrees, bound.TotalSeconds);
-                        throw new RoutineFailedException(SlewTimeout, string.Create(CultureInfo.InvariantCulture,
-                            $"the mount turned only {Math.Max(best, 0):F1}° of {degrees:F0}° in {bound.TotalSeconds:F0} s, twice the time the turn takes at its speed — check it, then start again"));
-                    }
-                    if (fast && degrees - p <= AxisSlowZoneDeg) {
-                        fast = false; // the last few degrees at the slow speed: the stop lands close to the target
-                    }
+                    // Short of the step once the reading caught up: a top-up for the rest, under the same guards and bound.
+                    LogClockStopTopUp(axis, settledDeg, degrees, rest);
+                    ThrowIfStoppedFromOutside(gen);
                     if (!IsCurrent(gen)) {
-                        // Checked again just before the renewal: a Stop during the read above must not get a motor restart.
                         throw new OperationCanceledException("the run was superseded while the mount moved");
                     }
-                    await RunAxisAsync(axis, Rate(), abortEpoch).ConfigureAwait(false); // a new speed, or the lease renewed
+                    fast = rest > AxisSlowZoneDeg;
+                    best = Math.Max(best, settledDeg);
+                    settled = false;
+                    await RunAxisAsync(axis, Rate(), abortEpoch).ConfigureAwait(false);
+                    segmentBegan = Clock.GetTimestamp();
+                    bestAt = segmentBegan;
+                    last = (after.RaDeg, segmentBegan);
+                    travel.Reset(settledDeg, Rate(), segmentBegan);
+                    segmentBase = settledDeg;
                 }
-                // Arrived on the reading: stop the motor, then see the mount stand still. The motion stays marked until it
-                // does (ARA-3): a Stop meanwhile still sends AbortSlew, whatever an early "not slewing" says.
-                if (RunStopsFenced(gen)) {
-                    // #2066 — the arriving read hung past a takeover's bound: the mount is someone else's, no stop from here.
-                    throw new OperationCanceledException("the run was fenced as the turn arrived");
-                }
-                await StopAxisBestEffortAsync(axis).ConfigureAwait(false);
-                settled = true;
-                after = await SettleAfterTurnAsync(start, startSide, degrees, progress, gen, ct).ConfigureAwait(false);
             } catch (OperationCanceledException) {
                 throw;
             } catch (Exception) when (!IsCurrent(gen)) {

@@ -158,8 +158,15 @@ namespace OpenAstroAra.Test {
 
             Assert.That(bound.TotalSeconds, Is.EqualTo((2.0 * ((7.0 / 30.0) + (3.0 / 10.0))) + 2.0).Within(1e-6));
             Assert.That(reason, Is.EqualTo(PolarAlignService.SlewTimeout), message);
-            var turn = RaTurns(mount).Single();
-            Assert.That(Math.Abs(turn.TrueDeltaHaDeg), Is.LessThan(1.0 * (bound.TotalSeconds + 0.1)), "stopped at the bound. " + mount.Describe());
+            // #2166 rig check — the clock stops each move at its commanded 10°, and the settled reading (short) gets
+            // top-ups: one turn's moves, all one way, together stopped at the bound.
+            var moves = RaTurns(mount);
+            Assert.That(moves.Where(t => t.TrueDeltaHaDeg != 0).Select(t => Math.Sign(t.TrueDeltaHaDeg)).Distinct().Count(), Is.EqualTo(1), mount.Describe());
+            Assert.That(Math.Abs(moves.Sum(t => t.TrueDeltaHaDeg)), Is.LessThan(1.0 * (bound.TotalSeconds + 0.1)), "stopped at the bound. " + mount.Describe());
+            // The bound counts motor time only (a top-up's settle is not motion): the moves together run at most the bound,
+            // plus the last poll's 10 ms read.
+            var motorTime = moves.Aggregate(TimeSpan.Zero, (sum, t) => sum + (t.EndedAt!.Value - t.StartedAt));
+            Assert.That(motorTime, Is.LessThanOrEqualTo(bound + TimeSpan.FromMilliseconds(20)), "no motor time past the bound. " + mount.Describe());
             mount.AssertEndedStopped(tracking: false);
             mount.AssertCommon(LastEventIndex(ws, WsEventCatalog.PolarAlignError), CounterweightLimitDeg);
         }
@@ -410,24 +417,26 @@ namespace OpenAstroAra.Test {
             mount.AssertCommon(LastEventIndex(ws, WsEventCatalog.PolarAlignError), CounterweightLimitDeg, expectLimitHit: true);
         }
 
-        // ── the settle after the stop: two still readings 1.5 s apart, within 8 s ────────────
+        // ── the settle after the stop: two still readings 2.5 s apart, within 8 s ────────────
 
         [Test]
-        public void The_daemons_settle_needs_two_still_readings_1_5_s_apart_and_gives_up_after_8_s() {
-            // 1.5 s outlasts AlpacaBridge iOptron's 1 s cache: two cached readings never pass for a mount standing still.
+        public void The_daemons_settle_needs_two_still_readings_2_5_s_apart_and_gives_up_after_8_s() {
+            // 2.5 s outlasts the 2 s the HAE29C's readings trailed its motor on AlpacaBridge (#2166 rig check): two answers
+            // from one cached sample never pass for a mount standing still.
             var mount = PolledGemAt(-4.0);
             using var daemon = new PolarAlignService(NewFake(), NullLogger<PolarAlignService>.Instance, new TrueSkySolver(mount), mount,
                 MediatorMotionControl.For(mount), NewStore());
 
-            Assert.That(daemon.AxisSettle, Is.EqualTo(TimeSpan.FromSeconds(1.5)));
+            Assert.That(daemon.AxisSettle, Is.EqualTo(TimeSpan.FromSeconds(2.5)));
             Assert.That(daemon.AxisSteadyWindow, Is.EqualTo(TimeSpan.FromSeconds(8)));
         }
 
         [Test]
         public async Task Behind_a_1_s_driver_cache_a_mount_still_turning_after_the_stop_is_never_taken_for_still() {
             // iOptron's 1 s cache, a Slewing that already reads false, and a mount that runs on slowly after the turn's
-            // MoveAxis 0: two readings 10 ms apart are the same cached one. The settle wants two still readings 1.5 s apart,
-            // so the cache refreshes between them, the motion shows, and the run fails on this turn (never a second one).
+            // MoveAxis 0: two readings 10 ms apart are the same cached one. The settle wants two still readings 2.5 s apart
+            // (the daemon's, #2166), so the cache refreshes between them, the motion shows, and the run fails on this turn
+            // (never a second one).
             var mount = PolledGemAt(-4.0);
             mount.DriverCache = TimeSpan.FromSeconds(1);
             mount.SlewingFalseAfter = TimeSpan.Zero;
@@ -435,7 +444,7 @@ namespace OpenAstroAra.Test {
             mount.RunawayDegPerSec = 0.5;
             var ws = new WsRecorder();
             using var svc = NewGuardedService(mount, ws);
-            svc.AxisSettle = TimeSpan.FromSeconds(1.5); // the daemon's (the bench runs with none)
+            svc.AxisSettle = TimeSpan.FromSeconds(2.5); // the daemon's (the bench runs with none)
             svc.AxisFastRateDegPerSec = 3.0; // and its motor speeds: a 1 s cache trails them by a degree or so
             svc.AxisSlowRateDegPerSec = 1.0;
 
