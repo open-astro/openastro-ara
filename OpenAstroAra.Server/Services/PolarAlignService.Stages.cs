@@ -522,10 +522,13 @@ namespace OpenAstroAra.Server.Services {
         internal TimeSpan AxisSettle { get; set; } = TimeSpan.FromSeconds(2.5);
 
         /// <summary>Run one axis's motor until <paramref name="progress"/> (start reading, current reading) reaches
-        /// <paramref name="degrees"/> by the mount's own position, read from the driver four times a second; fast
-        /// until the last <see cref="AxisSlowZoneDeg"/>, slow for the rest, at the rates the mount offers at or below the
-        /// routine's (never above, #2083). Then stop, wait for the mount to stand still, check the turn arrived, and return
-        /// the fresh reading. With <paramref name="checkDirection"/>, a move that runs the wrong way (progress below
+        /// <paramref name="degrees"/> by the mount's own position, read from the driver four times a second, or until the
+        /// motor has been told the distance (the commanded rates times how long they ran, #2166 rig check: a reading that
+        /// trails the motor no longer adds its lag to the turn); fast until the reading is within the last
+        /// <see cref="AxisSlowZoneDeg"/>, slow for the rest, at the rates the mount offers at or below the routine's (never
+        /// above, #2083). Then stop and wait for the mount to stand still; after a stop by the clock the settled reading says
+        /// where it ended, and a shortfall over <see cref="ClockStopTopUpDeg"/> gets a top-up move under the same guards and
+        /// time bound. Then check the turn arrived, and return the fresh reading. With <paramref name="checkDirection"/>, a move that runs the wrong way (progress below
         /// −<see cref="WrongWayDeg"/>) is stopped and fails the run (<see cref="TurnWrongWay"/>, #2081): it is never reversed,
         /// because a reversal trusts the reading's sign, and a wrong reading (a bad sync, counterweight up) would turn the
         /// motor toward the limit and call that the right way. The RA motor's sign is the run's saved or tested one
@@ -589,6 +592,8 @@ namespace OpenAstroAra.Server.Services {
                 var segmentBegan = began;
                 // A top-up's settle is not motor time: the bound counts only the moves (#2188 review).
                 var settledFor = TimeSpan.Zero;
+                // Where the current segment started (the settled progress before a top-up): the follow check is per segment.
+                var segmentBase = 0.0;
                 while (true) {
                     var byClock = false;
                     var read = 0.0;
@@ -677,7 +682,7 @@ namespace OpenAstroAra.Server.Services {
                     }
                     // The reading made no progress for the second half of the segment: it froze, not lagged.
                     var stoodStill = Clock.GetElapsedTime(bestAt, stoppedAt) * 2 >= Clock.GetElapsedTime(segmentBegan, stoppedAt);
-                    ThrowIfReadingDidNotFollow(axis, settledDeg, commanded, degrees, stoodStill, "turn");
+                    ThrowIfReadingDidNotFollow(axis, settledDeg - segmentBase, commanded - segmentBase, degrees, stoodStill, "turn");
                     var rest = degrees - settledDeg;
                     if (rest <= ClockStopTopUpDeg) {
                         break;
@@ -696,6 +701,7 @@ namespace OpenAstroAra.Server.Services {
                     bestAt = segmentBegan;
                     last = (after.RaDeg, segmentBegan);
                     travel.Reset(settledDeg, Rate(), segmentBegan);
+                    segmentBase = settledDeg;
                 }
             } catch (OperationCanceledException) {
                 throw;

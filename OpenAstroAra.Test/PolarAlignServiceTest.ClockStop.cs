@@ -96,5 +96,56 @@ namespace OpenAstroAra.Test {
             mount.AssertEndedStopped(tracking: false);
             mount.AssertCommon(LastEventIndex(ws, WsEventCatalog.PolarAlignStopped), CounterweightLimitDeg);
         }
+        /// <summary>Bench speeds (30°/s and 10°/s) behind the 2 s lag: every move ends by the clock before the reading
+        /// shows any of it, so only the settled reading can see which way it went.</summary>
+        private static PolarAlignService NewBenchLagService(FakeGemMount mount, WsRecorder ws) {
+            mount.DriverCache = RigReadingLag;
+            var svc = NewGemService(mount, ws);
+            svc.AxisMoveStall = TimeSpan.FromSeconds(2);
+            svc.AxisSettle = TimeSpan.FromSeconds(2.5);
+            return svc;
+        }
+
+        [Test]
+        public async Task An_RA_turn_stopped_by_the_clock_that_settles_the_wrong_way_fails_as_turn_wrong_way() {
+            // The RA motor turns the other way from the saved sign, and the 10° turn (0.5 s at the bench's speeds) ends by
+            // the clock before the 2 s-old reading moves: the settled reading is the first to show it, 10° the wrong way.
+            var mount = PolledGemAt(-4.0);
+            mount.RaMotorSign = -1.0;
+            var ws = new WsRecorder();
+            using var svc = NewBenchLagService(mount, ws);
+
+            var (reason, message) = await GuardedRunFailureAsync(mount, ws, svc).ConfigureAwait(false);
+
+            Assert.That(reason, Is.EqualTo(PolarAlignService.TurnWrongWay), message + " " + mount.Describe());
+            Assert.That(RaTurns(mount), Has.Length.EqualTo(1), "never reversed, no top-up. " + mount.Describe());
+            mount.AssertEndedStopped(tracking: false);
+        }
+
+        [Test]
+        public async Task A_Dec_move_stopped_by_the_clock_that_settles_the_wrong_way_fails_as_turn_wrong_way() {
+            // The probe learns the Dec motor's way; then the motor's sign flips, so the move off the pole goes toward it.
+            // At the bench's speeds that 0.9° move ends by the clock before the 2 s-old reading moves: only the settled
+            // reading shows it went the wrong way.
+            var mount = PolledGemNearThePole(decDeg: 87.2);
+            using var svc = NewBenchLagService(mount, new WsRecorder());
+            var flipped = false;
+            mount.OnFullRead = () => {
+                if (!flipped && DecMoves(mount).Length == 1 && !mount.IsMoving) {
+                    flipped = true;
+                    mount.DecMotorSign = -mount.DecMotorSign;
+                }
+            };
+
+            var result = await svc.MoveToStartAsync(MoveConfirmed, CancellationToken.None).ConfigureAwait(false);
+
+            Assert.Multiple(() => {
+                Assert.That(flipped, Is.True, mount.Describe());
+                Assert.That(result.Outcome, Is.EqualTo(PolarAlignMoveToStartOutcomes.Failed), result.Message);
+                Assert.That(result.Reason, Is.EqualTo(PolarAlignService.TurnWrongWay), result.Message + " " + mount.Describe());
+                Assert.That(DecMoves(mount), Has.Length.EqualTo(2), "the probe and the one move: no top-up, never reversed. " + mount.Describe());
+                Assert.That(mount.IsMoving, Is.False);
+            });
+        }
     }
 }

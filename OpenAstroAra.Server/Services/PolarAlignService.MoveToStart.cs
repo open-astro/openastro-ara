@@ -366,6 +366,8 @@ namespace OpenAstroAra.Server.Services {
                 var segmentBegan = began;
                 // A top-up's settle is not motor time: the bound counts only the moves (#2188 review).
                 var settledFor = TimeSpan.Zero;
+                // Where the current segment started (the settled progress before a top-up): the follow check is per segment.
+                var segmentBase = 0.0;
                 while (true) {
                     var byClock = false;
                     var read = 0.0;
@@ -446,7 +448,7 @@ namespace OpenAstroAra.Server.Services {
                         throw new RoutineFailedException(TurnWrongWay, DecWrongWayMessage);
                     }
                     var stoodStill = Clock.GetElapsedTime(bestAt, stoppedAt) * 2 >= Clock.GetElapsedTime(segmentBegan, stoppedAt);
-                    ThrowIfReadingDidNotFollow(axis, settledDeg, commanded, degrees, stoodStill, "move");
+                    ThrowIfReadingDidNotFollow(axis, settledDeg - segmentBase, commanded - segmentBase, degrees, stoodStill, "move");
                     var rest = degrees - settledDeg;
                     if (rest <= ClockStopTopUpDeg) {
                         break;
@@ -465,6 +467,7 @@ namespace OpenAstroAra.Server.Services {
                     bestAt = segmentBegan;
                     last = (track.SignedOffPoleDeg, segmentBegan);
                     travel.Reset(settledDeg, Rate(), segmentBegan);
+                    segmentBase = settledDeg;
                 }
             } catch (OperationCanceledException) {
                 throw;
