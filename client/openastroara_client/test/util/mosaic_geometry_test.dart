@@ -53,11 +53,30 @@ void main() {
     final flat = mosaicPanelOffsetsArcmin(fov, g);
     final turned = mosaicPanelOffsetsArcmin(fov, g, rotationDeg: 90);
     expect(flat, hasLength(4));
-    // 90° clockwise-on-screen: (x, y) → (−y, x) in the page's convention.
+    // Up axis turned 90° east of north: (x east, y north) → (y, −x) (#2150).
     for (var i = 0; i < 4; i++) {
-      expect(turned[i].$1, closeTo(-flat[i].$2, 1e-6));
-      expect(turned[i].$2, closeTo(flat[i].$1, 1e-6));
+      expect(turned[i].$1, closeTo(flat[i].$2, 1e-6));
+      expect(turned[i].$2, closeTo(-flat[i].$1, 1e-6));
     }
+  });
+
+  test('a 2x1 mosaic at a turned dial lies along the width axis', () {
+    // #2150: the dial is the camera's up axis, east of north (the daemon's
+    // meaning), so the width axis, along which a 2×1 grid runs, is dial + 90.
+    const two = (cols: 2, rows: 1, overlapPct: 10);
+    const ra0 = 10.685, dec0 = 41.269, dial = 30.0;
+    final p = mosaicPanelCentres(
+        raDeg: ra0, decDeg: dec0, fovArcmin: fov, g: two, rotationDeg: dial);
+    const d2r = math.pi / 180;
+    final dRa = (p[1].raDeg - ra0) * d2r;
+    final de0 = dec0 * d2r, de1 = p[1].decDeg * d2r;
+    final pa = math.atan2(
+          math.sin(dRa) * math.cos(de1),
+          math.cos(de0) * math.sin(de1) -
+              math.sin(de0) * math.cos(de1) * math.cos(dRa),
+        ) /
+        d2r;
+    expect((pa % 180 + 180) % 180, closeTo(dial + 90, 0.5));
   });
 
   test('suggestMosaic picks the smallest square grid that covers the object', () {

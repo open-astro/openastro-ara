@@ -32,7 +32,7 @@ test('catalogueAngle wraps into 0 to 359', () => {
 
 // The ring of the page's own box for M 31 (catalogue angle 35) after Snap.
 function snappedBox(optics) {
-  const p = loadPageFunctions(['snapDialDeg', 'snapToCatalogueAngle', 'mosaicData', 'tanToRaDec'], {
+  const p = loadPageFunctions(['snapDialDeg', 'snapToCatalogueAngle', 'mosaicData', 'upAxisTurn', 'tanToRaDec'], {
     D2R, optics, frameCatPaDeg: 35, frameRotDeg: 0, frameCols: 1, frameRows: 1, frameOverlap: 10,
     frameRaDeg: 10.685, frameDecDeg: 41.269, updateFrame() {},
   });
@@ -77,11 +77,13 @@ test('snapToCatalogueAngle turns the dial to the angle that lines the box up, an
     optics: LANDSCAPE, frameCatPaDeg: 35, frameRotDeg: 0, updateFrame() { redraws++; },
   });
   p.snapToCatalogueAngle();
-  assert.equal(p.frameRotDeg, 55);
+  // #2150: the dial is the camera's up axis, so the landscape long side (the
+  // width, at dial + 90) lies along 35 at dial 125, the portrait one at 35.
+  assert.equal(p.frameRotDeg, 125);
   assert.equal(redraws, 1);
   p.optics = PORTRAIT;
   p.snapToCatalogueAngle();
-  assert.equal(p.frameRotDeg, 145);
+  assert.equal(p.frameRotDeg, 35);
 });
 
 test('snapToCatalogueAngle with no catalogue angle leaves the dial alone', () => {
@@ -103,7 +105,7 @@ test('snapEnabled: on, a catalogue angle that differs', () => {
 
 test('snapEnabled is false when Framing is off, the dial shows the Snap angle, or there is none', () => {
   const p = loadPageFunctions(['snapDialDeg', 'snapEnabled'], {
-    optics: LANDSCAPE, frameOn: true, frameCatPaDeg: 35, frameRotDeg: 55,
+    optics: LANDSCAPE, frameOn: true, frameCatPaDeg: 35, frameRotDeg: 125,
   });
   assert.equal(p.snapEnabled(), false);
   p.frameRotDeg = 35;   // the raw catalogue angle does not line the box up
@@ -125,7 +127,7 @@ test('the Snap label shows the angle Snap turns the dial to', () => {
     fmtFovDeg: (x) => x.toFixed(2) + '°', setFrameCoordText() {},
   });
   p.renderFramePanel();
-  assert.equal(els['f-snap'].textContent, 'Snap to catalogue angle (55°)');
+  assert.equal(els['f-snap'].textContent, 'Snap to catalogue angle (125°)');
   assert.equal(els['f-snap'].disabled, false);
 });
 
