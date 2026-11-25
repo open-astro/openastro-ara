@@ -7778,7 +7778,7 @@
   "@polarKnobMainExposure": {
     "description": "Settings \u2192 Imaging \u2192 Polar align: main camera exposure field label with its accepted range"
   },
-  "polarKnobToleranceHint": "Done turns on once the error is inside it",
+  "polarKnobToleranceHint": "A Polar Aligner's motors stop once the error is inside it",
   "@polarKnobToleranceHint": {
     "description": "Imaging > Polar align settings panel hint"
   },
@@ -7862,7 +7862,7 @@
       }
     }
   },
-  "polarAlignerConvergedPlain": "{moves, plural, =1{Inside your tolerance after 1 move.} other{Inside your tolerance after {moves} moves.}} Done waits for your polar-align settings to load. If the error drifts out, the motors correct again.",
+  "polarAlignerConvergedPlain": "{moves, plural, =1{Inside your tolerance after 1 move.} other{Inside your tolerance after {moves} moves.}} If the error drifts out, the motors correct again.",
   "@polarAlignerConvergedPlain": {
     "description": "Polar Aligner block: the motors rest inside the tolerance, while the polar-align settings (and so the tolerance in arcminutes) are not loaded from the rig",
     "placeholders": {
@@ -8941,8 +8941,6 @@
   "@polarVerdictFarOffMeaning": {"description": "Polar align result: what Far off means"},
   "polarAdjustAgain": "Adjust again",
   "@polarAdjustAgain": {"description": "Polar align result: the secondary button; starts a new run from Home"},
-  "polarDoneWaits": "Done turns on once the total error is under {tolerance}′.",
-  "@polarDoneWaits": {"description": "Polar align adjust screen: why Done is off, with the profile's tolerance", "placeholders": {"tolerance": {"type": "String"}}},
   "polarAlignErrorHomeFailed": "The mount did not go Home. Check the mount, send it Home, then start again.",
   "@polarAlignErrorHomeFailed": {"description": "polar_align.error reason home_failed: the mount refused or did not finish going Home after Done"}
 }

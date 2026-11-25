@@ -1132,7 +1132,7 @@ const Map<String, Help> helpRegistry = {
     body:
         '* **Home** — every run starts from the mount\'s Home position (tube at the pole, counterweights down). On a mount that can find Home by itself, tap Home and wait until it gets there; on any other mount, put it in its home position yourself. A parked mount is unparked first.\n'
         '* **Start Polar Alignment** — the camera solves a frame at each of three stops while the RA motor makes two turns of the profile\'s turn (10° for a new profile), the way the *Polar align turn direction* setting says (east in the north, west in the south unless you change it). The circle through the three points is where the mount\'s axis really points (a camera not square to the axis adds nothing false). Keep a hand on the mount\'s power switch the first time you run this on a mount.\n'
-        '* **Adjust** — every solve then shows your knob adjustments live. Lower/Raise and Move east/west name the knob to turn. Done turns on once the error is inside the tolerance.\n'
+        '* **Adjust** — every solve then shows your knob adjustments live. Lower/Raise and Move east/west name the knob to turn. Press Done whenever you are happy with it: nothing holds it back.\n'
         '* **Done** — the mount goes Home, three more solves around two RA turns measure the result with nothing taken from the live readout, and the mount goes Home again. The result says how good the alignment really is. Adjust again starts a new run from Home.\n'
         '* **Frames per point** — each of the three points averages several frames (3 by default). A point that stays scattered over 3″ after one retake marks the result *noisy*.\n'
         '* Every measuring turn is the RA motor alone, never a GoTo or a Dec move, as NINA\'s three-point polar alignment. The mount\'s own limits still apply.\n'
@@ -2427,7 +2427,7 @@ const Map<String, Help> helpRegistry = {
     key: 'img.polar.target_tolerance_arcmin',
     title: 'Polar align tolerance',
     body:
-        'How close to the pole counts as aligned. Done turns on once the error is inside it.',
+        'How close to the pole counts as aligned. A Polar Aligner\'s motors stop once the error is inside it, and the readout says when a measurement inside it is too uncertain to confirm. Done does not wait for it: that is your call.',
     relatedSettings: ['img.polar.target_tolerance_arcmin'],
   ),
   'img.polar.polar_aligner_auto': Help(

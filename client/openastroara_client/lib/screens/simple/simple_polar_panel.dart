@@ -109,9 +109,9 @@ class SimplePolarShutter extends ConsumerWidget {
 /// Polar align's panel beside the right rail, one step at a time
 /// ([PolarFlowStep]): Home then Start with the routine's settings (exposure,
 /// Loop/Single); a calm line while the rig measures; the bullseye, the
-/// altitude and azimuth turns, Take frame (Single) and Done (inside the
-/// profile's tolerance) while the user turns the bolts; then the verdict, with
-/// Done and Adjust again. The rail's shutter starts and stops it.
+/// altitude and azimuth turns, Take frame (Single) and Done (the user's call,
+/// whenever they are happy) while the user turns the bolts; then the verdict,
+/// with Done and Adjust again. The rail's shutter starts and stops it.
 class SimplePolarPanel extends ConsumerStatefulWidget {
   const SimplePolarPanel({super.key});
 
@@ -191,7 +191,7 @@ class _SimplePolarPanelState extends ConsumerState<SimplePolarPanel> {
       (_, next) => setState(() => _bolt.track(next)),
     );
     // Null until the profile's copy is in from the rig (ADR 0015): the
-    // settings say so, with Retry, and nothing is judged against a made-up
+    // settings say so, with Retry, and no readout is judged against a made-up
     // tolerance.
     final loaded = ref.watch(polarAlignSettingsProvider);
     final settings = loaded.value;
@@ -201,13 +201,9 @@ class _SimplePolarPanelState extends ConsumerState<SimplePolarPanel> {
     final step = polarFlowStep(live);
     final adjusting = step == PolarFlowStep.adjusting;
     final total = live.totalErrorArcmin;
-    final inTolerance =
-        total != null &&
-        settings != null &&
-        total <= settings.targetToleranceArcmin;
     // #2072 inside the tolerance on the error alone, but not with twice its
-    // 1σ: the panel says the measurement cannot confirm it. Done stays
-    // available inside the tolerance (Joey, 2026-11-21).
+    // 1σ: the panel says the measurement cannot confirm it. Done never waits:
+    // it is the user's call.
     final unconfirmed = polarUnconfirmedText(l10n, total, live.totalSigmaArcmin, settings?.targetToleranceArcmin);
     final color = zoneColor(total);
     // #1971 while the Polar Aligner's motors work, the arrows dim and Done
@@ -342,14 +338,6 @@ class _SimplePolarPanelState extends ConsumerState<SimplePolarPanel> {
         // the measurement cannot confirm it.
         if (unconfirmed != null && !motorsBusy)
           caution(unconfirmed, const Key('simple-polar-unconfirmed')),
-        // Done waits for the profile's tolerance: said in the open.
-        if (!inTolerance && settings != null && !motorsBusy)
-          Text(
-            l10n.polarDoneWaits(polarToleranceText(settings.targetToleranceArcmin)),
-            key: const Key('simple-polar-done-waits'),
-            style: kSimpleCaption,
-            maxLines: 3,
-          ),
         Row(
           spacing: AraSpace.s8,
           children: [
@@ -369,9 +357,7 @@ class _SimplePolarPanelState extends ConsumerState<SimplePolarPanel> {
                 child: FilledButton(
                   key: const Key('simple-polar-done'),
                   style: kSimpleGoStyle,
-                  onPressed: !busy && inTolerance
-                      ? () => _run(l10n.polarActionComplete, (api) => api.complete())
-                      : null,
+                  onPressed: busy ? null : () => _run(l10n.polarActionComplete, (api) => api.complete()),
                   child: Text(l10n.polarDone),
                 ),
               ),

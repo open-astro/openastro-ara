@@ -326,7 +326,7 @@ void main() {
   });
 
   testWidgets(
-    'adjusting: the error, the turns, no Stop (the shutter stops it); Done waits for the tolerance',
+    'adjusting: the error, the turns, no Stop (the shutter stops it); Done is on outside the tolerance',
     (tester) async {
       final api = await _pump(tester, _adjusting);
       expect(find.text('14.4′'), findsOneWidget);
@@ -341,7 +341,8 @@ void main() {
         tester
             .widget<FilledButton>(find.byKey(const Key('simple-polar-done')))
             .onPressed,
-        isNull,
+        isNotNull,
+        reason: '14.4′ against a 1′ tolerance: still the user\'s call',
       );
       expect(
         tester
@@ -615,7 +616,7 @@ void main() {
   );
 
   testWidgets(
-    'a hair above the tolerance, Done stays off and says why',
+    'a hair above the tolerance, Done posts complete: no reason line',
     (tester) async {
       final api = await _pump(
         tester,
@@ -629,40 +630,54 @@ void main() {
         ),
         tolerance: 1.0,
       );
-      expect(
-        tester
-            .widget<FilledButton>(find.byKey(const Key('simple-polar-done')))
-            .onPressed,
-        isNull,
-      );
-      expect(find.text('Done turns on once the total error is under 1′.'), findsOneWidget);
-      expect(api!.calls, isEmpty);
+      expect(find.textContaining('Done turns on'), findsNothing);
+      await tester.tap(find.byKey(const Key('simple-polar-done')));
+      await tester.pumpAndSettle();
+      expect(find.byType(Dialog), findsNothing);
+      expect(api!.calls, ['complete']);
     },
   );
 
   testWidgets(
-    'at the tolerance exactly, Done posts complete: there is no Check button',
+    'paused with no solve, far outside the tolerance: Done still posts complete, and there is no Check button',
     (tester) async {
       final api = await _pump(
         tester,
         const PolarAlignLive(
-          phase: PolarAlignStates.adjusting,
+          phase: PolarAlignStates.paused,
           stage: PolarAlignStages.align,
-          altErrorArcmin: 0.6,
-          azErrorArcmin: 0.8,
-          totalErrorArcmin: 1.0,
-          zone: 'green',
+          altErrorArcmin: 20,
+          azErrorArcmin: 18,
+          totalErrorArcmin: 27,
+          zone: 'yellow',
+          consecutiveSolveFailures: 5,
         ),
         tolerance: 1.0,
       );
       expect(find.byKey(const Key('simple-polar-check')), findsNothing);
-      expect(find.byKey(const Key('simple-polar-done-waits')), findsNothing);
       await tester.tap(find.byKey(const Key('simple-polar-done')));
       await tester.pumpAndSettle();
-      expect(find.byType(Dialog), findsNothing);
-      expect(api!.calls, ['complete'], reason: 'enabled at the tolerance exactly (<=), not only below it');
+      expect(api!.calls, ['complete']);
     },
   );
+
+  testWidgets('before the profile loads, Done does not wait for it (ADR 0015)', (tester) async {
+    final api = _Api();
+    api.section.initial = null; // the rig does not answer
+    await tester.pumpWidget(ProviderScope(
+      overrides: [
+        ...polarAlignSectionOverrides(api.section),
+        polarAlignApiProvider.overrideWithValue(api),
+        polarAlignLiveProvider.overrideWith(() => _Live(_adjusting)),
+      ],
+      child: const MaterialApp(home: Scaffold(body: Center(child: SimplePolarPanel()))),
+    ));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('section-retry')), findsOneWidget, reason: 'the settings are not in');
+    await tester.tap(find.byKey(const Key('simple-polar-done')));
+    await tester.pumpAndSettle();
+    expect(api.calls, ['complete']);
+  });
 
   testWidgets('a noisy measurement says so while adjusting and beside the verdict (#2082)', (tester) async {
     tester.view.physicalSize = const Size(1024, 768);

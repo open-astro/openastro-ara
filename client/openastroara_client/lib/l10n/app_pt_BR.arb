@@ -1678,7 +1678,7 @@
   "polarKnobTolerance": "Tolerância (arcmin, 0,1 a 10)",
   "polarKnobTurn": "Giro (°, 5 a 30)",
   "polarKnobMainExposure": "Exposição da câmera principal (s, 0,1 a 60)",
-  "polarKnobToleranceHint": "O Concluir liga quando o erro fica dentro dela",
+  "polarKnobToleranceHint": "Os motores de um Polar Aligner param quando o erro fica dentro dela",
   "polarKnobTurnHint": "Mantido entre 5° e 30°",
   "polarAligner": "Alinhador polar",
   "polarAlignerIdle": "Depois de Iniciar, o Ara mede, faz um pequeno movimento de teste em cada eixo e depois gira os motores até o erro ficar dentro da sua tolerância de {tolerance}′.",
@@ -1689,7 +1689,7 @@
   "polarAlignerMeasuring": "Medindo o novo erro…",
   "polarAlignerHoming": "Voltando ao zero…",
   "polarAlignerConverged": "{moves, plural, =1{Dentro da sua tolerância de {tolerance}′ após 1 movimento.} other{Dentro da sua tolerância de {tolerance}′ após {moves} movimentos.}} Termine com Concluir. Se o erro sair da tolerância, os motores corrigem de novo.",
-  "polarAlignerConvergedPlain": "{moves, plural, =1{Dentro da sua tolerância após 1 movimento.} other{Dentro da sua tolerância após {moves} movimentos.}} O Concluir aguarda o carregamento das suas configurações de alinhamento polar. Se o erro sair da tolerância, os motores corrigem de novo.",
+  "polarAlignerConvergedPlain": "{moves, plural, =1{Dentro da sua tolerância após 1 movimento.} other{Dentro da sua tolerância após {moves} movimentos.}} Se o erro sair da tolerância, os motores corrigem de novo.",
   "polarAlignerAxisAzimuth": "azimute",
   "polarAlignerAxisAltitude": "altitude",
   "polarAlignerEast": "para leste",
@@ -1962,6 +1962,5 @@
   "polarVerdictRoughMeaning": "As estrelas vão derivar em exposições longas. Ajuste de novo para chegar mais perto.",
   "polarVerdictFarOffMeaning": "A montagem está longe do polo. Ajuste de novo.",
   "polarAdjustAgain": "Ajustar de novo",
-  "polarDoneWaits": "O Concluir liga quando o erro total fica abaixo de {tolerance}′.",
   "polarAlignErrorHomeFailed": "A montagem não foi para Home. Verifique a montagem, envie-a para Home e comece de novo."
 }

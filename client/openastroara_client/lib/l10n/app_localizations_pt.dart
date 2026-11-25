@@ -6055,7 +6055,7 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get polarKnobToleranceHint =>
-      'Done turns on once the error is inside it';
+      'A Polar Aligner\'s motors stop once the error is inside it';
 
   @override
   String get polarKnobTurnHint => 'Kept between 5° and 30°';
@@ -6111,7 +6111,7 @@ class AppLocalizationsPt extends AppLocalizations {
       other: 'Inside your tolerance after $moves moves.',
       one: 'Inside your tolerance after 1 move.',
     );
-    return '$_temp0 Done waits for your polar-align settings to load. If the error drifts out, the motors correct again.';
+    return '$_temp0 If the error drifts out, the motors correct again.';
   }
 
   @override
@@ -7166,11 +7166,6 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get polarAdjustAgain => 'Adjust again';
-
-  @override
-  String polarDoneWaits(String tolerance) {
-    return 'Done turns on once the total error is under $tolerance′.';
-  }
 
   @override
   String get polarAlignErrorHomeFailed =>
@@ -13275,7 +13270,7 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get polarKnobToleranceHint =>
-      'O Concluir liga quando o erro fica dentro dela';
+      'Os motores de um Polar Aligner param quando o erro fica dentro dela';
 
   @override
   String get polarKnobTurnHint => 'Mantido entre 5° e 30°';
@@ -13332,7 +13327,7 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
       other: 'Dentro da sua tolerância após $moves movimentos.',
       one: 'Dentro da sua tolerância após 1 movimento.',
     );
-    return '$_temp0 O Concluir aguarda o carregamento das suas configurações de alinhamento polar. Se o erro sair da tolerância, os motores corrigem de novo.';
+    return '$_temp0 Se o erro sair da tolerância, os motores corrigem de novo.';
   }
 
   @override
@@ -14395,11 +14390,6 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get polarAdjustAgain => 'Ajustar de novo';
-
-  @override
-  String polarDoneWaits(String tolerance) {
-    return 'O Concluir liga quando o erro total fica abaixo de $tolerance′.';
-  }
 
   @override
   String get polarAlignErrorHomeFailed =>

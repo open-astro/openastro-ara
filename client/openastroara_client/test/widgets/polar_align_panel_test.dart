@@ -680,7 +680,7 @@ void main() {
       expect(api.calls, ['start']);
     });
 
-    testWidgets('adjusting shows the readout and gates Done on tolerance', (tester) async {
+    testWidgets('adjusting shows the readout, and Done posts complete outside the tolerance: the user decides', (tester) async {
       final api = _FakePolarAlignClient();
       await tester.pumpWidget(_harness(
           api,
@@ -700,16 +700,31 @@ void main() {
       expect(find.descendant(of: readout, matching: find.text('−23.4′')), findsOneWidget);
       expect(find.descendant(of: readout, matching: find.text('Lower')), findsOneWidget);
       expect(find.descendant(of: readout, matching: find.text('Move east')), findsOneWidget);
-      final done = tester.widget<FilledButton>(find.byKey(const Key('polar-align-done')));
-      expect(done.onPressed, isNull, reason: '27.3′ is outside the 1′ tolerance — Done disabled');
-
-      expect(find.text('Done turns on once the total error is under 1′.'), findsOneWidget);
+      expect(find.textContaining('Done turns on'), findsNothing, reason: 'no reason line: nothing holds Done');
       expect(find.byKey(const Key('polar-align-check')), findsNothing);
-      await tester.ensureVisible(find.byKey(const Key('polar-align-stop')));
+
+      // 27.3′ is far outside the 1′ tolerance: Done is still the user's call.
+      await tester.ensureVisible(find.byKey(const Key('polar-align-done')));
       await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('polar-align-done')));
+      await tester.pumpAndSettle();
+      expect(api.calls, ['complete']);
       await tester.tap(find.byKey(const Key('polar-align-stop')));
       await tester.pumpAndSettle();
-      expect(api.calls, ['stop']);
+      expect(api.calls, ['complete', 'stop']);
+    });
+
+    testWidgets('paused with no solve: Done still posts complete', (tester) async {
+      final api = _FakePolarAlignClient();
+      await tester.pumpWidget(_harness(
+          api,
+          const PolarAlignLive(phase: PolarAlignStates.paused, totalErrorArcmin: 12, consecutiveSolveFailures: 5)));
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.byKey(const Key('polar-align-done')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('polar-align-done')));
+      await tester.pumpAndSettle();
+      expect(api.calls, ['complete']);
     });
 
     testWidgets('in-tolerance Done posts complete', (tester) async {
@@ -895,7 +910,7 @@ void main() {
     });
 
     testWidgets(
-        'the capture settings wait for the profile from the rig: Not loaded with Retry, and Done waits too (ADR 0015)',
+        'the capture settings wait for the profile from the rig: Not loaded with Retry; Done does not wait for it (ADR 0015)',
         (tester) async {
       final api = _FakePolarAlignClient();
       api.section.initial = null; // the rig does not answer
@@ -906,8 +921,8 @@ void main() {
       expect(find.byKey(const Key('polar-align-exposure')), findsNothing, reason: 'no default exposure shows');
       expect(find.byKey(const Key('polar-align-mode')), findsNothing);
       expect(find.byKey(const Key('section-retry')), findsOneWidget);
-      expect(tester.widget<ButtonStyleButton>(find.byKey(const Key('polar-align-done'))).enabled, isFalse,
-          reason: 'no tolerance is made up to judge the error against');
+      expect(tester.widget<ButtonStyleButton>(find.byKey(const Key('polar-align-done'))).enabled, isTrue,
+          reason: 'Done judges nothing against a tolerance: it needs no profile');
       expect(api.section.sent, isEmpty);
 
       api.settings = rigPolarAlign;

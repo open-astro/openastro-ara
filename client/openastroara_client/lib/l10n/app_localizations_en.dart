@@ -6055,7 +6055,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get polarKnobToleranceHint =>
-      'Done turns on once the error is inside it';
+      'A Polar Aligner\'s motors stop once the error is inside it';
 
   @override
   String get polarKnobTurnHint => 'Kept between 5° and 30°';
@@ -6111,7 +6111,7 @@ class AppLocalizationsEn extends AppLocalizations {
       other: 'Inside your tolerance after $moves moves.',
       one: 'Inside your tolerance after 1 move.',
     );
-    return '$_temp0 Done waits for your polar-align settings to load. If the error drifts out, the motors correct again.';
+    return '$_temp0 If the error drifts out, the motors correct again.';
   }
 
   @override
@@ -7166,11 +7166,6 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get polarAdjustAgain => 'Adjust again';
-
-  @override
-  String polarDoneWaits(String tolerance) {
-    return 'Done turns on once the total error is under $tolerance′.';
-  }
 
   @override
   String get polarAlignErrorHomeFailed =>

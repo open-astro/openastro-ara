@@ -182,7 +182,6 @@ void main() {
       (tester) async {
     await _pump(tester, _fine(const PolarAlignerRun(state: 'settling', seconds: 2)));
     expect(_key('simple-polar-done'), findsNothing);
-    expect(_key('simple-polar-done-waits'), findsNothing);
     _liveNotifier.set(_fine(const PolarAlignerRun(state: 'converged', moves: 4)));
     await tester.pumpAndSettle();
     expect(_key('simple-polar-done'), findsOneWidget);

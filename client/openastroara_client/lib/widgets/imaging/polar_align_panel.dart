@@ -81,8 +81,8 @@ String _secondsLabel(num ms) => '${(ms / 1000).toStringAsFixed(1)} s';
 /// ([PolarFlowStep]). Home, then Start; the three-point measurement; the
 /// zooming bullseye with decoupled Az/Alt readouts fed by
 /// `polar_align.progress` WS events while the user turns the bolts; Done
-/// (inside the profile's target tolerance, §45.12), after which the rig sends
-/// the mount Home, verifies and shows the verdict. Stop in every running step.
+/// (the user's call, whenever they are happy), after which the rig sends the
+/// mount Home, verifies and shows the verdict. Stop in every running step.
 class PolarAlignPanel extends ConsumerStatefulWidget {
   const PolarAlignPanel({super.key});
 
@@ -96,7 +96,7 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
   bool get _busy => ref.watch(polarAlignActionProvider).busy;
   String? get _status => ref.watch(polarAlignActionProvider).error;
   // Null until the profile's copy is in from the rig (ADR 0015): the capture
-  // settings say so, and nothing is judged against a made-up tolerance.
+  // settings say so, and no readout is judged against a made-up tolerance.
   PolarAlignSettings? get _settings => ref.watch(polarAlignSettingsProvider).value;
   double? get _toleranceArcmin => _settings?.targetToleranceArcmin;
 
@@ -447,12 +447,10 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
   }
 
   Widget _adjustBody(PolarAlignLive live, Color color) {
-    final tolerance = _toleranceArcmin;
-    final inTolerance =
-        live.totalErrorArcmin != null && tolerance != null && live.totalErrorArcmin! <= tolerance;
     // #2072 inside the tolerance, but not with twice its 1σ: the screen says the
-    // measurement cannot confirm it; Done stays available (Joey, 2026-11-21).
-    final unconfirmed = polarUnconfirmedText(context.l10n, live.totalErrorArcmin, live.totalSigmaArcmin, tolerance);
+    // measurement cannot confirm it. Done never waits: it is the user's call.
+    final unconfirmed =
+        polarUnconfirmedText(context.l10n, live.totalErrorArcmin, live.totalSigmaArcmin, _toleranceArcmin);
     final single = _settings?.loopMode == PolarAlignLoopModes.single;
     return FitColumn(
       children: [
@@ -557,28 +555,13 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
                   ),
                 FilledButton(
                   key: const Key('polar-align-done'),
-                  onPressed: _busy || !inTolerance
-                      ? null
-                      : () => _run(context.l10n.polarActionComplete, (api) => api.complete()),
+                  onPressed: _busy ? null : () => _run(context.l10n.polarActionComplete, (api) => api.complete()),
                   child: Text(context.l10n.polarDone),
                 ),
               ],
             ),
           ],
         ),
-        // Done waits for the profile's tolerance: said in the open, not in a tooltip.
-        if (!inTolerance && tolerance != null) ...[
-          const SizedBox(height: 8),
-          Align(
-            alignment: Alignment.centerRight,
-            child: Text(
-              context.l10n.polarDoneWaits(polarToleranceText(tolerance)),
-              key: const Key('polar-align-done-waits'),
-              textAlign: TextAlign.right,
-              style: const TextStyle(fontSize: _smallFont, color: AraColors.textSecondary),
-            ),
-          ),
-        ],
         if (unconfirmed != null) ...[
           const SizedBox(height: 8),
           Align(

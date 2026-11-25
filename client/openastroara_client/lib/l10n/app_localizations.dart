@@ -10175,7 +10175,7 @@ abstract class AppLocalizations {
   /// Imaging > Polar align settings panel hint
   ///
   /// In en, this message translates to:
-  /// **'Done turns on once the error is inside it'**
+  /// **'A Polar Aligner\'s motors stop once the error is inside it'**
   String get polarKnobToleranceHint;
 
   /// Imaging > Polar align settings panel hint
@@ -10241,7 +10241,7 @@ abstract class AppLocalizations {
   /// Polar Aligner block: the motors rest inside the tolerance, while the polar-align settings (and so the tolerance in arcminutes) are not loaded from the rig
   ///
   /// In en, this message translates to:
-  /// **'{moves, plural, =1{Inside your tolerance after 1 move.} other{Inside your tolerance after {moves} moves.}} Done waits for your polar-align settings to load. If the error drifts out, the motors correct again.'**
+  /// **'{moves, plural, =1{Inside your tolerance after 1 move.} other{Inside your tolerance after {moves} moves.}} If the error drifts out, the motors correct again.'**
   String polarAlignerConvergedPlain(int moves);
 
   /// Fills polarAlignerTestMove / polarAlignerMoving and the stop sentences: the azimuth axis, lower case
@@ -11888,12 +11888,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Adjust again'**
   String get polarAdjustAgain;
-
-  /// Polar align adjust screen: why Done is off, with the profile's tolerance
-  ///
-  /// In en, this message translates to:
-  /// **'Done turns on once the total error is under {tolerance}′.'**
-  String polarDoneWaits(String tolerance);
 
   /// polar_align.error reason home_failed: the mount refused or did not finish going Home after Done
   ///

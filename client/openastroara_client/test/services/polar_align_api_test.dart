@@ -64,7 +64,7 @@ void main() {
     );
   });
 
-  test('Stop and Done wait for the daemon to confirm the mount stopped, past the 5 s default (#2048)', () async {
+  test('Stop waits past the 5 s default for the confirmed stop (#2048); Done answers at once on the default', () async {
     final d = _Daemon();
     final api = PolarAlignApi(const AraServer(hostname: 'x', port: 80), dio: Dio()..httpClientAdapter = d);
     await api.stop();
@@ -72,7 +72,7 @@ void main() {
     await api.requestCapture();
     expect(d.seen, [
       ('POST /api/v1/equipment/polaralign/stop', PolarAlignApi.endTimeout),
-      ('POST /api/v1/equipment/polaralign/complete', PolarAlignApi.endTimeout),
+      ('POST /api/v1/equipment/polaralign/complete', null),
       ('POST /api/v1/equipment/polaralign/capture', null),
     ]);
   });

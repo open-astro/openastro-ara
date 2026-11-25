@@ -88,13 +88,10 @@ class PolarAlignApi implements PolarAlignClient {
   /// arrives on the `polar_align.*` WS stream and needs no further call.
   @override
   Future<void> complete() async {
-    await _dio.post<void>(
-      '/api/v1/equipment/polaralign/complete',
-      options: Options(receiveTimeout: endTimeout),
-    );
+    await _dio.post<void>('/api/v1/equipment/polaralign/complete');
   }
 
-  /// #2048 — Stop and Done answer once the daemon has ended the run and
+  /// #2048 — Stop answers once the daemon has ended the run and
   /// confirmed the mount stopped. Its slowest end (`EndWorstCase` in
   /// PolarAlignService.MountStop.cs) is a stuck run: one round of stop
   /// commands (3 × 3 s), the 15 s unwind grace, then the stop it confirms
