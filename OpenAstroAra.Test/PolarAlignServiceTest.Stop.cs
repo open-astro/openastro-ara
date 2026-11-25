@@ -51,8 +51,8 @@ namespace OpenAstroAra.Test {
         /// The bench mount for the exit paths: a mocked mediator that is also the daemon's telescope service (the path
         /// production takes), with real state — motor rates, tracking — and an ordered log of every motion, park and
         /// tracking command the routine sends. A GoTo, Find Home or unpark is logged too, so a test sees the routine sends
-        /// none (#2048). A fresh position read advances each running motor by <see cref="StepDeg"/>, as the leased motor
-        /// turns between the routine's polls.
+        /// none. A running motor turns its axis at its rate on the bench clock (<see cref="Clock"/>), which the routine's
+        /// timed turns move; a mount that ignored a stop runs on by <see cref="StepDeg"/> at every fresh read.
         /// </summary>
         private sealed class FakeStopMount {
             private readonly object _lock = new();
@@ -65,38 +65,27 @@ namespace OpenAstroAra.Test {
             private bool _tracking;
             private bool _runaway;
             private bool _threwOnTrackingOff;
+            private long _since;
 
             public Mock<ITelescopeMediator> Mock { get; } = new();
 
-            /// <summary>Each fresh read moves a running motor this far (degrees).</summary>
+            /// <summary>The clock the motors turn on: it advances by itself as the routine times a turn on it. A test that
+            /// needs to act in the middle of a turn turns <see cref="ManualMountClock.AutoAdvance"/> off first.</summary>
+            public ManualMountClock Clock { get; }
+
+            /// <summary>The mount reports AtHome (only a mount that can find Home is asked).</summary>
+            public bool AtHome { get; set; } = true;
+
+            /// <summary>Each fresh read moves a mount that ignored a stop this far (degrees).</summary>
             public double StepDeg { get; set; } = 0.25;
             /// <summary>The mount refuses every motor command that would move it.</summary>
             public bool RefusesMotor { get; set; }
-            /// <summary>The motor takes its commands, but the reading never changes (a slipping clutch, a stall).</summary>
+            /// <summary>The motor takes its commands, but the mount never turns (a slipping clutch, a stall).</summary>
             public bool Frozen { get; set; }
             /// <summary>AbortSlew and MoveAxis 0 are not honored: once one arrives, the RA axis runs on.</summary>
             public bool IgnoresStops { get; set; }
             /// <summary>The first tracking-off write throws (a mount fault the routine does not expect).</summary>
             public bool ThrowsOnFirstTrackingOff { get; set; }
-            /// <summary>The next this many fresh position reads fail (a WiFi hiccup). Until a read succeeds again the cached
-            /// position is the daemon's (0, 0) J2000 placeholder, as after a failed status poll.</summary>
-            public int DriverReadsFail {
-                get {
-                    lock (_lock) {
-                        return _driverReadsFail;
-                    }
-                }
-                set {
-                    lock (_lock) {
-                        _driverReadsFail = value;
-                    }
-                }
-            }
-            private int _driverReadsFail;
-            private bool _cacheLost;
-            /// <summary>#2089 — one fresh read fails (the cache turns to the placeholder) once the RA motor runs at or past this
-            /// RA: a WiFi hiccup in the middle of a turn. Guarded by the lock.</summary>
-            public double? FailReadPastRaDeg { get; set; }
             /// <summary>Awaited by the next MoveAxis 0 (once, then cleared; the axis has stopped by then): a test holds a stop
             /// here to keep the end that sent it in flight.</summary>
             public Func<Task>? StopGate { get; set; }
@@ -104,30 +93,22 @@ namespace OpenAstroAra.Test {
             public Func<int>? EventCount { get; set; }
 
             public TaskCompletionSource FirstMove { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
-            /// <summary>#2066 — the next fresh read taken with no motor running, once a motor has run, comes after a park from
-            /// outside and then a reconnect (a Wi-Fi blip, and the user's Park while nothing turns): that reading is of a new
-            /// mount session, and the park owns the mount. Guarded by the lock.</summary>
-            public bool ParkAndReconnectBeforeTheNextRestRead { get; set; }
-            /// <summary>#2081 — run once (then cleared), under the lock, when the next tracking-on write arrives: the moment
-            /// between a run's confirmed start and its first move.</summary>
-            public Action? OnTrackingOn { get; set; }
-            private bool _motorRan;
-
             public FakeStopMount(bool tracking = true, bool canFindHome = false) {
                 _tracking = tracking;
+                Clock = BenchClockOf(Mock);
+                _since = Clock.GetTimestamp();
                 Mock.Setup(m => m.GetInfo()).Returns(() => {
                     lock (_lock) {
                         return new TelescopeInfo {
-                            Connected = true, SiderealTime = Lst, TrackingEnabled = _tracking, CanFindHome = canFindHome,
-                            Slewing = SlewingLocked(), SideOfPier = CachePierSideFailed ? PierSide.pierUnknown : SideLocked(),
+                            Connected = true, SiderealTime = Lst, TrackingEnabled = _tracking, CanFindHome = canFindHome, AtHome = AtHome,
+                            Slewing = SlewingLocked(), SideOfPier = SideLocked(),
                         };
                     }
                 });
                 Mock.Setup(m => m.GetCurrentPosition()).Returns(() => {
                     lock (_lock) {
-                        return _cacheLost
-                            ? new Coordinates(Angle.ByDegree(0), Angle.ByDegree(0), Epoch.J2000)
-                            : new Coordinates(_raDeg, _decDeg, Epoch.JNOW, Coordinates.RAType.Degrees);
+                        TurnLocked();
+                        return new Coordinates(_raDeg, _decDeg, Epoch.JNOW, Coordinates.RAType.Degrees);
                     }
                 });
                 Mock.SetupGet(m => m.TrackingWriteCount).Returns(() => Interlocked.Read(ref _trackingWrites));
@@ -140,10 +121,6 @@ namespace OpenAstroAra.Test {
                             throw new InvalidCastException("the driver answered tracking with garbage");
                         }
                         _tracking = on;
-                        if (on && OnTrackingOn is { } hook) {
-                            OnTrackingOn = null;
-                            hook();
-                        }
                         return true;
                     }
                 });
@@ -176,37 +153,20 @@ namespace OpenAstroAra.Test {
                 service.SetupGet(s => s.AbortEpoch).Returns(() => Interlocked.Read(ref _epoch));
                 service.SetupGet(s => s.SessionEpoch).Returns(() => Interlocked.Read(ref _sessionEpoch));
                 service.Setup(s => s.ReadNowAsync(It.IsAny<CancellationToken>())).Returns(Read);
-                service.Setup(s => s.ReadPositionNowAsync(It.IsAny<CancellationToken>())).Returns(Read);
                 Task<MountReading?> Read() {
                     lock (_lock) {
-                        if (FailReadPastRaDeg is double past && _rates[0] != 0 && _raDeg >= past) {
-                            FailReadPastRaDeg = null;
-                            _driverReadsFail++;
-                        }
-                        if (_driverReadsFail > 0) {
-                            _driverReadsFail--;
-                            _cacheLost = true;
-                            return Task.FromResult<MountReading?>(null);
-                        }
-                        _cacheLost = false;
-                        if (ParkAndReconnectBeforeTheNextRestRead && _motorRan && _rates[0] == 0 && _rates[1] == 0) {
-                            ParkAndReconnectBeforeTheNextRestRead = false;
-                            Record("park");
-                            _reasons.Add((Interlocked.Increment(ref _epoch), "park"));
-                            Interlocked.Increment(ref _sessionEpoch);
-                        }
-                        if (!Frozen) {
-                            _raDeg = (_raDeg + (Math.Sign(_rates[0]) * StepDeg) + (_runaway ? StepDeg : 0.0) + 360.0) % 360.0;
-                            var dec = Math.Sign(_rates[1]) * StepDeg;
-                            _decDeg = _decDeg >= 0 ? _decDeg - dec : _decDeg + dec;
+                        TurnLocked();
+                        if (_runaway && !Frozen) {
+                            _raDeg = (_raDeg + StepDeg + 360.0) % 360.0;
                         }
                         return Task.FromResult<MountReading?>(new MountReading(_raDeg / 15.0, _decDeg, SlewingLocked(),
-                            SideLocked(), DateTimeOffset.UtcNow, Interlocked.Read(ref _sessionEpoch)));
+                            SideLocked(), Clock.GetUtcNow(), Interlocked.Read(ref _sessionEpoch)));
                     }
                 }
                 service.Setup(s => s.MoveAxisAsync(It.IsAny<int>(), It.IsAny<double>(), It.IsAny<int?>(), It.IsAny<long?>(), It.IsAny<CancellationToken>()))
                     .Returns((int axis, double rate, int? _, long? since, CancellationToken _) => {
                         lock (_lock) {
+                            TurnLocked();
                             var command = string.Create(CultureInfo.InvariantCulture, $"move {(axis == 0 ? "primary" : "secondary")} {rate}");
                             if (rate != 0 && RefusesMotor) {
                                 Record(command + " refused");
@@ -224,7 +184,6 @@ namespace OpenAstroAra.Test {
                             }
                             _rates[axis] = rate;
                             if (rate != 0) {
-                                _motorRan = true;
                                 FirstMove.TrySetResult();
                             }
                             if (rate == 0 && StopGate is { } gate) {
@@ -269,8 +228,21 @@ namespace OpenAstroAra.Test {
 
             private readonly List<(long Epoch, string Reason)> _reasons = new();
 
+            /// <summary>Brings the axes up to the bench clock: each has turned at its motor's rate since the last call.</summary>
+            private void TurnLocked() {
+                var seconds = Clock.GetElapsedTime(_since).TotalSeconds;
+                _since = Clock.GetTimestamp();
+                if (Frozen) {
+                    return;
+                }
+                _raDeg = (_raDeg + (_rates[0] * seconds) + 720.0) % 360.0;
+                var dec = _rates[1] * seconds;
+                _decDeg = _decDeg >= 0 ? _decDeg - dec : _decDeg + dec;
+            }
+
             private void Abort(string reason) {
                 lock (_lock) {
+                    TurnLocked();
                     Record("abort " + reason);
                     _reasons.Add((Interlocked.Increment(ref _epoch), reason));
                     if (IgnoresStops) {
@@ -298,34 +270,12 @@ namespace OpenAstroAra.Test {
             private long _sessionEpoch;
             /// <summary>#2064 — the bench's LST, set explicitly: RA 0 is then HA −4 h, east of the meridian.</summary>
             private const double Lst = 20.0;
-            /// <summary>A side the test set; null = the hour-angle model's side of the pose (#2064: a counterweight-down
-            /// mount at RA 0 is on the west side, which default(PierSide) would call east).</summary>
-            private PierSide? _side;
-
-            /// <summary>#2089 — the user moves the mount by other means (a slew, the hand pad, by hand) to this RA.</summary>
-            public void MoveByHand(double raDeg) {
-                lock (_lock) {
-                    _raDeg = (raDeg + 360.0) % 360.0;
-                }
-            }
-
-            /// <summary>#2089 — the mount disconnects and connects again: a new mount session.</summary>
+            /// <summary>The mount disconnects and connects again: a new mount session.</summary>
             public void Reconnect() => Interlocked.Increment(ref _sessionEpoch);
 
-            private PierSide SideLocked() => _side ?? CounterweightDownSide(Lst, _raDeg);
-
-            /// <summary>#2066 — the daemon's refresh cache holds <c>pierUnknown</c> (its last SideOfPier read failed); a fresh
-            /// read still reports the side. Guarded by the lock.</summary>
-            public bool CachePierSideFailed { get; set; }
-
-            /// <summary>The pier side the mount reports, in place of the hour-angle model's.</summary>
-            public PierSide Side {
-                set {
-                    lock (_lock) {
-                        _side = value;
-                    }
-                }
-            }
+            /// <summary>The hour-angle model's side of the pose (#2064: a counterweight-down mount at RA 0 is on the west
+            /// side, which default(PierSide) would call east).</summary>
+            private PierSide SideLocked() => CounterweightDownSide(Lst, _raDeg);
 
             private void Record(string command) => _log.Add((command, EventCount?.Invoke() ?? 0));
 
@@ -349,6 +299,7 @@ namespace OpenAstroAra.Test {
             public double RaDeg {
                 get {
                     lock (_lock) {
+                        TurnLocked();
                         return _raDeg;
                     }
                 }
@@ -432,17 +383,19 @@ namespace OpenAstroAra.Test {
         }
 
         private static async Task<FakeStopMount> AdjustingAsync(PolarAlignService svc, FakeStopMount mount) {
-            await svc.StartConfirmedAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
             Assert.That((await PollStateAsync(svc, "adjusting", "failed").ConfigureAwait(false)).State, Is.EqualTo("adjusting"));
             return mount;
         }
 
-        /// <summary>A run in its first seed turn, slowed down so the test lands inside it: 30° at a step a poll would take
-        /// about six seconds.</summary>
+        /// <summary>A run in its first seed turn, held there: the bench clock stands still, so the turn's time never runs
+        /// out and its motor runs until the test ends the run.</summary>
         private static async Task InFirstTurnAsync(PolarAlignService svc, FakeStopMount mount) {
-            svc.AxisMovePoll = TimeSpan.FromMilliseconds(50);
-            await svc.StartConfirmedAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            mount.Clock.AutoAdvance = false;
+            var turning = mount.Clock.TimerSet.Task;
+            await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
             await mount.FirstMove.Task.WaitAsync(SignalTimeout).ConfigureAwait(false);
+            await turning.WaitAsync(SignalTimeout).ConfigureAwait(false);
         }
 
         private static void AssertNoMotionAfter(FakeStopMount mount, int from) =>
@@ -622,8 +575,7 @@ namespace OpenAstroAra.Test {
             };
             using var svc = NewStopService(mount, ws, guider: guider);
 
-            var startPlan = await svc.GetStartPlanAsync(PolarAlignStages.Fine, CancellationToken.None).ConfigureAwait(false);
-            var start = svc.StartAsync(PolarAlignStages.Fine, new PolarAlignStartConfirmation(startPlan.Direction, startPlan.NewOrigin), null, CancellationToken.None);
+            var start = svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None);
             await inLease.Task.WaitAsync(SignalTimeout).ConfigureAwait(false);
             var stop = svc.StopAsync(null, CancellationToken.None);
             leaseGate.SetResult();
@@ -670,7 +622,7 @@ namespace OpenAstroAra.Test {
             mount.EventCount = () => ws.Events.Count;
             using var svc = NewService(NewFake(), solver, mount.Mock, ws, store: NewStore());
             svc.RunUnwindGrace = TimeSpan.FromMilliseconds(200);
-            await svc.StartConfirmedAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
             await solver.Entered.Task.WaitAsync(SignalTimeout).ConfigureAwait(false);
 
             try {
@@ -716,7 +668,7 @@ namespace OpenAstroAra.Test {
         /// <summary>Waits for the run's error event; asserts the exit's stop round and tracking-off all came before it.</summary>
         private static async Task<(string Reason, string Message)> FailureAfterStopAsync(
                 PolarAlignService svc, FakeStopMount mount, WsRecorder ws, bool abort) {
-            await svc.StartConfirmedAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
             var error = await WaitForEventAsync(ws, WsEventCatalog.PolarAlignError).ConfigureAwait(false);
             var errorAt = ws.Events.Select((e, i) => (e, i)).First(x => x.e.Type == WsEventCatalog.PolarAlignError).i;
             var entries = mount.Entries;
@@ -745,15 +697,17 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
-        public async Task A_turn_that_stalls_fails_after_the_mount_is_stopped_and_tracking_off() {
+        public async Task A_mount_that_takes_its_turns_but_never_turns_fails_the_fit_after_the_mount_is_stopped_and_tracking_off() {
+            // A slipping clutch: the motor commands are taken, the tube stays. The three frames show the same field.
             var mount = new FakeStopMount(tracking: true) { Frozen = true };
             var ws = new WsRecorder();
-            using var svc = NewStopService(mount, ws, HandBackStore());
+            mount.EventCount = () => ws.Events.Count;
+            using var svc = NewService(NewFake(), new MountFollowingSolver(), mount.Mock, ws, store: HandBackStore());
 
-            var (reason, message) = await FailureAfterStopAsync(svc, mount, ws, abort: true).ConfigureAwait(false);
+            var (reason, message) = await FailureAfterStopAsync(svc, mount, ws, abort: false).ConfigureAwait(false);
 
-            Assert.That(reason, Is.EqualTo(PolarAlignService.SlewStalled));
-            Assert.That(message, Does.Contain("stopped changing"));
+            Assert.That(reason, Is.EqualTo("axis_fit_failed"));
+            Assert.That(message, Does.Contain("the three frames show the same field").And.Contain("the mount did not turn"));
         }
 
         [Test]
@@ -780,7 +734,7 @@ namespace OpenAstroAra.Test {
             svc.StopVerifyNotBefore = TimeSpan.FromSeconds(1.5);
             svc.StopVerifyWindow = TimeSpan.FromSeconds(10);
 
-            await svc.StartConfirmedAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
             var watch = Stopwatch.StartNew();
             while ((await svc.GetStatusAsync(CancellationToken.None).ConfigureAwait(false)).State != "failed") {
                 Assert.That(watch.Elapsed, Is.LessThan(SignalTimeout), "the refused move never failed the run");
@@ -810,10 +764,10 @@ namespace OpenAstroAra.Test {
             var ws = new WsRecorder();
             var store = NewStore();
             store.PutPolarAlignSettings(store.GetPolarAlignSettings() with { StopTrackingWhenDone = stopTrackingWhenDone });
-            using var svc = NewService(NewFake(), new HintFollowingSolver(), mount.Mock, ws, store: store);
+            using var svc = NewService(NewFake(), new MountFollowingSolver(), mount.Mock, ws, store: store);
             mount.EventCount = () => ws.Events.Count;
 
-            await svc.StartConfirmedAsync(PolarAlignStages.Check, null, CancellationToken.None).ConfigureAwait(false);
+            await svc.StartAsync(PolarAlignStages.Check, null, CancellationToken.None).ConfigureAwait(false);
             Assert.That((await PollStateAsync(svc, "checked", "failed").ConfigureAwait(false)).State, Is.EqualTo("checked"));
 
             var entries = mount.Entries;

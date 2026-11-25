@@ -2416,65 +2416,11 @@ paths:
       responses:
         '200':
           description: OK
-  /api/v1/equipment/polaralign/start-plan:
-    get:
-      tags:
-        - Equipment
-      summary: 'What a confirmed polar-align start would do: the RA turn direction, the step and the most it turns from where it starts.'
-      operationId: GetPolarAlignStartPlan
-      parameters:
-        - name: stage
-          in: query
-          schema:
-            type: string
-      responses:
-        '200':
-          description: OK
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/PolarAlignStartPlanDto'
-        '400':
-          description: Bad Request
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '409':
-          description: Conflict
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-  /api/v1/equipment/polaralign/preflight:
-    get:
-      tags:
-        - Equipment
-      summary: 'Polar Align''s pre-flight checks for the next start (ok, warn, fail or unknown each), and what that start would do.'
-      operationId: GetPolarAlignPreflight
-      parameters:
-        - name: stage
-          in: query
-          schema:
-            type: string
-      responses:
-        '200':
-          description: OK
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/PolarAlignPreflightDto'
-        '400':
-          description: Bad Request
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
   /api/v1/equipment/polaralign/start:
     post:
       tags:
         - Equipment
-      summary: Start one polar-align measurement; RA always turns with the mount's motor.
+      summary: Start one polar-align measurement from the mount's Home position; RA turns with the mount's motor.
       parameters:
         - name: Idempotency-Key
           in: header
@@ -2490,24 +2436,6 @@ paths:
       responses:
         '200':
           description: OK
-  /api/v1/equipment/polaralign/next:
-    post:
-      tags:
-        - Equipment
-      summary: 'Retired: Polar Align makes one measurement per Start. Always answers 409; start a check with POST /polaralign/start {stage: check}.'
-      operationId: PolarAlignNext
-      parameters:
-        - name: Idempotency-Key
-          in: header
-          schema:
-            type: string
-      responses:
-        '409':
-          description: Conflict
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
   /api/v1/equipment/polaralign/stop:
     post:
       tags:
@@ -2532,34 +2460,6 @@ paths:
       responses:
         '200':
           description: OK
-  /api/v1/equipment/polaralign/motor-direction:
-    get:
-      tags:
-        - Equipment
-      summary: 'The RA motor direction Polar Align tested and saved for this profile''s mount, and whether it stands for the connected mount''s driver.'
-      operationId: GetPolarAlignMotorDirection
-      responses:
-        '200':
-          description: OK
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/PolarAlignMotorDirectionStateDto'
-  /api/v1/equipment/polaralign/motor-direction/retest:
-    post:
-      tags:
-        - Equipment
-      summary: 'Forget the saved RA motor direction: the next Polar Align start tests it again with a 0.5° turn its confirm step shows. 409 while a run is going.'
-      operationId: RetestPolarAlignMotorDirection
-      responses:
-        '204':
-          description: No Content
-        '409':
-          description: Conflict
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
   /api/v1/equipment/polaralign/frame.jpg:
     get:
       tags:
@@ -14905,172 +14805,6 @@ components:
           type:
             - 'null'
             - string
-    PolarAlignMotorDirectionDto:
-      required:
-        - sign
-        - mount_key
-        - driver_info
-        - driver_version
-        - tested_utc
-      type: object
-      properties:
-        sign:
-          pattern: '^-?(?:0|[1-9]\d*)$'
-          type:
-            - integer
-            - string
-          format: int32
-        mount_key:
-          type: string
-        driver_info:
-          type: string
-        driver_version:
-          type: string
-        tested_utc:
-          type: string
-          format: date-time
-    PolarAlignMotorDirectionStateDto:
-      required:
-        - saved
-        - matches_connected_mount
-      type: object
-      properties:
-        saved:
-          oneOf:
-            - type: 'null'
-            - $ref: '#/components/schemas/PolarAlignMotorDirectionDto'
-        matches_connected_mount:
-          type:
-            - 'null'
-            - boolean
-    PolarAlignMountClearanceDto:
-      required:
-        - confirmed_reach_deg
-      type: object
-      properties:
-        confirmed_reach_deg:
-          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
-          type:
-            - number
-            - string
-          format: double
-    PolarAlignPreflightCheckDto:
-      required:
-        - id
-        - status
-        - detail
-      type: object
-      properties:
-        id:
-          type: string
-        status:
-          type: string
-        detail:
-          type: string
-    PolarAlignPreflightDto:
-      required:
-        - ready
-        - checks
-        - planned
-        - mount_key
-      type: object
-      properties:
-        ready:
-          type: boolean
-        checks:
-          type: array
-          items:
-            $ref: '#/components/schemas/PolarAlignPreflightCheckDto'
-        planned:
-          $ref: '#/components/schemas/PolarAlignPreflightPlannedDto'
-        mount_key:
-          type:
-            - 'null'
-            - string
-    PolarAlignPreflightPlannedDto:
-      required:
-        - stage
-        - direction
-        - turn_step_deg
-        - check_step_deg
-        - turns
-        - max_sweep_deg
-        - new_origin
-        - origin_offset_deg
-        - sweep_limit_deg
-        - reach_deg
-        - start_cw_angle_deg
-        - min_altitude_deg
-      type: object
-      properties:
-        stage:
-          type: string
-        direction:
-          type:
-            - 'null'
-            - string
-        turn_step_deg:
-          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
-          type:
-            - number
-            - string
-          format: double
-        check_step_deg:
-          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
-          type:
-            - number
-            - string
-          format: double
-        turns:
-          pattern: '^-?(?:0|[1-9]\d*)$'
-          type:
-            - integer
-            - string
-          format: int32
-        max_sweep_deg:
-          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
-          type:
-            - number
-            - string
-          format: double
-        new_origin:
-          type:
-            - 'null'
-            - boolean
-        origin_offset_deg:
-          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
-          type:
-            - 'null'
-            - number
-            - string
-          format: double
-        sweep_limit_deg:
-          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
-          type:
-            - 'null'
-            - number
-            - string
-          format: double
-        reach_deg:
-          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
-          type:
-            - number
-            - string
-          format: double
-        start_cw_angle_deg:
-          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
-          type:
-            - 'null'
-            - number
-            - string
-          format: double
-        min_altitude_deg:
-          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
-          type:
-            - 'null'
-            - number
-            - string
-          format: double
     PolarAlignSettingsDto:
       type: object
       properties:
@@ -15153,72 +14887,6 @@ components:
           type:
             - 'null'
             - boolean
-        mount_clearance:
-          type:
-            - 'null'
-            - object
-          additionalProperties:
-            $ref: '#/components/schemas/PolarAlignMountClearanceDto'
-    PolarAlignStartPlanDto:
-      required:
-        - stage
-        - direction
-        - step_deg
-        - turns
-        - max_sweep_deg
-      type: object
-      properties:
-        stage:
-          type:
-            - 'null'
-            - string
-        direction:
-          type: string
-        step_deg:
-          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
-          type:
-            - number
-            - string
-          format: double
-        turns:
-          pattern: '^-?(?:0|[1-9]\d*)$'
-          type:
-            - integer
-            - string
-          format: int32
-        max_sweep_deg:
-          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
-          type:
-            - number
-            - string
-          format: double
-        new_origin:
-          type: boolean
-          default: true
-        origin_offset_deg:
-          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
-          type:
-            - number
-            - string
-          format: double
-          default: 0
-        sweep_limit_deg:
-          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
-          type:
-            - number
-            - string
-          format: double
-          default: 30
-        camera:
-          type: string
-          default: guide
-        direction_test_deg:
-          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
-          type:
-            - number
-            - string
-          format: double
-          default: 0
     PolarAlignStartRequestDto:
       type: object
       properties:
@@ -15226,19 +14894,6 @@ components:
           type:
             - 'null'
             - string
-        confirmed:
-          type: boolean
-          default: false
-        direction:
-          type:
-            - 'null'
-            - string
-        new_origin:
-          type: boolean
-          default: false
-        direction_test:
-          type: boolean
-          default: false
     PoseSolveAvailabilityDto:
       required:
         - available
@@ -15797,10 +15452,6 @@ components:
           oneOf:
             - type: 'null'
             - $ref: '#/components/schemas/DomeSettingsDto'
-        polar_align_motor_direction:
-          oneOf:
-            - type: 'null'
-            - $ref: '#/components/schemas/PolarAlignMotorDirectionDto'
     QualityScoreBreakdownDto:
       required:
         - composite
@@ -15883,21 +15534,12 @@ components:
         - mount-position-unverified
         - counterweight-limit
         - polar-align-mount-parked
-        - polar-align-unconfirmed
-        - polar-align-sweep-limit
+        - polar-align-not-home
         - polar-align-moving-mount
-        - polar-align-on-axis
-        - polar-align-pointing-unknown
-        - polar-align-pose-ambiguous
         - polar-align-mount-busy
         - first-flip-not-completed
         - mount-clock-not-verified
-        - polar-align-already-running
-        - polar-align-clearance-not-confirmed
         - above-clearance-limit
-        - polar-align-site-not-set
-        - polar-align-alt-az-mount
-        - polar-align-cannot-move-axis
         - pose-check-not-needed
         - pose-sync-not-offered
         - mount-not-connected

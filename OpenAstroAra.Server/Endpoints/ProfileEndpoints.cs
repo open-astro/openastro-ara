@@ -23,7 +23,6 @@ using OpenAstroAra.Server.Contracts.Refusals;
 using OpenAstroAra.Server.Services;
 using System;
 using System.Collections.Generic;
-using System.Globalization;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -943,7 +942,7 @@ public static partial class ProfileEndpoints {
     /// every frame, so a bad exposure or an unknown loop mode must be refused at the write boundary
     /// (400) rather than reaching the camera. Extracted so the 400s are unit-testable without a host.</summary>
     /// <summary>§45.12 — what the daemon will use, not what an older build stored: the turn and
-    /// rough-exposure knobs come back clamped (PolarAlignSettingsClamp), as every read in the service
+    /// main-camera exposure knobs come back clamped (PolarAlignSettingsClamp), as every read in the service
     /// applies them.</summary>
     internal static IResult GetPolarAlignSettings(IProfileStore store) =>
         Results.Ok(PolarAlignSettingsClamp.Apply(store.GetPolarAlignSettings()));
@@ -967,38 +966,13 @@ public static partial class ProfileEndpoints {
             return Results.Problem(detail: "camera must be \"guide\" or \"main\"",
                 statusCode: StatusCodes.Status400BadRequest);
         }
-        // The turn and rough-exposure knobs have no control in the app yet (#1736), and an older build
+        // The turn and main-camera exposure knobs have no control in the app yet (#1736), and an older build
         // stored any value: a stored value outside the range must not make the panel's own edits (the
         // whole DTO comes back on every PUT) fail over a field the user cannot reach. Clamp, don't refuse
         // — the same table the service applies on every read (PolarAlignSettingsClamp).
-        // #2068 — a confirmed clearance is for the reach the user said there is room for (#2165): one that is not a usable
-        // reach is a 400, never raised or lowered to a reach the user did not confirm.
-        if (InvalidConfirmedClearance(body.MountClearance) is { } clearanceProblem) {
-            return Results.Problem(detail: clearanceProblem, statusCode: StatusCodes.Status400BadRequest);
-        }
-        // #2068 — a body without mount_clearance (an app from before the field) keeps the stored entries: saving the
-        // exposure there must not wipe every mount's confirmation. The app sends {} to clear them.
-        if (body.MountClearance is null) {
-            body = body with { MountClearance = store.GetPolarAlignSettings()?.MountClearance };
-        }
         body = PolarAlignSettingsClamp.Apply(body);
         store.PutPolarAlignSettings(body);
         return Results.Ok(body);
-    }
-
-    /// <summary>#2068 — the 400 detail for a clearance entry whose confirmed reach (#2165) is not a positive number up to
-    /// 360°, or null when every entry is usable.</summary>
-    internal static string? InvalidConfirmedClearance(IReadOnlyDictionary<string, PolarAlignMountClearanceDto>? entries) {
-        if (entries is null) {
-            return null;
-        }
-        foreach (var (key, entry) in entries) {
-            if (entry is not null && !PolarAlignSettingsClamp.IsReach(entry.ConfirmedReachDeg)) {
-                return string.Create(CultureInfo.InvariantCulture,
-                    $"mount_clearance['{key}'].confirmed_reach_deg must be above 0 and at most {PolarAlignSettingsClamp.MaxConfirmedReachDeg:0} degrees");
-            }
-        }
-        return null;
     }
 
     /// <summary>§76.2 — write-boundary validation of the guide exposure range. The range feeds BOTH

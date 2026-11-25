@@ -14,8 +14,8 @@ import '../help_icon.dart';
 import '../settings/section_load_state.dart';
 
 /// #1736 The Start card's collapsed Advanced row: the routine's three knobs
-/// (`check_step_deg`, `coarse_exposure_seconds`, `seed_rotation_deg`; #2048
-/// retired `use_home`: the routine never sends the mount Home), edited through the same module as the Settings panel
+/// (`check_step_deg`, `coarse_exposure_seconds`, `seed_rotation_deg`), edited
+/// through the same module as the Settings panel
 /// ([polarAlignSettingsProvider], ADR 0013 rule 3): nothing shows or saves
 /// until the rig's copy is loaded, each edit saves at once, a failed save puts
 /// the field back, and a value outside the range is refused in the field.
@@ -155,7 +155,7 @@ class _PolarAdvancedRowState extends ConsumerState<PolarAdvancedRow> {
       ),
       _numberField(
         const Key('polar-advanced-coarse'),
-        l10n.polarKnobRoughExposure,
+        l10n.polarKnobMainExposure,
         'img.polar.coarse_exposure_seconds',
         polarCoarseExposureRange,
         (x) => x.coarseExposureSeconds,

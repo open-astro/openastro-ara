@@ -540,7 +540,7 @@ namespace OpenAstroAra.Test {
         [Test]
         public async Task The_polar_align_start_endpoint_answers_the_refusal_with_its_cause() {
             var pa = new Mock<IPolarAlignService>();
-            pa.Setup(p => p.StartAsync(It.IsAny<string?>(), It.IsAny<PolarAlignStartConfirmation?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+            pa.Setup(p => p.StartAsync(It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
                 .ThrowsAsync(new RefusalException(RefusalCatalog.MountClockNotVerified, "Mount clock not verified."));
             var refusal = await Assert.ThrowsAsync<RefusalException>(() => EquipmentEndpoints.PolarAlignStartAsync(pa.Object, null, null, CancellationToken.None),
                 "RefusalHandler answers it with reason mount-clock-not-verified, not the guider's generic 409");

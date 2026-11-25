@@ -20,15 +20,10 @@ import '../support/polar_align_section.dart';
 /// The routine's fake Polar Align client: no routine runs.
 class _Api implements PolarAlignClient {
   @override
-  Future<PolarAlignPreflight?> preflight({String? stage}) async => null;
-  @override
-  Future<PolarAlignStartPlan> startPlan({String? stage}) async =>
-      PolarAlignStartPlan(stage: stage, direction: PolarAlignDirections.east);
-  @override
   Future<PolarAlignStatus?> getStatus() async => null;
 
   @override
-  Future<void> start(PolarAlignStartPlan plan) async {}
+  Future<void> start({String? stage}) async {}
   @override
   Future<void> stop() async {}
   @override
@@ -292,7 +287,7 @@ void main() {
       for (final (key, name) in [
         (_seed, l10n.polarKnobTurn),
         (_check, l10n.polarKnobVerifyStep),
-        (_coarse, l10n.polarKnobRoughExposure),
+        (_coarse, l10n.polarKnobMainExposure),
       ]) {
         expect(
           find.descendant(

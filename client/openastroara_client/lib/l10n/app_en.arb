@@ -1339,14 +1339,6 @@
   "@polarPhaseHoming": {
     "description": "Simple Mode Polar align panel: routine phase: the mount is finding its home position"
   },
-  "polarPhaseNeedsHome": "Put the mount at Home",
-  "@polarPhaseNeedsHome": {
-    "description": "Simple Mode Polar align panel: routine phase: waiting for the user to put the mount at Home"
-  },
-  "polarPhaseRough": "Rough step",
-  "@polarPhaseRough": {
-    "description": "Simple Mode Polar align panel: routine phase: the coarse (main camera at Home) stage"
-  },
   "polarPhaseChecking": "Checking {done} of {total}",
   "@polarPhaseChecking": {
     "description": "Simple Mode Polar align panel: routine phase: the three-point check, solves done so far of the daemon's total",
@@ -1382,52 +1374,6 @@
   "polarPhaseChecked": "Checked",
   "@polarPhaseChecked": {
     "description": "Simple Mode Polar align panel: routine phase: the three-point check has its result"
-  },
-  "polarRoughWaiting": "The main camera measures the mount axis with a turn in RA, then follows your knob moves. Waiting for the first solve…",
-  "@polarRoughWaiting": {
-    "description": "Simple Mode Polar align panel: rough stage before the first solve"
-  },
-  "polarSideOnPole": "The mount axis is on the pole.",
-  "@polarSideOnPole": {
-    "description": "Simple Mode Polar align panel, rough stage: the axis sits within half an arcminute of the pole"
-  },
-  "polarSideSits": "The mount axis sits {parts} of the pole.",
-  "@polarSideSits": {
-    "description": "Simple Mode Polar align panel, rough stage: which side of the pole the axis sits; parts is e.g. 'above and east'",
-    "placeholders": {
-      "parts": {
-        "type": "String"
-      }
-    }
-  },
-  "polarSideSitsVertical": "The mount axis sits {parts} the pole.",
-  "@polarSideSitsVertical": {
-    "description": "Simple Mode Polar align panel, rough stage: the axis sits only above or below the pole (no east/west part), so English drops the 'of'",
-    "placeholders": {
-      "parts": {
-        "type": "String"
-      }
-    }
-  },
-  "polarSideAbove": "above",
-  "@polarSideAbove": {
-    "description": "Simple Mode Polar align panel, rough stage: the axis sits above the pole (fills polarSideSits)"
-  },
-  "polarSideBelow": "below",
-  "@polarSideBelow": {
-    "description": "Simple Mode Polar align panel, rough stage: the axis sits below the pole (fills polarSideSits)"
-  },
-  "polarSideEast": "east",
-  "@polarSideEast": {
-    "description": "Simple Mode Polar align panel, rough stage: the axis sits east of the pole (fills polarSideSits)"
-  },
-  "polarSideWest": "west",
-  "@polarSideWest": {
-    "description": "Simple Mode Polar align panel, rough stage: the axis sits west of the pole (fills polarSideSits)"
-  },
-  "polarSideJoin": " and ",
-  "@polarSideJoin": {
-    "description": "Simple Mode Polar align panel, rough stage: joins the two directions in polarSideSits ('above' + ' and ' + 'east')"
   },
   "polarCheckedLine": "Three-point check: {verdict}",
   "@polarCheckedLine": {
@@ -7811,18 +7757,6 @@
       }
     }
   },
-  "polarStepRough": "Rough",
-  "@polarStepRough": {
-    "description": "Simple Mode Polar align stepper: the rough step"
-  },
-  "polarStepFine": "Fine",
-  "@polarStepFine": {
-    "description": "Simple Mode Polar align stepper: the fine step"
-  },
-  "polarStepVerify": "Check",
-  "@polarStepVerify": {
-    "description": "Simple Mode Polar align stepper: the verify step"
-  },
   "polarSetup": "Setup",
   "@polarSetup": {
     "description": "Simple Mode Polar align panel: heading over the routine's settings"
@@ -7831,36 +7765,9 @@
   "@polarErrorHeading": {
     "description": "Simple Mode Polar align panel: heading over the bullseye and the turns"
   },
-  "polarInsideTolerance": "Inside your {tolerance}′ tolerance. Done keeps this alignment; stop and start again to refine it with the guide camera.",
-  "@polarInsideTolerance": {
-    "description": "Simple Mode Polar align rough step: caption once the error is inside the profile's tolerance",
-    "placeholders": {
-      "tolerance": {
-        "type": "String"
-      }
-    }
-  },
-  "polarOutsideTolerance": "Outside your {tolerance}′ tolerance: stop with the shutter, then start again to refine it with the guide camera.",
-  "@polarOutsideTolerance": {
-    "description": "Simple Mode Polar align rough step: caption while the error is outside the profile's tolerance",
-    "placeholders": {
-      "tolerance": {
-        "type": "String"
-      }
-    }
-  },
   "polarCheckCaption": "Check turns the mount 2 × {step}° and takes three frames to measure the alignment.",
   "@polarCheckCaption": {
     "description": "Polar align (#2082): caption with the Check button, how far it turns the mount (the profile's check step, whole degrees) before it moves",
-    "placeholders": {"step": {"type": "String"}}
-  },
-  "polarRoughFirst": "Rough first (main camera)",
-  "@polarRoughFirst": {
-    "description": "Polar align (#2082): after the guide camera could not solve the pole field, a start that measures with the main camera first (it goes through the confirm step)"
-  },
-  "polarRoughFirstCaption": "Rough first turns the mount 2 × {step}° and measures with the main camera.",
-  "@polarRoughFirstCaption": {
-    "description": "Polar align (#2082): caption with the Rough first button, how far it turns the mount (the profile's turn, whole degrees) before it moves",
     "placeholders": {"step": {"type": "String"}}
   },
   "polarNoisyMeasurement": "Noisy measurement: the solves at one point scattered more than 3″, even after a retake. Check focus and seeing, or take more frames per point.",
@@ -7921,14 +7828,6 @@
   "@polarKnobFramesPerPointHint": {
     "description": "Settings > Imaging > Polar align (#2082): hint under frames per point"
   },
-  "polarConfirmMainCamera": "This measurement uses the main camera.",
-  "@polarConfirmMainCamera": {
-    "description": "Polar align start confirm dialog (#2082): shown when the run measures with the main camera (Rough first, or the profile's camera)"
-  },
-  "polarStepDone": "Done",
-  "@polarStepDone": {
-    "description": "Simple Mode Polar align stepper: what a screen reader says for a step with a tick"
-  },
   "polarKnobSection": "Polar align",
   "@polarKnobSection": {
     "description": "Settings \u2192 Imaging \u2192 Polar align: section heading over the routine's knobs"
@@ -7945,9 +7844,9 @@
   "@polarKnobVerifyStep": {
     "description": "Settings \u2192 Imaging \u2192 Polar align: Verify step field label with its accepted range"
   },
-  "polarKnobRoughExposure": "Rough step exposure (s, 0.1 to 60)",
-  "@polarKnobRoughExposure": {
-    "description": "Settings \u2192 Imaging \u2192 Polar align: rough step exposure field label with its accepted range"
+  "polarKnobMainExposure": "Main camera exposure (s, 0.1 to 60)",
+  "@polarKnobMainExposure": {
+    "description": "Settings \u2192 Imaging \u2192 Polar align: main camera exposure field label with its accepted range"
   },
   "polarKnobToleranceHint": "Done turns on once the error is inside it",
   "@polarKnobToleranceHint": {
@@ -8310,7 +8209,7 @@
   },
   "polarAdvancedSummary": "{turn}° turn · {step}° step · {exposure} s",
   "@polarAdvancedSummary": {
-    "description": "Advanced Mode Polar Align Start card: the collapsed Advanced row's one-line summary of the seed turn, the Verify step and the rough exposure",
+    "description": "Advanced Mode Polar Align Start card: the collapsed Advanced row's one-line summary of the seed turn, the Check step and the main camera exposure",
     "placeholders": {
       "turn": {"type": "String"},
       "step": {"type": "String"},
@@ -8681,15 +8580,10 @@
   "@mountConfirmAtHomeYes": {"description": "Mount window: the confirm button of the Home question"},
   "mountCouldntConfirmHome": "Couldn't confirm Home",
   "@mountCouldntConfirmHome": {"description": "Mount window: notice when the rig refused the Home confirmation"},
-  "refusalPolarAlignMountParked": "The mount is parked. Unpark it and point it near the pole first.",
+  "refusalPolarAlignMountParked": "The mount is parked. Unpark it and send it Home first.",
   "@refusalPolarAlignMountParked": {"description": "Refusal (polar-align-mount-parked): polar alignment was started on a parked mount; it never unparks the mount itself"},
-  "refusalPolarAlignUnconfirmed": "Polar alignment moves the mount only after you confirm it. Start it again and confirm.",
-  "@refusalPolarAlignUnconfirmed": {"description": "Refusal (polar-align-unconfirmed): a start reached the rig without the confirm step, or the turn direction changed since the user confirmed it"},
-  "refusalPolarAlignSweepLimit": "The mount has turned {offset}° from where Polar Align started. Slew it back near the pole, counterweights down, and start again.",
-  "@refusalPolarAlignSweepLimit": {
-    "description": "Refusal (polar-align-sweep-limit, #2089): the RA axis has turned too far from where polar alignment started this session; offset is whole degrees",
-    "placeholders": {"offset": {"type": "String"}}
-  },
+  "refusalPolarAlignNotHome": "The mount is not at Home. Send it Home first, then start polar alignment.",
+  "@refusalPolarAlignNotHome": {"description": "Refusal (polar-align-not-home): polar alignment was started on a mount that can find Home by itself and does not report being at Home; every run starts from Home"},
   "refusalPolarAlignMovingMount": "Polar alignment is using the mount. Stop polar alignment first, or tap Stop Mount.",
   "@refusalPolarAlignMovingMount": {"description": "Refusal (polar-align-moving-mount, #2066): a GoTo, Center, Home or Park was refused because polar alignment holds the mount for its whole run (its turns, solves and adjust loop); a direction-pad move only while it turns the RA motor; Stop Mount ends polar alignment too"},
   "polarAlignStoppedFromOutside": "{by, select, user_request{The mount was stopped from outside polar alignment (Stop Mount). Polar alignment ended. Start again when ready.} emergency_stop{Emergency Stop stopped the mount. Polar alignment ended. Start again when ready.} watchdog{The meridian-flip watchdog stopped the mount. Polar alignment ended. Check the mount, then start again.} park{The mount was parked from outside polar alignment. Polar alignment ended. Unpark it and start again when ready.} findhome{The mount was sent Home from outside polar alignment. Polar alignment ended. Start again when ready.} pad_stop{The mount was stopped from the direction pad. Polar alignment ended. Start again when ready.} fault_reaction{The equipment-fault reaction stopped the mount (its park was refused because the mount's position is unverified). Polar alignment ended. Check the rig before you start again.} pose_unverified{The safety reaction stopped the mount (conditions turned unsafe, and the park was refused because the mount's position is unverified). Polar alignment ended. Check the rig before you start again.} other{The mount was stopped from outside polar alignment. Polar alignment ended. Start again when ready.}}",
@@ -8701,30 +8595,10 @@
   "@polarAlignStopNotConfirmed": {
     "description": "Polar Align card (both modes): added after the polarAlignStoppedFromOutside sentence when the run could not confirm its own stop afterwards (polar_align.error stop_unconfirmed, #2066); the mount may still be moving"
   },
-  "polarAlignErrorSlewStalled": "The mount stopped turning partway through an RA turn. Check that it can turn freely and is still connected, then start again.",
-  "@polarAlignErrorSlewStalled": {"description": "Polar Align card (both modes): why the run ended, polar_align.error slew_stalled: the RA turn's reading made no progress for a while (#2067)"},
-  "polarAlignErrorSlewTimeout": "The mount took more than twice as long as it should to make an RA turn, so Polar Align stopped it. Check the mount, then start again.",
-  "@polarAlignErrorSlewTimeout": {"description": "Polar Align card (both modes): why the run ended, polar_align.error slew_timeout: the RA turn did not arrive within twice its planned time (#2067)"},
-  "polarAlignErrorDecMoved": "The mount's Dec reading moved during an RA turn, which an RA turn never does. Check that the Dec clutch is tight, then start again.",
-  "@polarAlignErrorDecMoved": {"description": "Polar Align card (both modes): why the run ended, polar_align.error dec_moved: the Dec reading moved during an RA motor turn (#2067)"},
-  "polarAlignErrorPierChanged": "The mount reported a different side of the pier during an RA turn. Polar Align never flips the mount. Check where it points, then start again.",
-  "@polarAlignErrorPierChanged": {"description": "Polar Align card (both modes): why the run ended, polar_align.error pier_changed: the reported pier side changed during an RA turn (#2067)"},
-  "polarAlignErrorTurnMismatch": "The mount did not turn the way Polar Align asked. Check that it turns freely, only in RA, and stops when told, then start again.",
-  "@polarAlignErrorTurnMismatch": {"description": "Polar Align card (both modes): why the run ended, polar_align.error turn_mismatch: the turn ended off its step, ran past it, its reading jumped, or the field rotated between two frames (#2067)"},
-  "polarAlignErrorPierFlip": "The mount flipped to the other side of the pier between two frames. Polar Align stopped it and turned tracking off. Check where it points, then start again.",
-  "@polarAlignErrorPierFlip": {"description": "Polar Align card (both modes): why the run ended, polar_align.error pier_flip: two frames are turned about 180° apart, so the pier flipped; the run stopped the mount and turned tracking off (#2067)"},
   "polarAlignErrorTrackingOff": "The mount is not tracking and did not start tracking when Ara asked. Turn tracking on from the mount controls, then start again.",
   "@polarAlignErrorTrackingOff": {"description": "Polar Align card (both modes): why the run ended, polar_align.error tracking_off: the mount was not tracking and refused to start before a turn (#2067)"},
-  "polarAlignErrorSweepLimit": "The next turn would take the RA axis past Polar Align's limit. Slew it back near the pole, counterweights down, or take fewer or shorter frames, then start again.",
-  "@polarAlignErrorSweepLimit": {"description": "Polar Align card (both modes): why the run ended, polar_align.error sweep_limit: the next RA turn would pass the sweep limit from where Polar Align started (#2067)"},
-  "refusalPolarAlignOnAxis": "The scope points within 3° of the pole. Point it 2–5° from the pole, counterweights down, then start again.",
-  "@refusalPolarAlignOnAxis": {"description": "Refusal (polar-align-on-axis, #2082): polar alignment was started with the scope pointing within 3° of the celestial pole, where the camera looks along the RA axis; nothing tilts it off any more"},
-  "refusalPolarAlignPointingUnknown": "Polar Align got no fresh reading of where the mount points. Check the mount's connection, then start again.",
-  "@refusalPolarAlignPointingUnknown": {"description": "Refusal (polar-align-pointing-unknown, #2066): polar alignment plans only from a reading of the mount taken now; none came, it was the (0, 0) placeholder, or it was more than 2 s old"},
-  "refusalPolarAlignPoseAmbiguous": "The mount reports a Dec past the pole, so its pier side is not known. Point the tube 2–5° from the pole, counterweights down, with the hand controller (or send the mount Home), then start again.",
-  "@refusalPolarAlignPoseAmbiguous": {"description": "Refusal (polar-align-pose-ambiguous, #2066): the mount reads a declination beyond ±90° (its Dec axis over the pole, e.g. after a sync), so which side of the pier it is on is ambiguous; polar alignment moves nothing"},
   "refusalPolarAlignMountBusy": "The mount is moving or the guider is guiding. Let the slew finish or stop guiding, then start polar alignment again.",
-  "@refusalPolarAlignMountBusy": {"description": "Refusal (polar-align-mount-busy, #2066): polar alignment was started while the mount slews (or does not say whether it does), or while the guider guides or calibrates; it would turn the mount beside another motion"},
+  "@refusalPolarAlignMountBusy": {"description": "Refusal (polar-align-mount-busy, #2066): polar alignment was started while something else moves the mount (a GoTo, Park or Home in progress), or while the guider guides or calibrates; it would turn the mount beside another motion"},
   "actionConfirmFlip": "confirm the meridian flip",
   "@actionConfirmFlip": {
     "description": "Error message tail after \"Couldn't \" (friendlyError action); lower-case verb phrase, no period"
@@ -8757,50 +8631,15 @@
   "@safetyFirstFlipRearmedSnack": {"description": "Settings → Unattended running → When to stop, first-flip row (#1589): snackbar after Re-arm succeeds; the confirmation and any completed-flip record are cleared"},
   "refusalFirstFlipNotCompleted": "No meridian flip has completed on this profile yet. Watch one flip from start to end, then confirm it.",
   "@refusalFirstFlipNotCompleted": {"description": "Refusal (first-flip-not-completed, #1589): the user pressed Confirm for the profile's meridian flip, but no flip has run to the end since the last re-arm or optics change"},
-  "refusalPolarAlignAlreadyRunning": "Polar alignment is running. Wait for it to end, or stop it, then try again.",
-  "@refusalPolarAlignAlreadyRunning": {"description": "Refusal (polar-align-already-running, #2081): Test direction again (the RA motor direction retest) reached the rig while a polar alignment run was going"},
-  "polarConfirmTitle": "Before the mount moves",
-  "@polarConfirmTitle": {"description": "Polar align start confirm dialog (#2048): title. The routine starts from where the mount points and turns its RA axis"},
-  "polarConfirmPoint": "Point the tube 2–5° from the pole, with the counterweights down.",
-  "@polarConfirmPoint": {"description": "Polar align start confirm dialog: where the user must point the mount before it moves; no Home, no GoTo"},
-  "polarConfirmTurns": "RA will turn about {step}° twice toward the {direction} ({total}° in all).",
-  "@polarConfirmTurns": {
-    "description": "Polar align start confirm dialog: the RA turns of the first step; step and total are whole degrees, direction is polarDirectionEast or polarDirectionWest",
-    "placeholders": {"step": {"type": "String"}, "direction": {"type": "String"}, "total": {"type": "String"}}
-  },
-  "polarConfirmFromOrigin": "RA is {offset}° {direction} of where Polar Align started; these turns go back toward it.",
-  "@polarConfirmFromOrigin": {
-    "description": "Polar align start confirm dialog (#2089): how far the RA axis has turned from the session's first start, whole degrees; direction is polarDirectionEast or polarDirectionWest. The run turns back toward that start",
-    "placeholders": {"offset": {"type": "String"}, "direction": {"type": "String"}}
-  },
-  "polarConfirmNewOrigin": "This pose is Polar Align's new start: until the mount is moved some other way, RA stays within {limit}° of it.",
-  "@polarConfirmNewOrigin": {
-    "description": "Polar align start confirm dialog (#2089): the pose becomes the session's start (first start since the mount connected, or the mount was moved by other means); limit is whole degrees",
-    "placeholders": {"limit": {"type": "String"}}
-  },
-  "polarConfirmPower": "Keep a hand on the mount's power switch.",
-  "@polarConfirmPower": {"description": "Polar align start confirm dialog: safety line, the user cuts power if the mount heads for the pier"},
-  "polarConfirmGo": "Move the mount",
-  "@polarConfirmGo": {"description": "Polar align start confirm dialog: the button that starts the routine and lets the mount move"},
-  "polarConfirmCancel": "Cancel",
-  "@polarConfirmCancel": {"description": "Polar align start confirm dialog: the button that closes it; nothing moves"},
-  "polarDirectionEast": "east",
-  "@polarDirectionEast": {"description": "Polar align start confirm dialog: the RA turn direction, inside polarConfirmTurns (lower case)"},
-  "polarDirectionWest": "west",
-  "@polarDirectionWest": {"description": "Polar align start confirm dialog: the RA turn direction, inside polarConfirmTurns (lower case)"},
   "refusalMountClockNotVerified": "The mount's clock is not verified yet. Ara sets it from the synced rig clock: wait a moment and try again, or sync the time in Settings.",
   "@refusalMountClockNotVerified": {"description": "Refusal (mount-clock-not-verified): a GoTo, Sync, Center or polar alignment before the mount's clock was set from the synced rig clock and checked"},
-  "polarConfirmGuideField": "Pick a field fairly high toward the pole for your hemisphere, at least about 15° above the horizon when you can.",
-  "@polarConfirmGuideField": {"description": "Polar align start confirm dialog (#2083): NINA's guidance on where to point before the start"},
-  "polarConfirmGuideMeridian": "Choose a start whose turns do not cross the meridian, so the tube cannot swing into the pier.",
-  "@polarConfirmGuideMeridian": {"description": "Polar align start confirm dialog (#2083): NINA's guidance, keep the RA turns on one side of the meridian (pier collision)"},
   "polarAzimuthArc": "true arc (cos alt)",
   "@polarAzimuthArc": {"description": "Polar align readout (#2083): the azimuth error's convention, an arc on the sky (NINA shows the unscaled angle, larger by 1/cos(latitude))"},
   "polarAzimuthNina": "NINA {value}",
   "@polarAzimuthNina": {"description": "Polar align readout (#2083): the same azimuth error as NINA would show it; value is a signed arcminute figure like +1.5′", "placeholders": {"value": {"type": "String"}}},
   "polarInitialErrorLarge": "The error at the start was over 2°: get closer, then run again. The readout is less reliable this far out.",
   "@polarInitialErrorLarge": {"description": "Polar align readout (#2083): NINA's large-error warning, the stage started more than 2° from the pole"},
-  "polarInitialErrorHuge": "The error at the start was over 10°: check the site location and the start field, and that the mount turned only in RA.",
+  "polarInitialErrorHuge": "The error at the start was over 10°: check the site location, and that the mount turned only in RA.",
   "@polarInitialErrorHuge": {"description": "Polar align readout (#2083): NINA's huge-error warning, the stage started more than 10° from the pole"},
   "bridgeSetupFoundTitle": "Found on this rig",
   "@bridgeSetupFoundTitle": {
@@ -9098,132 +8937,21 @@
   "@polarReadoutCautionAltitudeWeak": {
     "description": "Polar align (Simple Mode panel and full UI): the live readout is weak in altitude for this camera position (#2072)"
   },
-  "polarDecSpreadWarning": "The mount's Dec reading moved {arcsec}″ across the three points (more than 2″), so this measurement may be off. Check the Dec clutch is tight, then measure again.",
-  "@polarDecSpreadWarning": {
-    "description": "Polar align (Simple Mode panel and full UI): NINA's warning when the mount's Dec reading spread more than 2 arcseconds across the three measuring points (dec_spread_arcsec, #2081); {arcsec} is the spread in arcseconds, one decimal",
-    "placeholders": {"arcsec": {"type": "String"}}
-  },
   "versionMismatchWarning": "Server {server} and app {app} differ; update both from the same release.",
   "@versionMismatchWarning": {
     "description": "Warning on the About panel, the first-run screen and Simple Mode's version rows when the server and the app come from different X.Y release lines; {server} and {app} are versions like '1.2.0'",
     "placeholders": {"server": {"type": "String"}, "app": {"type": "String"}}
   },
-  "polarPreflightTitle": "Pre-flight checks",
-  "@polarPreflightTitle": {"description": "Polar align (#2068): heading of the Start card's list of safety checks the rig makes before a start"},
-  "polarPreflightReach": "Polar align turns the mount up to {deg}° each way.",
-  "@polarPreflightReach": {"description": "Polar align Start card (#2165): how far this run turns RA each way, in degrees, always shown", "placeholders": {"deg": {"type": "String"}}},
-  "polarPreflightChecking": "Checking the rig…",
-  "@polarPreflightChecking": {"description": "Polar align (#2068): the pre-flight list is being read from the rig"},
-  "polarPreflightReadFailed": "Couldn't read the pre-flight checks. The rig still checks them when you start.",
-  "@polarPreflightReadFailed": {"description": "Polar align (#2068): the pre-flight list could not be read; Start stays on and the rig refuses a start that fails a check"},
-  "polarPreflightRetry": "Retry",
-  "@polarPreflightRetry": {"description": "Polar align (#2068): read the pre-flight list again after a failed read"},
-  "polarPreflightRefresh": "Check again",
-  "@polarPreflightRefresh": {"description": "Polar align (#2068): tooltip of the button that reads the pre-flight list again"},
-  "polarPreflightSummary": "{passed} passed · {notYet} not checked yet",
-  "@polarPreflightSummary": {"description": "Polar align (#2068): under the pre-flight list, how many checks passed and how many the rig does not make yet", "placeholders": {"passed": {"type": "int"}, "notYet": {"type": "int"}}},
-  "polarPreflightShowAll": "Show all checks",
-  "@polarPreflightShowAll": {"description": "Polar align (#2068): show every pre-flight check, not only the failing and warning ones"},
-  "polarPreflightShowFewer": "Show fewer",
-  "@polarPreflightShowFewer": {"description": "Polar align (#2068): show only the failing and warning pre-flight checks again"},
-  "polarPreflightStatusOk": "passed",
-  "@polarPreflightStatusOk": {"description": "Polar align (#2068): screen-reader status of a pre-flight check that passed"},
-  "polarPreflightStatusWarn": "note",
-  "@polarPreflightStatusWarn": {"description": "Polar align (#2068): screen-reader status of a pre-flight check that is a reminder and never stops a start"},
-  "polarPreflightStatusFail": "fails, Start is off",
-  "@polarPreflightStatusFail": {"description": "Polar align (#2068): screen-reader status of a pre-flight check that fails; Start is off until it passes"},
-  "polarPreflightStatusUnknown": "not checked yet",
-  "@polarPreflightStatusUnknown": {"description": "Polar align (#2068): screen-reader status of a pre-flight check the rig does not make yet"},
-  "polarPreflightBlocked": "A pre-flight check fails: see the list in Polar align",
-  "@polarPreflightBlocked": {"description": "Polar align (#2068): why Simple Mode's Start is off while a pre-flight check fails"},
-  "polarPreflightCheckMountConnected": "Mount connected",
-  "@polarPreflightCheckMountConnected": {"description": "Polar align (#2068): pre-flight check name"},
-  "polarPreflightCheckMountParked": "Mount not parked",
-  "@polarPreflightCheckMountParked": {"description": "Polar align (#2068): pre-flight check name"},
-  "polarPreflightCheckSiteLatitude": "Site latitude",
-  "@polarPreflightCheckSiteLatitude": {"description": "Polar align (#2068): pre-flight check name"},
-  "polarPreflightCheckSiteLongitude": "Site longitude and sidereal time",
-  "@polarPreflightCheckSiteLongitude": {"description": "Polar align (#2068): pre-flight check name"},
-  "polarPreflightCheckMountClock": "Mount clock",
-  "@polarPreflightCheckMountClock": {"description": "Polar align (#2068): pre-flight check name (the mount's clock set and checked from the rig's synced clock)"},
-  "polarPreflightCheckPoseVerified": "Mount position trusted",
-  "@polarPreflightCheckPoseVerified": {"description": "Polar align (#2068): pre-flight check name (no power loss or unconfirmed stop since the mount's position was last trusted)"},
-  "polarPreflightCheckClearance": "Counterweight and cable clearance",
-  "@polarPreflightCheckClearance": {"description": "Polar align (#2068): pre-flight check name (the user confirmed this mount's clearance)"},
-  "polarPreflightCheckStartPointing": "Where the scope points",
-  "@polarPreflightCheckStartPointing": {"description": "Polar align (#2068): pre-flight check name (the start's plan from a fresh reading of the mount)"},
-  "polarPreflightCheckMountType": "Mount type",
-  "@polarPreflightCheckMountType": {"description": "Polar align (#2068): pre-flight check name (German equatorial, fork or alt-az)"},
-  "polarPreflightCheckCanMoveAxis": "RA motor control",
-  "@polarPreflightCheckCanMoveAxis": {"description": "Polar align (#2068): pre-flight check name (the mount can turn its RA axis by rate)"},
-  "polarPreflightCheckAligner": "Polar Aligner",
-  "@polarPreflightCheckAligner": {"description": "Polar align (#2068): pre-flight check name (the motorised alt/az adjuster)"},
-  "polarPreflightCheckMountLimits": "The mount's own limits",
-  "@polarPreflightCheckMountLimits": {"description": "Polar align (#2068): pre-flight reminder to set the mount's own slew and altitude limits in its hand controller"},
-  "polarClearanceButton": "Confirm clearance…",
-  "@polarClearanceButton": {"description": "Polar align (#2068): opens the clearance dialog while this mount's clearance is not confirmed"},
-  "polarClearanceChange": "Change clearance…",
-  "@polarClearanceChange": {"description": "Polar align (#2068): opens the clearance dialog for a mount whose clearance is confirmed"},
-  "polarClearanceTitle": "Room to turn the mount",
-  "@polarClearanceTitle": {"description": "Polar align (#2068, #2165): title of the clearance dialog"},
-  "polarClearanceQuestion": "Polar Align will turn the mount up to {deg}° each way. Is there room for the tube, counterweight and cables to move that far?",
-  "@polarClearanceQuestion": {"description": "Polar align (#2165, Joey 2026-11-21): the clearance dialog's question; {deg} is how far this run turns RA each way, in degrees (the turns plus the 0.5° direction test when owed)", "placeholders": {"deg": {"type": "String"}}},
-  "polarClearanceYes": "Yes, there is room",
-  "@polarClearanceYes": {"description": "Polar align (#2165): the clearance dialog's one confirm button"},
-  "polarClearanceTakeBack": "Take back",
-  "@polarClearanceTakeBack": {"description": "Polar align (#2068, Joey 2026-11-21): button in the clearance dialog and in Settings › Imaging › Polar align that withdraws this mount's clearance confirmation, so the motor does not turn it until it is confirmed again"},
-  "polarActionClearance": "save the mount's clearance",
-  "@polarActionClearance": {"description": "Polar align (#2068): verb phrase completing \"Couldn't …\" when the clearance could not be saved"},
-  "refusalPolarAlignClearanceNotConfirmed": "Polar align turns this mount up to {reach}° each way. Confirm there is room for the tube, counterweight and cables to move that far: tap Confirm clearance in Polar align.",
-  "@refusalPolarAlignClearanceNotConfirmed": {"description": "Refusal (polar-align-clearance-not-confirmed, #2068, #2165): no polar alignment motor motion until the user confirmed there is room for this run's reach; {reach} is how far the run turns RA each way, in degrees", "placeholders": {"reach": {"type": "String"}}},
-  "refusalPolarAlignSiteNotSet": "Polar align needs your site: set its latitude and longitude in the site settings (not 0° and 0°), so it knows the sidereal time.",
-  "@refusalPolarAlignSiteNotSet": {"description": "Refusal (polar-align-site-not-set, #2083): the site has no longitude, sits at latitude 0 and longitude 0 (never set), or its sidereal time is unknown; polar alignment steers by the hour angle"},
-  "refusalPolarAlignAltAzMount": "Polar align needs an equatorial mount. This mount says it is alt-az, so turning it would turn azimuth, not RA.",
-  "@refusalPolarAlignAltAzMount": {"description": "Refusal (polar-align-alt-az-mount, #2083): the mount reports AlignmentMode alt-az; polar alignment turns the RA axis"},
-  "refusalPolarAlignCannotMoveAxis": "This mount cannot turn its RA axis by motor speed, so Polar align cannot turn it. Polar align needs a mount whose driver can move the RA axis.",
-  "@refusalPolarAlignCannotMoveAxis": {"description": "Refusal (polar-align-cannot-move-axis, #2083): the mount reports CanMoveAxis false for its RA axis, so Polar align cannot start (#2170: there is no hand-turn fallback)"},
-  "polarKnobClearance": "Room to turn the mount",
-  "@polarKnobClearance": {"description": "Settings › Imaging › Polar align (#2068, #2165): how far Polar align turns the connected mount and whether the user confirmed there is room"},
-  "polarKnobClearanceConfirmed": "Turns up to {deg}° each way, room confirmed for this mount",
-  "@polarKnobClearanceConfirmed": {"description": "Settings › Imaging › Polar align (#2165): the run's reach in degrees, the room for it confirmed", "placeholders": {"deg": {"type": "String"}}},
-  "polarKnobClearanceNotConfirmed": "Turns up to {deg}° each way, not confirmed: the motor does not turn this mount",
-  "@polarKnobClearanceNotConfirmed": {"description": "Settings › Imaging › Polar align (#2165): the run's reach in degrees, the room for it not confirmed", "placeholders": {"deg": {"type": "String"}}},
-  "polarKnobClearanceNoMount": "Connect the mount to see and confirm its clearance",
-  "@polarKnobClearanceNoMount": {"description": "Settings › Imaging › Polar align (#2068): no mount connected, so no clearance to show"},
-  "polarKnobClearanceHint": "Kept for each mount. A bigger turn size asks again.",
-  "@polarKnobClearanceHint": {"description": "Settings › Imaging › Polar align (#2068): hint under the clearance row"},
   "polarKnobEastDirection": "Turn direction",
-  "@polarKnobEastDirection": {"description": "Settings › Imaging › Polar align (#2081): the way the RA axis turns when a run starts a new start pose (NINA's East direction)"},
+  "@polarKnobEastDirection": {"description": "Settings › Imaging › Polar align (#2081): the way the RA axis turns in a run (NINA's East direction)"},
   "polarKnobEastDirectionAuto": "Automatic",
   "@polarKnobEastDirectionAuto": {"description": "Polar align turn direction choice (#2081): no setting, the site's hemisphere picks"},
   "polarKnobEastDirectionEast": "East",
   "@polarKnobEastDirectionEast": {"description": "Polar align turn direction choice (#2081): the RA reading rises"},
   "polarKnobEastDirectionWest": "West",
   "@polarKnobEastDirectionWest": {"description": "Polar align turn direction choice (#2081): the RA reading falls"},
-  "polarKnobEastDirectionHint": "Automatic is east in the north and west in the south. A new start turns this way; later starts turn back toward it",
-  "@polarKnobEastDirectionHint": {"description": "Polar align turn direction (#2081): it picks the way only for a new start pose, later runs turn back toward that start"},
-  "polarMotorDirection": "RA motor direction",
-  "@polarMotorDirection": {"description": "Settings › Imaging › Polar align (#2081): the RA motor direction Polar align tested and saved for this mount"},
-  "polarMotorDirectionSaved": "Tested on {mount}: the motor's positive speed turns RA {direction}.",
-  "@polarMotorDirectionSaved": {"description": "Polar align saved RA motor direction (#2081, #2167); mount is the mount identity the test was saved for (its Alpaca unique id or name, or polarMotorDirectionMountDriver with the driver name and version), direction is polarDirectionEast or polarDirectionWest", "placeholders": {"mount": {"type": "String"}, "direction": {"type": "String"}}},
-  "polarMotorDirectionOtherDriver": "Tested on another mount or driver ({mount}): the next start tests it again with a 0.5° turn.",
-  "@polarMotorDirectionOtherDriver": {"description": "Polar align saved RA motor direction (#2081, #2167): the connected mount has another identity, driver name or driver version than the saved test; mount is the saved identity as in polarMotorDirectionSaved", "placeholders": {"mount": {"type": "String"}}},
-  "polarMotorDirectionMountDriver": "{mount}, driver {driver}",
-  "@polarMotorDirectionMountDriver": {"description": "Polar align saved RA motor direction (#2167): the identity a test was saved for, a mount (its Alpaca unique id or name) with the driver name and version it reported (as reported, not translated)", "placeholders": {"mount": {"type": "String"}, "driver": {"type": "String"}}},
-  "polarMotorDirectionUntested": "Not tested yet: the next start first turns the mount 0.5° to learn it.",
-  "@polarMotorDirectionUntested": {"description": "Polar align RA motor direction (#2081): nothing saved, the next motor run tests it first (shown in its confirm step)"},
-  "polarMotorDirectionUnknown": "This rig does not save a motor direction.",
-  "@polarMotorDirectionUnknown": {"description": "Polar align RA motor direction (#2081): an older rig without the motor-direction endpoint"},
-  "polarMotorDirectionReadFailed": "Could not read the saved motor direction from the rig.",
-  "@polarMotorDirectionReadFailed": {"description": "Polar align RA motor direction (#2081): the read failed"},
-  "polarMotorDirectionRetest": "Test direction again",
-  "@polarMotorDirectionRetest": {"description": "Polar align RA motor direction (#2081): button that forgets the saved direction, so the next start tests it with a 0.5° turn"},
-  "polarMotorDirectionRetestDone": "The next start tests the motor direction again.",
-  "@polarMotorDirectionRetestDone": {"description": "Polar align RA motor direction (#2081): snackbar after Test direction again"},
-  "polarConfirmDirectionTest": "First it turns the mount {deg}° to learn the motor direction (not tested yet for this mount and driver).",
-  "@polarConfirmDirectionTest": {"description": "Polar align start confirm dialog (#2081): the run's first move, a small RA turn whose reading tells which way the motor runs; deg has one decimal", "placeholders": {"deg": {"type": "String"}}},
-  "polarAlignTurnWrongWay": "The mount turned the other way from its saved motor direction, so Polar align stopped it and never turned it back. Check the mount, then tap Test direction again in Settings › Imaging › Polar align, and start again.",
-  "@polarAlignTurnWrongWay": {"description": "Polar Align card (both modes): the run failed with turn_wrong_way (#2081); 'Test direction again' is polarMotorDirectionRetest"},
+  "polarKnobEastDirectionHint": "Automatic is east in the north and west in the south. Every run turns this way",
+  "@polarKnobEastDirectionHint": {"description": "Polar align turn direction (#2081): what Automatic means; every run turns the chosen way"},
   "poseCheckButton": "Check position with a plate solve",
   "@poseCheckButton": {"description": "Mount window (#2173): button on the unverified-position row that takes one short exposure, plate-solves it and compares it with the mount; it sends the mount no motion"},
   "poseCheckRunning": "Checking the position with a plate solve…",

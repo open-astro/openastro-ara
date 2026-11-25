@@ -169,59 +169,16 @@ namespace OpenAstroAra.Test {
             store.Verify(s => s.PutPolarAlignSettings(It.IsAny<PolarAlignSettingsDto>()), Times.Never, "a read writes nothing back");
         }
 
-        // #2068 review — an app from before mount_clearance PUTs the section without it: the stored confirmations stay.
-        // An empty map (the app's own clear) still clears them.
+        // An older profile or app still carries the per-mount clearance: the key is read like any unknown member (ignored).
         [Test]
-        public void A_PUT_without_mount_clearance_keeps_every_stored_confirmation() {
-            var stored = new Dictionary<string, PolarAlignMountClearanceDto> {
-                ["mount-a"] = new(ConfirmedReachDeg: 20.5),
-            };
-            var store = new Mock<IProfileStore>();
-            store.Setup(s => s.GetPolarAlignSettings()).Returns(new PolarAlignSettingsDto(MountClearance: stored));
-
-            var kept = (ProfileEndpoints.PutPolarAlignSettings(new PolarAlignSettingsDto(ExposureSeconds: 4.0), store.Object)
-                as Ok<PolarAlignSettingsDto>)?.Value;
-            var cleared = (ProfileEndpoints.PutPolarAlignSettings(
-                new PolarAlignSettingsDto(MountClearance: new Dictionary<string, PolarAlignMountClearanceDto>()), store.Object)
-                as Ok<PolarAlignSettingsDto>)?.Value;
-
-            Assert.That(kept?.MountClearance?["mount-a"], Is.EqualTo(new PolarAlignMountClearanceDto(20.5)));
-            Assert.That(kept!.ExposureSeconds, Is.EqualTo(4.0));
-            Assert.That(cleared?.MountClearance, Is.Empty, "an empty map clears them");
-        }
-
-        // #2165 — a confirmation is for the reach the user said there is room for: one that is not a positive number up
-        // to a whole turn is refused, never raised or lowered to a reach the user did not confirm.
-        [TestCase(0.0)]
-        [TestCase(-1.0)]
-        [TestCase(361.0)]
-        [TestCase(double.NaN)]
-        public void A_confirmed_reach_that_is_not_a_positive_number_up_to_360_is_400_and_not_stored(double reachDeg) {
-            var store = new Mock<IProfileStore>();
-            var entries = new Dictionary<string, PolarAlignMountClearanceDto> { ["m"] = new(reachDeg) };
-
-            var refused = ProfileEndpoints.PutPolarAlignSettings(new PolarAlignSettingsDto(MountClearance: entries), store.Object);
-
-            Assert.That((refused as ProblemHttpResult)?.StatusCode, Is.EqualTo(StatusCodes.Status400BadRequest));
-            store.Verify(s => s.PutPolarAlignSettings(It.IsAny<PolarAlignSettingsDto>()), Times.Never);
-        }
-
-        // #2165 — a confirmation stored in the old slider format (a counterweight angle, no reach) is dropped when it is
-        // read, so that mount is asked again (pre-beta, no migration of meaning). A reach entry beside it stays.
-        [Test]
-        public void An_old_slider_format_clearance_entry_is_dropped_and_asked_again() {
+        public void A_polar_align_section_that_still_carries_mount_clearance_is_read_without_it() {
             const string json = """
-                {"mount_clearance": {
-                  "old-mount": {"max_cw_angle_deg": 60, "clearance_confirmed": true, "confirmed_max_cw_angle_deg": 60},
-                  "new-mount": {"confirmed_reach_deg": 20.5}}}
+                {"exposure_seconds": 2.5, "mount_clearance": {"some-mount": {"confirmed_reach_deg": 20.5}}}
                 """;
-            var stored = System.Text.Json.JsonSerializer.Deserialize<PolarAlignSettingsDto>(json, OpenAstroAra.Server.AraJsonSerializerContext.Default.Options);
 
-            var read = PolarAlignSettingsClamp.Apply(stored!);
+            var read = System.Text.Json.JsonSerializer.Deserialize<PolarAlignSettingsDto>(json, OpenAstroAra.Server.AraJsonSerializerContext.Default.Options);
 
-            Assert.That(read.MountClearance, Is.EqualTo(new Dictionary<string, PolarAlignMountClearanceDto> {
-                ["new-mount"] = new(20.5),
-            }));
+            Assert.That(read, Is.EqualTo(new PolarAlignSettingsDto(ExposureSeconds: 2.5)));
         }
 
         [TestCase(0.001, PolarAlignLoopModes.Loop)]

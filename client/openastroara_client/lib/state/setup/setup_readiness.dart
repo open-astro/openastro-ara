@@ -57,7 +57,7 @@ SetupStepState connectStepState(MountStatus? mount, CameraStatus? camera) {
 /// else pending. This is a THIS-SESSION signal by design: alignment is
 /// physical and per-setup, so a fresh app session starts unaligned. Simple
 /// Mode's Night Setup (#1565) passes [last] and [now] to also count the rig's
-/// last routine past the rough stage: done when it ended in tonight's observing
+/// last routine: done when it ended in tonight's observing
 /// night inside the green zone, unless a newer routine stopped here outside it.
 /// The Full UI passes neither.
 SetupStepState polarAlignStepState(
@@ -65,13 +65,9 @@ SetupStepState polarAlignStepState(
   PolarAlignLastResult? last,
   DateTime? now,
 }) {
-  // The rough stage's green is a first pass on the main camera, not an
-  // alignment: fine and check are still ahead of it. (A new stage starts with
-  // no readout — the daemon and the fold both clear it — so a later stage's
-  // green is its own.)
-  if (live.zone == 'green' && live.stage != PolarAlignStages.coarse) {
-    return SetupStepState.done;
-  }
+  // A new stage starts with no readout (the daemon and the fold both clear
+  // it), so a green is the running stage's own.
+  if (live.zone == 'green') return SetupStepState.done;
   if (live.phase == PolarAlignStates.failed) return SetupStepState.problem;
   // A finished check outside the green zone is a measurement that says
   // "not aligned": the step needs work, it is not untouched.

@@ -61,53 +61,26 @@ public static class RefusalCatalog {
     // Slice 2: a mount whose reported position is not trusted after a power loss (#2070).
     public static readonly RefusalCause MountPositionUnverified = new("mount-position-unverified", 409, "The mount's position is unverified", "position_unverified_reason", "home_is_sensor_search");
 
-    // #2048 — Polar Align starts like NINA's: from where the user pointed the mount, never from a parked mount, and only
-    // after the user confirmed the start and its RA turn direction (direction = the way the run would turn now).
+    // Polar Align never unparks the mount: unpark it and send it Home first.
     public static readonly RefusalCause PolarAlignMountParked = new("polar-align-mount-parked", 409, "The mount is parked");
-    public static readonly RefusalCause PolarAlignUnconfirmed = new("polar-align-unconfirmed", 409, "Polar alignment needs your confirmation before the mount moves", "direction");
-    // #2089 — the RA axis has turned too far from where Polar Align started this session (offset_deg from the origin,
-    // limit_deg the bound): slew it back near the pole and confirm again.
-    public static readonly RefusalCause PolarAlignSweepLimit = new("polar-align-sweep-limit", 409, "The mount has turned too far from where Polar Align started", "offset_deg", "limit_deg");
+    // Polar Align starts from the mount's Home position: a mount that can find Home by itself and is not there is refused.
+    // Send it Home first, then start again.
+    public static readonly RefusalCause PolarAlignNotHome = new("polar-align-not-home", 409, "The mount is not at Home");
     // #2066 — Polar Align holds the mount's motion owner for its whole run (its solves and the adjust loop included): a GoTo,
     // a sync, Center, Park or Home meanwhile is refused, a REST Park or Home whose checks were still running when it took the
     // mount too. A pad move is refused only while a turn runs (or its stop is not confirmed yet). Stop Polar Align first. A
     // pad stop (rate 0) and Stop Mount are never refused; the safety, fault and shutdown parks end Polar Align first.
     public static readonly RefusalCause PolarAlignMovingMount = new("polar-align-moving-mount", 409, "Polar alignment is moving the mount");
-    // #2082 — the scope points within 3° of the pole: the camera would look along the RA axis, and nothing tilts it off the
-    // axis any more. Point it 2–5° from the pole and start again.
-    public static readonly RefusalCause PolarAlignOnAxis = new("polar-align-on-axis", 409, "The scope points too close to the pole");
-    // #2066 (ARA-5) — Polar Align plans only from a fresh reading of the mount: none came, it was the (0, 0) placeholder,
-    // or it was more than 2 s old. Check the mount's connection and start again.
-    public static readonly RefusalCause PolarAlignPointingUnknown = new("polar-align-pointing-unknown", 409, "No fresh reading of where the mount points");
-    // #2066 (ARA-5) — the mount reads Dec past ±90° (its Dec axis over the pole): the pier side and hour angle are
-    // ambiguous, so nothing moves. Point it near the pole by its own controls (or Home) and start again.
-    public static readonly RefusalCause PolarAlignPoseAmbiguous = new("polar-align-pose-ambiguous", 409, "The mount reads a Dec past the pole");
-    // #2066 (ARA-2) — the mount slews (or does not say whether it does), or the guider guides or calibrates: Polar Align
-    // would turn the mount beside another motion. Let the slew end, or stop guiding, and start again.
+    // Another routine holds the mount's motion owner, or the guider guides or calibrates: Polar Align would turn the
+    // mount beside another motion. Let it end, or stop guiding, and start again.
     public static readonly RefusalCause PolarAlignMountBusy = new("polar-align-mount-busy", 409, "The mount or the guider is busy");
 
     // #1589 — the user confirms a profile's meridian flip only after one ran to the end.
     public static readonly RefusalCause FirstFlipNotCompleted = new("first-flip-not-completed", 409, "No completed meridian flip to confirm");
 
-    // #2081 — a motor-direction retest while a run is going (its own 0.5° test could save a sign right after).
-    public static readonly RefusalCause PolarAlignAlreadyRunning = new("polar-align-already-running", 409, "Polar alignment is already running");
-
-    // #2068 (ARA-8, ARA-18) — the connected mount's clearance is not confirmed for this run's reach (the pre-flight list's
-    // clearance check): no Polar Align motor motion until the user said in the app that there is room for the tube,
-    // counterweight and cables to turn that far. reach_deg (#2165) is how far this run turns RA each way, the reach the user confirms there is room for.
-    public static readonly RefusalCause PolarAlignClearanceNotConfirmed = new("polar-align-clearance-not-confirmed", 409, "The mount's clearance is not confirmed", "reach_deg");
-
     // #1589 — a GoTo to a target at or above the profile's clearance limit (clearance_limit_enabled on): the camera
     // or rotator could reach the pier or tripod there.
     public static readonly RefusalCause AboveClearanceLimit = new("above-clearance-limit", 409, "The target is above the clearance limit", "altitude_deg", "limit_deg");
-    // #2083 — the site has no usable longitude, sits at latitude 0° and longitude 0° (a site never set), or its local
-    // sidereal time cannot be worked out: Polar Align steers by the hour angle, so it refuses rather than guess.
-    public static readonly RefusalCause PolarAlignSiteNotSet = new("polar-align-site-not-set", 409, "The site's longitude is not set");
-    // #2083 — the mount reports AlignmentMode altAz: its first axis turns azimuth, not RA, so the RA turns cannot run.
-    public static readonly RefusalCause PolarAlignAltAzMount = new("polar-align-alt-az-mount", 409, "Polar Align needs an equatorial mount");
-    // #2083 — the mount reports CanMoveAxis(Primary) false: it cannot turn its RA axis by rate, so Polar Align cannot run
-    // (#2170: there is no hand-turn fallback).
-    public static readonly RefusalCause PolarAlignCannotMoveAxis = new("polar-align-cannot-move-axis", 409, "The mount cannot turn its RA axis by rate");
 
     // #2173 — the plate-solve check of the mount's position while it is trusted already (or not read yet): nothing to check.
     public static readonly RefusalCause PoseCheckNotNeeded = new("pose-check-not-needed", 409, "The mount's position is not unverified");
@@ -120,11 +93,9 @@ public static class RefusalCatalog {
     public static readonly IReadOnlyList<RefusalCause> All = [
         NoCamera, CameraBusy, GateStuck, CenterInProgress, OpticsNotSet, SolverNotSet, CaptureSettingsUnsupported, StorageUnavailable,
         EndNightInProgress, BelowHorizonLimit, MountPositionUnverified, CounterweightLimit,
-        PolarAlignMountParked, PolarAlignUnconfirmed, PolarAlignSweepLimit, PolarAlignMovingMount, PolarAlignOnAxis,
-        PolarAlignPointingUnknown, PolarAlignPoseAmbiguous, PolarAlignMountBusy,
-        FirstFlipNotCompleted, MountClockNotVerified, PolarAlignAlreadyRunning,
-        PolarAlignClearanceNotConfirmed,
-        AboveClearanceLimit, PolarAlignSiteNotSet, PolarAlignAltAzMount, PolarAlignCannotMoveAxis,
+        PolarAlignMountParked, PolarAlignNotHome, PolarAlignMovingMount, PolarAlignMountBusy,
+        FirstFlipNotCompleted, MountClockNotVerified,
+        AboveClearanceLimit,
         PoseCheckNotNeeded, PoseSyncNotOffered, MountNotConnected,
     ];
 }

@@ -35,10 +35,10 @@ namespace OpenAstroAra.Test {
         // started the motor again. Counted as a stop first, the renewal is refused and the run ends.
         [Test]
         public async Task A_pad_stop_mid_turn_ends_the_run_and_the_motor_is_not_restarted() {
-            var mount = FakeGemMount.CounterweightDownAt(-4.0, 85.0, lstHours: 20.0);
+            var mount = GemAt(-4.0, 85.0, lstHours: 20.0);
             var ws = new WsRecorder();
             using var svc = NewGemService(mount, ws, benchMotors: false); // NINA's 10° steps at the daemon's speeds
-            await svc.StartConfirmedAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
             await mount.FirstMove.Task.WaitAsync(SignalTimeout).ConfigureAwait(false);
             Assert.That(svc.IsMovingMount, Is.True, "mid-turn");
 

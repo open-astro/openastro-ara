@@ -122,17 +122,6 @@ namespace OpenAstroAra.Server.Services {
             return StopsFenced(fence);
         }
 
-        /// <summary>#2067 — the stop fence the run of generation <paramref name="gen"/> was launched under, for a stop it sends
-        /// mid-run (a turn's runaway); the current fence when it keeps no record.</summary>
-        private long RunStopFence(int gen) {
-            lock (_gate) {
-                if (_runFence is { } f && f.Gen == gen) {
-                    return f.Fence;
-                }
-            }
-            return StopFence;
-        }
-
         /// <summary>The run's AbortEpoch reading (taken when its Start was called), for the leased motor commands; null for
         /// a superseded run or a mount that keeps no count.</summary>
         private long? RunAbortEpoch(int gen) {
@@ -145,9 +134,9 @@ namespace OpenAstroAra.Server.Services {
         /// The run-wide watch: any stop the run did not raise since its Start — Stop Mount, Emergency Stop, the meridian
         /// watchdog, a park, a Find Home — fails it with <see cref="SlewAbortedExternally"/>, so it starts no further turn
         /// and turns tracking on no more. Checked before every motor move, before every tracking switch-on, after every seed
-        /// frame and each live frame, between the stages, and on every poll of a move.
+        /// frame and each live frame, and through every turn (before each renewal of the motor's lease).
         /// </summary>
-        private void ThrowIfAbortedFromOutside(int gen) {
+        private void ThrowIfStoppedFromOutside(int gen) {
             var service = _motionControl;
             (long Epoch, long OwnAborts, RunEnd End) watch;
             lock (_gate) {
@@ -574,7 +563,7 @@ namespace OpenAstroAra.Server.Services {
 
         /// <summary>A fresh reading for the stop's confirmation: the driver's position now (never the cached one) and its
         /// Slewing now (the cache when the driver gives no answer). Null when there is no reading, or one that cannot be
-        /// trusted (#2066, <see cref="UntrustedForStillness"/>: "not confirmed").</summary>
+        /// trusted (<see cref="UntrustedForStillness"/>: "not confirmed").</summary>
         [SuppressMessage("Design", "CA1031:Do not catch general exception types",
             Justification = "A failed read is 'not confirmed' by contract: the confirmation loop reads again or gives up.")]
         private async Task<(double RaDeg, double DecDeg, bool Slewing)?> ReadStillnessAsync() {
@@ -588,6 +577,15 @@ namespace OpenAstroAra.Server.Services {
                 return null;
             }
         }
+
+        /// <summary>The oldest reading the stop's confirmation counts: twice AlpacaBridge iOptron's 1 s status cache.</summary>
+        internal static readonly TimeSpan StillnessReadMaxAge = TimeSpan.FromSeconds(2);
+
+        /// <summary>A reading the stop's confirmation must not count (a disconnected, stale or failed read is "not
+        /// confirmed", never "stopped"): none, the (0, 0) placeholder the daemon answers after a failed status poll, or one
+        /// older than <see cref="StillnessReadMaxAge"/> on <see cref="Clock"/>.</summary>
+        private bool UntrustedForStillness([NotNullWhen(false)] MountReading? r) =>
+            r is null || (r.RaHours == 0.0 && r.DecDegrees == 0.0) || Clock.GetUtcNow() - r.ReadAtUtc > StillnessReadMaxAge;
 
         /// <summary>Tracking at the end of a run (NINA's StopTrackingWhenDone, profile <c>stop_tracking_when_done</c>, on by
         /// default). On: tracking off. Off: a run that finished (Done, or the check's verdict) gives back the tracking it

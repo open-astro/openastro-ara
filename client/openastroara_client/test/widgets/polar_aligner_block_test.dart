@@ -20,14 +20,9 @@ import '../support/settings_values.dart';
 
 class _Api implements PolarAlignClient {
   @override
-  Future<PolarAlignPreflight?> preflight({String? stage}) async => null;
-  @override
-  Future<PolarAlignStartPlan> startPlan({String? stage}) async =>
-      PolarAlignStartPlan(stage: stage, direction: PolarAlignDirections.east);
-  @override
   Future<PolarAlignStatus?> getStatus() async => null;
   @override
-  Future<void> start(PolarAlignStartPlan plan) async {}
+  Future<void> start({String? stage}) async {}
   @override
   Future<void> stop() async {}
   @override

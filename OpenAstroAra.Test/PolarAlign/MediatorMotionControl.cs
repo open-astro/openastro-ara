@@ -22,16 +22,18 @@ using System.Threading.Tasks;
 namespace OpenAstroAra.Test.PolarAlign {
 
     /// <summary>
-    /// #2066 — the <see cref="IMountMotionControl"/> seam over a bare mediator mock, for the Polar Align tests whose mount
+    /// The <see cref="IMountMotionControl"/> seam over a bare mediator mock, for the Polar Align tests whose mount
     /// models its motors on the mediator (<c>MoveAxis</c>, <c>GetCurrentPosition</c>) rather than the telescope service.
-    /// Its reading is the mediator's position, stamped now, in mount session 0; it keeps no stop count. The daemon never
-    /// takes this path: Polar Align gets the telescope service itself.
+    /// Its reading is the mediator's position, stamped now on <paramref name="clock"/> (the clock the routine ages a
+    /// reading on), in mount session 0; it keeps no stop count. The daemon never takes this path: Polar Align gets the
+    /// telescope service itself.
     /// </summary>
-    internal sealed class MediatorMotionControl(ITelescopeMediator mount) : IMountMotionControl {
+    internal sealed class MediatorMotionControl(ITelescopeMediator mount, TimeProvider clock) : IMountMotionControl {
 
         /// <summary>The seam a test's mount offers: its own (the fake GEM mount, a mock set up as the telescope service),
         /// else this one over its mediator.</summary>
-        public static IMountMotionControl For(ITelescopeMediator mount) => mount as IMountMotionControl ?? new MediatorMotionControl(mount);
+        public static IMountMotionControl For(ITelescopeMediator mount, TimeProvider? clock = null) =>
+            mount as IMountMotionControl ?? new MediatorMotionControl(mount, clock ?? TimeProvider.System);
 
         public Task AbortSlewAsync(string reason, CancellationToken ct) => Task.Run(mount.StopSlew, CancellationToken.None);
 
@@ -45,7 +47,7 @@ namespace OpenAstroAra.Test.PolarAlign {
             }
             var info = mount.GetInfo();
             return Task.FromResult<MountReading?>(new MountReading(pos.RA, pos.Dec, info?.Slewing, info?.SideOfPier ?? PierSide.pierUnknown,
-                DateTimeOffset.UtcNow, SessionEpoch: 0, pos.Epoch));
+                clock.GetUtcNow(), SessionEpoch: 0, pos.Epoch));
         }
     }
 }

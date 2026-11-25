@@ -10,11 +10,6 @@ import 'package:openastroara/state/polar_align/polar_align_state.dart';
 
 /// Fake rig: frame fetches wait on [frames] in order; status scripted.
 class _Api implements PolarAlignClient {
-  @override
-  Future<PolarAlignPreflight?> preflight({String? stage}) async => null;
-  @override
-  Future<PolarAlignStartPlan> startPlan({String? stage}) async =>
-      PolarAlignStartPlan(stage: stage, direction: PolarAlignDirections.east);
   final frames = <Completer<Uint8List?>>[];
   int frameCalls = 0;
   PolarAlignStatus? status;
@@ -30,7 +25,7 @@ class _Api implements PolarAlignClient {
   @override
   Future<PolarAlignStatus?> getStatus() async => status;
   @override
-  Future<void> start(PolarAlignStartPlan plan) async {}
+  Future<void> start({String? stage}) async {}
   @override
   Future<void> stop() async {}
   @override
@@ -79,14 +74,6 @@ void main() {
     expect(c.read(polarAlignFrameProvider), [3]);
   });
 
-  test('the rough stage fetches no frame: its frames are the main camera\'s', () async {
-    c.listen(polarAlignFrameProvider, (_, _) {});
-    live().set(PolarAlignLive(
-        phase: PolarAlignStates.adjusting, stage: PolarAlignStages.coarse, lastFrame: _frame(1)));
-    await pumpEventQueue();
-    expect(api.frameCalls, 0);
-  });
-
   test('a fine run on the main camera fetches no frame: the guider has none of it (#2082)', () async {
     c.listen(polarAlignFrameProvider, (_, _) {});
     live().set(PolarAlignLive(
@@ -122,11 +109,8 @@ void main() {
     expect(c.read(polarAlignLiveProvider).zone, 'green');
   });
 
-  test('opening a panel on a running routine fetches its frame; on the rough stage it does not', () async {
+  test('opening a panel on a running routine fetches its frame', () async {
     c.listen(polarAlignFrameProvider, (_, _) {});
-    api.status = PolarAlignStatus.fromJson({'state': PolarAlignStates.adjusting, 'stage': PolarAlignStages.coarse});
-    await c.read(polarAlignFrameProvider.notifier).hydrate();
-    expect(api.frameCalls, 0);
     api.status = PolarAlignStatus.fromJson({'state': PolarAlignStates.adjusting, 'stage': PolarAlignStages.fine});
     final opening = c.read(polarAlignFrameProvider.notifier).hydrate();
     await pumpEventQueue();

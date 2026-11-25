@@ -30,20 +30,10 @@ using System.Threading.Tasks;
 
 namespace OpenAstroAra.Test {
 
-    /// <summary>#2068 — the polar-align routes over HTTP: an unknown stage is a 400 before the service is asked. #2170 —
-    /// the removed <c>hand_turn</c> query and body field open no manual path: the route reads them as any unknown name
-    /// (ignored), so the service is asked for the one motor start there is.</summary>
+    /// <summary>The polar-align routes over HTTP: a start body carries its stage and nothing else, a field an older app
+    /// still sends is read like any unknown name (ignored), and the routes this daemon no longer has answer 404.</summary>
     [TestFixture]
     public class EquipmentEndpointsPolarAlignHttpTest {
-
-        private static readonly PolarAlignPreflightDto List = new(
-            Ready: true,
-            Checks: [new PolarAlignPreflightCheckDto(PolarAlignPreflightChecks.MountConnected, PolarAlignPreflightStatuses.Ok, "Connected.")],
-            Planned: new PolarAlignPreflightPlannedDto(PolarAlignStages.Fine, PolarAlignDirections.East, 10.0, 10.0, 2, 20.0,
-                true, 0.0, 30.0, 60.0, null, null),
-            MountKey: "ZWO_AM5_1");
-
-        private static readonly PolarAlignStartPlanDto Plan = new(PolarAlignStages.Fine, PolarAlignDirections.East, 10.0, 2, 20.0);
 
         private sealed class Host : IAsyncDisposable {
             public readonly Mock<IPolarAlignService> Svc = new();
@@ -51,9 +41,7 @@ namespace OpenAstroAra.Test {
             private HttpClient _http = null!;
 
             public async Task StartAsync() {
-                Svc.Setup(s => s.GetPreflightAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>())).ReturnsAsync(List);
-                Svc.Setup(s => s.GetStartPlanAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>())).ReturnsAsync(Plan);
-                Svc.Setup(s => s.StartAsync(It.IsAny<string?>(), It.IsAny<PolarAlignStartConfirmation?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+                Svc.Setup(s => s.StartAsync(It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
                     .ReturnsAsync(new OperationAcceptedDto(Guid.NewGuid(), "polar-align.start", DateTimeOffset.UtcNow, null));
                 var builder = WebApplication.CreateSlimBuilder();
                 builder.WebHost.UseUrls("http://127.0.0.1:0");
@@ -88,49 +76,43 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
-        public async Task Preflight_ignores_the_removed_hand_turn_query() {
-            await using var host = new Host();
-            await host.StartAsync();
-
-            Assert.That(await host.GetAsync("/preflight?hand_turn=true"), Is.EqualTo(200));
-            Assert.That(await host.GetAsync("/preflight?stage=check&hand_turn=true"), Is.EqualTo(200));
-
-            host.Svc.Verify(s => s.GetPreflightAsync(null, It.IsAny<CancellationToken>()), Times.Once, "the motor start's list");
-            host.Svc.Verify(s => s.GetPreflightAsync(PolarAlignStages.Check, It.IsAny<CancellationToken>()), Times.Once, "the motor check's list");
-        }
-
-        [Test]
-        public async Task Preflight_with_an_unknown_stage_is_400_and_the_service_is_not_asked() {
-            await using var host = new Host();
-            await host.StartAsync();
-
-            Assert.That(await host.GetAsync("/preflight?stage=sideways"), Is.EqualTo(400));
-            host.Svc.Verify(s => s.GetPreflightAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Never);
-        }
-
-        [Test]
-        public async Task Start_plan_ignores_the_removed_hand_turn_query() {
-            await using var host = new Host();
-            await host.StartAsync();
-
-            Assert.That(await host.GetAsync("/start-plan?stage=fine&hand_turn=true"), Is.EqualTo(200));
-
-            host.Svc.Verify(s => s.GetStartPlanAsync(PolarAlignStages.Fine, It.IsAny<CancellationToken>()), Times.Once, "the motor start's plan");
-        }
-
-        // #2170 — an older app's start body that still says hand_turn: the service gets the plain motor confirmation, so
-        // the start runs the same pre-flight list and moves the mount only as a motor start does.
-        [Test]
-        public async Task A_start_body_with_the_removed_hand_turn_field_is_a_motor_start() {
+        public async Task A_start_body_with_fields_an_older_app_still_sends_is_a_plain_start_of_its_stage() {
             await using var host = new Host();
             await host.StartAsync();
 
             var status = await host.PostJsonAsync("/start",
-                """{"stage":"fine","confirmed":true,"direction":"east","new_origin":true,"hand_turn":true}""");
+                """{"stage":"check","confirmed":true,"direction":"east","new_origin":true,"direction_test":true,"hand_turn":true}""");
 
             Assert.That(status, Is.EqualTo(202));
-            host.Svc.Verify(s => s.StartAsync(PolarAlignStages.Fine, new PolarAlignStartConfirmation(PolarAlignDirections.East, true),
-                null, It.IsAny<CancellationToken>()), Times.Once, "the confirmation of a motor start, nothing else");
+            host.Svc.Verify(s => s.StartAsync(PolarAlignStages.Check, null, It.IsAny<CancellationToken>()), Times.Once);
+        }
+
+        [Test]
+        public async Task A_start_with_an_unknown_stage_is_400_and_the_service_is_not_asked() {
+            await using var host = new Host();
+            await host.StartAsync();
+
+            Assert.That(await host.PostJsonAsync("/start", """{"stage":"coarse"}"""), Is.EqualTo(400));
+            host.Svc.Verify(s => s.StartAsync(It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Never);
+        }
+
+        [TestCase("/preflight")]
+        [TestCase("/start-plan")]
+        [TestCase("/motor-direction")]
+        public async Task The_removed_checklist_plan_and_motor_direction_routes_are_gone(string path) {
+            await using var host = new Host();
+            await host.StartAsync();
+
+            Assert.That(await host.GetAsync(path), Is.EqualTo(404));
+        }
+
+        [TestCase("/next")]
+        [TestCase("/motor-direction/retest")]
+        public async Task The_removed_Next_and_retest_routes_are_gone(string path) {
+            await using var host = new Host();
+            await host.StartAsync();
+
+            Assert.That(await host.PostJsonAsync(path, "{}"), Is.EqualTo(404));
         }
     }
 }

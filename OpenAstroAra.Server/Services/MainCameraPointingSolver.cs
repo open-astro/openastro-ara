@@ -26,20 +26,20 @@ using System.Threading.Tasks;
 
 namespace OpenAstroAra.Server.Services;
 
-/// <summary>The polar-align coarse stage's frame source: one main-camera snapshot, solved with the
+/// <summary>The frame source of a polar-align measurement on the main camera: one main-camera snapshot, solved with the
 /// main optics, returned as an apparent-of-date pointing. Failure to solve is <c>Success=false</c>;
 /// a busy camera throws a <see cref="RefusalException"/> (<c>camera-busy</c>), unset optics
 /// <see cref="PlateSolverConfigurationException"/>.</summary>
 public interface IPolarAlignMainCameraSolver {
     /// <param name="blindFailover">Walk the staged search (wider radii, then the blind solver) when the near
-    /// solve misses: right for a seed frame (the mount may be degrees off), wrong for the live loop, whose
+    /// solve misses: right for a measurement's point (the mount may be degrees off), wrong for the live loop, whose
     /// contract is fail fast and shoot again (#1136) — a blind cascade there freezes the readout for minutes.</param>
     Task<PolarAlignSolveOutcome> CaptureAndSolveAsync(
         double exposureSeconds, (double RaDeg, double DecDeg)? hintJnow, bool blindFailover, CancellationToken ct);
 
     /// <summary>Why the main camera cannot shoot right now (not connected), or null when it can — or
-    /// when the daemon has no camera service to ask. The coarse stage's Start checks this before it
-    /// moves the mount, so a camera that is off refuses at once instead of homing, slewing and then
+    /// when the daemon has no camera service to ask. A main-camera Start checks this before it
+    /// moves the mount, so a camera that is off refuses at once instead of turning the mount and then
     /// blaming the sky.</summary>
     Task<string?> UnavailableReasonAsync(CancellationToken ct);
 }
@@ -47,10 +47,10 @@ public interface IPolarAlignMainCameraSolver {
 /// <summary>
 /// One main-camera snapshot (SNAPSHOT type — never catalogued), plate-solved with the profile's main
 /// optics and the mount's reported pointing as the hint. The shared capture-and-solve behind §57.4
-/// Verify Position and the polar-align coarse stage: both only LOOK — one attempt, no sync, no slew.
+/// Verify Position and a main-camera polar-align measurement: both only LOOK — one attempt, no sync, no slew.
 /// </summary>
 public sealed class MainCameraPointingSolver : IPolarAlignMainCameraSolver {
-    /// <summary>The camera-busy sentence. Polar align's coarse stage shows the exception's message, so it stays.</summary>
+    /// <summary>The camera-busy sentence. A main-camera polar-align measurement shows the exception's message, so it stays.</summary>
     public const string CameraBusyMessage = "The camera is busy with an exposure — try Verify Position again once it has read out.";
 
     private readonly IProfileService _profileService;

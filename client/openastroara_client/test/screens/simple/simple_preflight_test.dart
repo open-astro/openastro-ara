@@ -33,14 +33,9 @@ final _focus = NotifierProvider<_Step, SetupStepState>(() => _Step(SetupStepStat
 final _aligned = NotifierProvider<_Step, SetupStepState>(() => _Step(SetupStepState.pending));
 
 class _PolarApi implements PolarAlignClient {
-  @override
-  Future<PolarAlignPreflight?> preflight({String? stage}) async => null;
-  @override
-  Future<PolarAlignStartPlan> startPlan({String? stage}) async =>
-      PolarAlignStartPlan(stage: stage, direction: PolarAlignDirections.east);
   final calls = <String>[];
   @override
-  Future<void> start(PolarAlignStartPlan plan) async => calls.add('start');
+  Future<void> start({String? stage}) async => calls.add('start');
   @override
   Future<void> stop() async => calls.add('stop');
   @override
@@ -236,7 +231,7 @@ void main() {
     expect(c.read(simplePreflightProvider), SimplePreflightStep.focus);
   });
 
-  test('a finished autofocus moves on to polar align, whose routine waits for the shutter and its confirm step (#2048)', () async {
+  test('a finished autofocus moves on to polar align, whose routine waits for the shutter', () async {
     final (c, api) = await _container();
     c.read(simplePreflightProvider.notifier).start();
     c.read(simplePreflightProvider.notifier).next();
@@ -244,7 +239,7 @@ void main() {
     c.read(_focus.notifier).set(SetupStepState.done);
     expect(c.read(simplePreflightProvider), SimplePreflightStep.polarAlign);
     await Future<void>.delayed(Duration.zero);
-    expect(api.calls, isEmpty, reason: 'the routine turns the mount from where it points: the user starts it');
+    expect(api.calls, isEmpty, reason: 'the routine turns the mount: the user starts it');
   });
 
   test("on a permanent pier a finished autofocus waits for its Done: nothing starts on its own", () async {

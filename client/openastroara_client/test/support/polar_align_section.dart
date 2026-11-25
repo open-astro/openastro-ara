@@ -25,7 +25,6 @@ const rigPolarAlign = PolarAlignSettings(
   stopTrackingWhenDone: true,
   camera: PolarAlignCameras.guide,
   framesPerPoint: 3,
-  mountClearance: {},
   eastDirection: null,
 );
 

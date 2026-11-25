@@ -35,8 +35,8 @@ String polarKnobText(double v) =>
 /// until there is one. A failed fetch keeps the previous picture. Fetches are
 /// coalesced: a frame that finishes while one is in flight is fetched once
 /// after it, or Single would keep showing the older image. Not while the run
-/// shoots the main camera (the rough stage, or `polar_align.camera` = main,
-/// #2082): the guider has none of its frames to show.
+/// shoots the main camera (`polar_align.camera` = main, #2082): the guider has
+/// none of its frames to show.
 class PolarAlignFrameNotifier extends Notifier<Uint8List?> {
   bool _loading = false;
   bool _reload = false;
@@ -64,7 +64,6 @@ class PolarAlignFrameNotifier extends Notifier<Uint8List?> {
     final status = await ref.read(polarAlignLiveProvider.notifier).hydrate();
     if (status != null &&
         status.isActive &&
-        status.stage != PolarAlignStages.coarse &&
         status.camera != PolarAlignCameras.main &&
         ref.mounted) {
       await load();

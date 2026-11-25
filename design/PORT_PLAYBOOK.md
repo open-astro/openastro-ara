@@ -6638,6 +6638,8 @@ rig check P0-6 (+rate primary MoveAxis direction from Home, AB #2424) posted on 
 
 ### 45.17 Motion safety: NINA parity plus the guards that landed (2026-11-21, #2048, ADR 0024)
 
+*(Superseded in part by §45.18, 2026-11-24: the rows marked "removed" below are gone from the code.)*
+
 ADR 0024 is the rule; this section is the map. Polar Align moves the mount the way NINA's Three Point
 Polar Alignment does (`isbeorn/nina.plugin.polaralignment` at `e5afbf54`, `PolarAlignment.cs`
 `MoveToNextPoint`, 985-1042): one East/West setting, `MoveAxis(Primary, ±rate)` at the fastest rate at
@@ -6647,19 +6649,19 @@ that and adds only the guards below, each merged on `stable/1.0`.
 
 | Guard | Where | Pull request |
 |---|---|---|
-| No Find Home, GoTo or unpark; a parked mount refused; a daemon-checked confirm step; the sweep bound from a session origin, max(30°, 2 × step + 2°) | `PolarAlignService.cs`, `PolarAlignService.SweepOrigin.cs` | #2089 |
+| No Find Home, GoTo or unpark; a parked mount refused; a daemon-checked confirm step; the sweep bound from a session origin, max(30°, 2 × step + 2°) | `PolarAlignService.cs`, `PolarAlignService.SweepOrigin.cs` | #2089 | *(§45.18: the confirm step and the sweep bound are removed)*
 | Emergency Stop latches first; any stop Polar Align did not raise ends the run (`slew_aborted_externally`) | `EmergencyStopService.cs`, `PolarAlignService.MountStop.cs` | #2097 |
 | Stop-contract holes: a lost mount gets its stop on reconnect, a pad stop ends the run, a takeover fences a stuck run, a GoTo raced by a stop is aborted again | `PolarAlignService.MountStop.cs`, `TelescopeService.cs` | #2112 (plan PR 1) |
 | Named stop reasons; an unconfirmed stop leaves the position unverified (`stop_unconfirmed`) | `PolarAlignService.cs`, `TelescopeService.PoseTrust.cs` | #2118 (PR 2) |
-| One measurement per Start; Check is its own confirmed Start; no Dec tilt, a start within 3° of the pole refused; the camera and frames per point | `PolarAlignService.cs`, `PolarAlignService.Stages.cs` | #2116, #2124 (PR 3, 5) |
+| One measurement per Start; Check is its own confirmed Start; no Dec tilt, a start within 3° of the pole refused; the camera and frames per point | `PolarAlignService.cs`, `PolarAlignService.Stages.cs` | #2116, #2124 (PR 3, 5) | *(§45.18: no confirmation, and a start at the pole is accepted)*
 | The settings section loads before it saves | client `polar_align_settings_state.dart` | #2114 (PR 4) |
-| Fresh, timestamped mount reads only (`pointing_unknown`, `pose_ambiguous`) | `PolarAlignService.FreshReads.cs`, `TelescopeService.FreshReads.cs` | #2119 (PR 6) |
-| One motion owner for the whole run (`polar-align-moving-mount`, `mount_busy`); stops and safety parks always get through | `TelescopeService.MotionOwner.cs`, `PolarAlignService.MotionOwner.cs` | #2123 (PR 7) |
-| Move guards: matched rates never rounded up, `slew_timeout`, `slew_stalled`, `dec_moved`, `pier_changed`, the arrival check, ARA-13's field-rotation check (`pier_flip`), the 2″ Dec-spread warning | `PolarAlignService.MoveGuards.cs`, `PolarAlignService.Stages.cs` | #2128 (PR 8) |
-| East/West setting and a saved RA motor direction (`turn_wrong_way`, never reversed) | `PolarAlignService.SweepOrigin.cs`, `PolarAlignService.MotorDirection.cs` | #2157 (PR 9) |
+| Fresh, timestamped mount reads only (`pointing_unknown`, `pose_ambiguous`) | `PolarAlignService.FreshReads.cs`, `TelescopeService.FreshReads.cs` | #2119 (PR 6) | *(removed, §45.18)*
+| One motion owner for the whole run (`polar-align-moving-mount`, `mount_busy`); stops and safety parks always get through | `TelescopeService.MotionOwner.cs`, `PolarAlignService.MotionOwner.cs` | #2123 (PR 7) | *(§45.18: the readings before each turn and `mount_busy` are removed)*
+| Move guards: matched rates never rounded up, `slew_timeout`, `slew_stalled`, `dec_moved`, `pier_changed`, the arrival check, ARA-13's field-rotation check (`pier_flip`), the 2″ Dec-spread warning | `PolarAlignService.MoveGuards.cs`, `PolarAlignService.Stages.cs` | #2128 (PR 8) | *(removed, §45.18)*
+| East/West setting and a saved RA motor direction (`turn_wrong_way`, never reversed) | `PolarAlignService.SweepOrigin.cs`, `PolarAlignService.MotorDirection.cs` | #2157 (PR 9) | *(§45.18: the setting stays; the saved direction and its test are removed)*
 | The mount clock gate (`mount-clock-not-verified`) | `TelescopeService.MountClock.cs` | #2087, #2120 (PR 10) |
-| The pre-flight list; Start refuses on its first fail; the per-mount clearance confirm (`polar-align-clearance-not-confirmed`) | `PolarAlignPreflightEvaluator.cs`, `PolarAlignService.Preflight.cs` | #2129 (PR 11) |
-| Site, alt-az and CanMoveAxis refusals (`polar-align-site-not-set`, `polar-align-alt-az-mount`, `polar-align-cannot-move-axis`) | `PolarAlignPreflightEvaluator.cs` | #2159 (PR 13) |
+| The pre-flight list; Start refuses on its first fail; the per-mount clearance confirm (`polar-align-clearance-not-confirmed`) | `PolarAlignPreflightEvaluator.cs`, `PolarAlignService.Preflight.cs` | #2129 (PR 11) | *(removed, §45.18)*
+| Site, alt-az and CanMoveAxis refusals (`polar-align-site-not-set`, `polar-align-alt-az-mount`, `polar-align-cannot-move-axis`) | `PolarAlignPreflightEvaluator.cs` | #2159 (PR 13) | *(removed, §45.18)*
 | The Polar Aligner's verified stop, follow check and caps | `PolarAligner.cs`, `PolarAlignerService.cs`, `PolarAlignService.Aligner.cs` | #2115 (PR 14) |
 | Each fit's 1σ; "aligned" and the Check's verdict rate error + 2σ | `PolarAlignService.Uncertainty.cs` | #2131 (PR 15) |
 
@@ -6684,6 +6686,30 @@ sign is learned once per driver version (ASCOM leaves it to the driver, AlpacaBr
 **Rig checks** (posted on #2048 before the issue closes): the stop traces P0-3/4/5 tune
 `PolarAlignService.MountStop.cs`'s timings; P0-6 (+rate direction) gated #2157 and passed on the rig 2026-11-21; staged runs at 5°, 10°
 and 30° steps.
+
+### 45.18 Timed RA turns from Home, judged by the plate solves (2026-11-24)
+
+On the rig (iOptron HAE29C over Wi-Fi, replies stalling 1–4 s) Polar Align failed 15 of 15 attempts, each
+ended by one of §45.17's verifications of the mount's readings. Joey's decision: base it on NINA's
+three-point alignment, always start from the mount's **Home** position (tube at the pole, counterweights
+down), where two 10° RA turns are safe on any equatorial mount, and let the plate solves be the truth
+about what the mount did. The machinery that made a start from an arbitrary pose safe is deleted.
+
+| What | Where |
+|---|---|
+| A start needs the mount at Home (`polar-align-not-home` when CanFindHome and not AtHome; a mount that cannot find Home is not asked), connected, not parked, a site latitude, the mount clock gate, a trusted position (the mount layer's refusal), a guider that neither guides nor calibrates, the motion owner, and the main camera's solver when the profile measures with it. No checklist, no plan, no confirmation; a start at the pole is accepted | `PolarAlignService.cs` (`ThrowIfStartRefusedAsync`, `ThrowIfNotAtHome`), `PolarAlignService.MotionOwner.cs` |
+| A turn is timed, not read: the fastest rate at or below 3°/s (never above), degrees / rate seconds on the monotonic clock, the lease renewed every second, `MoveAxis 0`, a 2.5 s settle. No mount reading during or after it. A stop from outside ends the run and gets no renewal; every exit stops the motor; a refused motor command is `slew_failed` | `PolarAlignService.Turn.cs` |
+| The turns go the profile's `polar_align.east_direction`; the first frame is looked for at the pole, each later one at the solve before it | `PolarAlignService.Stages.cs` |
+| The fit is cross-checked against the told turns, sizes only (a driver that turns the other way still fits): `axis_fit_failed` when two points are closer than 20″ (the same field) or a solved turn is more than 5° from the told one | `PolarAlignService.Stages.cs` (`FitThreePointOrFail`) |
+| Two stages, `fine` and `check`, both on `polar_align.camera`; the `coarse` stage ("Rough first") is gone | `PolarAlignService.Stages.cs`, `Contracts/EquipmentDtos.cs` |
+| Unchanged: the capture and solve plumbing, frames per point, the fit's σ, the live adjust loop, the whole exit and stop contract, the Polar Aligner, the session log, the lease | `PolarAlignService.cs`, `PolarAlignService.MountStop.cs`, `PolarAlignService.Aligner.cs` |
+
+Removed with it: the pre-flight list and the per-mount clearance, the start plan and its confirmation, the
+session sweep origin and its 30° limit, the RA motor-direction test and its saved sign, the turn guards
+(stall, time bound, Dec and pier-side watch, reading jump, runaway, arrival, clock-stop top-ups, the
+field-rotation check, the Dec-spread warning), the fresh-read rules for planning and turning, the two
+readings before each turn, the on-axis refusal and the 1° minimum cone, and `POST /polaralign/next`.
+The API side is the 2026-11-24 entry of `design/API_CONTRACT.md`.
 
 ---
 

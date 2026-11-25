@@ -478,6 +478,53 @@ namespace OpenAstroAra.Test {
             Assert.That(worst, Is.LessThan(3.0), "arcmin");
         }
 
+        [Test]
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("Security", "CA5394:Do not use insecure randomness",
+            Justification = "Seeded System.Random makes the synthetic solve noise deterministic; test-only, nothing security related.")]
+        public void Three_point_fit_on_a_0_2_degree_circle_lands_within_the_error_a_few_arcseconds_of_noise_predict() {
+            // From Home the camera looks a fraction of a degree off the RA axis: three points 10° apart on a 0.2° circle,
+            // 125″ from one to the next. Without noise the fit is exact. With ±3″ of noise per axis (1.73″ rms) the centre
+            // of a circle through three points an angle θ apart is found to about σ·√1.5 / (1 − cos θ) along the middle
+            // point's radius, whatever the circle's size: 2.3′ at 10°. That is the floor: on so small a circle the arc's
+            // sagitta is only 11″, so the noise is no longer small beside it and the fit's error runs a little over it.
+            var axis = Unit(30, 89.5);
+            var exact = Rotate(axis, Unit(120, 0), 0.2);
+            var e2 = Rotate(exact, axis, 10);
+            var e3 = Rotate(e2, axis, 10);
+            var clean = PolarAlignGeometry.FitAxisThreePoint(RaDec(exact).RaDeg, RaDec(exact).DecDeg, RaDec(e2).RaDeg, RaDec(e2).DecDeg,
+                RaDec(e3).RaDeg, RaDec(e3).DecDeg, true);
+            Assert.That(SeparationDeg((clean.RaDeg, clean.DecDeg), axis) * 3600.0, Is.LessThan(0.01), "arcsec, no noise");
+            Assert.That(clean.ConeHalfAngleDeg, Is.EqualTo(0.2).Within(1e-6));
+
+            const double NoiseArcsec = 3.0;
+            var expectedArcmin = NoiseArcsec / Math.Sqrt(3.0) * Math.Sqrt(1.5) / (1.0 - Math.Cos(10.0 * Math.PI / 180.0)) / 60.0;
+            var rng = new Random(11);
+            var squares = 0.0;
+            var worst = 0.0;
+            const int Trials = 400;
+            for (var i = 0; i < Trials; i++) {
+                var p1 = Rotate(exact, axis, i * 0.9);
+                var p2 = Rotate(p1, axis, 10);
+                var p3 = Rotate(p2, axis, 10);
+                (double, double) Noisy((double X, double Y, double Z) p) {
+                    var (ra, dec) = RaDec(p);
+                    var noise = NoiseArcsec / 3600.0;
+                    return (ra + (rng.NextDouble() - 0.5) * 2 * noise / Math.Cos(dec * Math.PI / 180), dec + (rng.NextDouble() - 0.5) * 2 * noise);
+                }
+                var (ra1, dec1) = Noisy(p1);
+                var (ra2, dec2) = Noisy(p2);
+                var (ra3, dec3) = Noisy(p3);
+                var fitted = PolarAlignGeometry.FitAxisThreePoint(ra1, dec1, ra2, dec2, ra3, dec3, true);
+                var errorArcmin = SeparationDeg((fitted.RaDeg, fitted.DecDeg), axis) * 60.0;
+                squares += errorArcmin * errorArcmin;
+                worst = Math.Max(worst, errorArcmin);
+            }
+            var rms = Math.Sqrt(squares / Trials);
+            Assert.That(expectedArcmin, Is.EqualTo(2.33).Within(0.01), "the predicted 1σ, arcmin");
+            Assert.That(rms, Is.InRange(0.9 * expectedArcmin, 1.4 * expectedArcmin), "the fit's rms error, arcmin");
+            Assert.That(worst, Is.LessThan(10.0 * expectedArcmin), "no fit further off than ten times that");
+        }
+
         // ── §45.8 live readout: the camera's alt/az shift mapped back to the axis's shift ──────
 
         private static (double X, double Y, double Z) Add((double X, double Y, double Z) a, (double X, double Y, double Z) b) =>

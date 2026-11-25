@@ -928,160 +928,33 @@ public sealed record GuiderAlpacaDiscoveryDto(IReadOnlyList<string> Servers);
 
 // ─── Polar Alignment (§10.6 row 12) ───────────────────────────────────────────
 
-/// <summary>The routine's measurements (<see cref="PolarAlignStateDto.Stage"/>), one per Start (#2082): <c>coarse</c> —
-/// from where the user pointed the mount, the three-point seed (two RA-motor turns, three solves) + live adjust loop on the
-/// main camera (slower frames, for the big moves); <c>fine</c> — the same seed + live adjust loop on the guide camera;
-/// <c>check</c> — three guide-camera solves with two RA turns, an exact three-point axis fit, no adjusting. No stage sends
-/// the mount Home, slews it or moves its Dec axis (#2048, NINA's start), and none leads into another.</summary>
+/// <summary>The routine's measurements (<see cref="PolarAlignStateDto.Stage"/>), one per Start, each from the mount's
+/// Home position: <c>fine</c> — three points with two timed RA-motor turns, the three-point axis fit, then the live adjust
+/// loop; <c>check</c> — the same three-point measurement with a verdict, no adjusting. Both measure with the profile's
+/// <c>polar_align.camera</c>. No stage sends the mount Home, slews it or moves its Dec axis, and none leads into
+/// another.</summary>
 public static class PolarAlignStages {
-    public const string Coarse = "coarse";
     public const string Fine = "fine";
     public const string Check = "check";
 
-    public static bool IsValid(string? stage) => stage is Coarse or Fine or Check;
+    public static bool IsValid(string? stage) => stage is Fine or Check;
 }
 
-/// <summary><c>POST /polaralign/start</c> body: the measurement to make (null/absent = fine, #2082), and the user's
-/// confirmation of the start (#2048). The
-/// routine starts from where the mount points now; it moves only with <c>Confirmed</c> true and <c>Direction</c> equal
-/// to the <see cref="PolarAlignStartPlanDto.Direction"/> the user was shown. Without them the start is refused
-/// (<c>polar-align-unconfirmed</c>, with the direction the run would turn now). <c>NewOrigin</c> echoes the plan's
-/// <see cref="PolarAlignStartPlanDto.NewOrigin"/>: a start whose plan changed between a new start pose and a continued
-/// one since the user saw it is refused the same way.
-/// <para>#2081 — <c>DirectionTest</c> echoes the plan's <see cref="PolarAlignStartPlanDto.DirectionTestDeg"/> (true when it
-/// is over 0): the user saw that the run first turns the mount 0.5° to learn its motor's direction. A motor start whose
-/// plan has a test the confirmation did not see, or the other way round, is refused like a changed direction.</para>
-/// <para>#2170 — there is no hand-turn start: Polar Align turns RA only with the mount's motor. A body that still carries
-/// the removed <c>hand_turn</c> field is read like any unknown field (ignored), so it makes the same motor start.</para></summary>
-public sealed record PolarAlignStartRequestDto(string? Stage = null, bool Confirmed = false, string? Direction = null, bool NewOrigin = false,
-    bool DirectionTest = false);
-
-/// <summary>#2048 — what a confirmed start will do, for the confirm step the user answers before the mount moves
-/// (<c>GET /polaralign/start-plan</c>). <c>Direction</c> (<c>east</c> | <c>west</c>) is the way the RA axis turns
-/// first (#2081: from the profile at a new sweep origin, else back toward it); <c>StepDeg</c> is each of the
-/// <c>Turns</c> turns; <c>MaxSweepDeg</c> is how far the run turns the RA axis from where it starts (its two turns:
-/// one measurement per Start, #2082). <c>Stage</c> echoes the request.
-/// <para>#2081 — at a new sweep origin <c>Direction</c> is the profile's <c>polar_align.east_direction</c> (east in the
-/// north and west in the south by default), never the mount's hour angle; a later start of the session turns back toward
-/// the origin. <c>DirectionTestDeg</c> (0.5, or 0) is the test move a run makes before its first turn when no saved RA
-/// motor direction stands for the mount's driver (<c>polar_align_motor_direction</c>): the mount turns that far toward
-/// <c>Direction</c> (or the other way, on a driver whose positive rate lowers RA) and the run saves which way it went. The
-/// test counts toward the sweep limit.</para>
-/// <para>#2089 — the session's sweep origin, from RA differences the mount reports (never its clock, LST or absolute
-/// RA): <c>NewOrigin</c> is true when this start's pose becomes Polar Align's origin (the first start since the mount
-/// connected, or the mount was moved by other means since Polar Align last turned it); otherwise
-/// <c>OriginOffsetDeg</c> is how far the RA axis has turned from the origin (signed: + east, − west), and
-/// <c>Direction</c> turns back toward it. No turn takes the axis more than <c>SweepLimitDeg</c> from the
-/// origin (else the <c>polar-align-sweep-limit</c> Refusal).</para>
-/// <para>#2082 — <c>Camera</c> (<see cref="PolarAlignCameras"/>) is the camera the run measures with: <c>main</c> for the
-/// <c>coarse</c> stage ("Rough first"), else the profile's <c>polar_align.camera</c>.</para></summary>
-public sealed record PolarAlignStartPlanDto(string? Stage, string Direction, double StepDeg, int Turns, double MaxSweepDeg,
-    bool NewOrigin = true, double OriginOffsetDeg = 0.0, double SweepLimitDeg = 30.0, string Camera = PolarAlignCameras.Guide,
-    double DirectionTestDeg = 0.0);
-
-/// <summary>#2068 (ARA-18) — Polar Align's pre-flight list (<c>GET /polaralign/preflight</c>): every safety check a start
-/// makes, in the order a start makes them, with what the next Start would do. <c>Ready</c> is true when no check
-/// fails; a start (<c>POST /polaralign/start</c>, <c>GET /polaralign/start-plan</c>) refuses on the first check that
-/// fails, with that check's cause. A <c>warn</c> or <c>unknown</c> check never refuses: <c>unknown</c> is a check this
-/// daemon does not make yet (its detail names the issue that adds it). <c>MountKey</c> is the connected mount's key in
-/// the polar-align section's <c>mount_clearance</c> (null with no mount connected): the clearance confirmation writes
-/// there.</summary>
-public sealed record PolarAlignPreflightDto(
-    bool Ready,
-    IReadOnlyList<PolarAlignPreflightCheckDto> Checks,
-    PolarAlignPreflightPlannedDto Planned,
-    string? MountKey);
-
-/// <summary>One check of <see cref="PolarAlignPreflightDto"/>: its id (<see cref="PolarAlignPreflightChecks"/>), its
-/// status (<see cref="PolarAlignPreflightStatuses"/>) and a sentence for people (English).</summary>
-public sealed record PolarAlignPreflightCheckDto(string Id, string Status, string Detail);
-
-/// <summary>What the next Start at <c>Stage</c> would do (the confirm step's plan where the mount could be read):
-/// <c>Direction</c> (<c>east</c> | <c>west</c>, null when the plan could not be made), <c>TurnStepDeg</c> each of the
-/// measurement's two turns (<c>CheckStepDeg</c> a Check's), <c>MaxSweepDeg</c> the most it turns from where it starts,
-/// the session's sweep origin (<c>NewOrigin</c>, <c>OriginOffsetDeg</c>, <c>SweepLimitDeg</c>, #2089) and (#2165)
-/// <c>ReachDeg</c>, the most the run's motor turns RA each way: <c>MaxSweepDeg</c> plus the 0.5° direction test when it
-/// is owed (the plan's <see cref="PolarAlignStartPlanDto.DirectionTestDeg"/>), the reach the clearance is confirmed for.
-/// <c>StartCwAngleDeg</c> and
-/// <c>MinAltitudeDeg</c> are always null: Ara has no counterweight model or pose envelope (NINA parity, Joey
-/// 2026-11-21); they stay so an app that reads them still parses the list.</summary>
-public sealed record PolarAlignPreflightPlannedDto(
-    string Stage,
-    string? Direction,
-    double TurnStepDeg,
-    double CheckStepDeg,
-    int Turns,
-    double MaxSweepDeg,
-    bool? NewOrigin,
-    double? OriginOffsetDeg,
-    double? SweepLimitDeg,
-    double ReachDeg,
-    double? StartCwAngleDeg,
-    double? MinAltitudeDeg);
-
-/// <summary>The statuses of a <see cref="PolarAlignPreflightCheckDto"/>.</summary>
-public static class PolarAlignPreflightStatuses {
-    public const string Ok = "ok";
-    /// <summary>Worth reading; never refuses a start.</summary>
-    public const string Warn = "warn";
-    /// <summary>A start refuses on it.</summary>
-    public const string Fail = "fail";
-    /// <summary>Not checked by this daemon yet, or its input could not be read for an informational check; never
-    /// refuses a start.</summary>
-    public const string Unknown = "unknown";
-}
-
-/// <summary>The ids of the <see cref="PolarAlignPreflightCheckDto"/> rows (ARA-18), in the order a start checks
-/// them.</summary>
-public static class PolarAlignPreflightChecks {
-    public const string MountConnected = "mount_connected";
-    public const string MountParked = "mount_parked";
-    public const string SiteLatitude = "site_latitude";
-    public const string SiteLongitudeLst = "site_longitude_lst";
-    public const string MountClockOrSite = "mount_clock_or_site";
-    public const string PoseVerified = "pose_verified";
-    public const string ClearanceConfirmed = "clearance_confirmed";
-    public const string StartPointing = "start_pointing";
-    public const string MountType = "mount_type";
-    public const string CanMoveAxis = "can_move_axis";
-    public const string Aligner = "aligner";
-    public const string MountLimits = "mount_limits";
-
-    /// <summary>Every id, in order.</summary>
-    public static readonly IReadOnlyList<string> All = [
-        MountConnected, MountParked, SiteLatitude, SiteLongitudeLst, MountClockOrSite, PoseVerified, ClearanceConfirmed,
-        StartPointing, MountType, CanMoveAxis, Aligner, MountLimits,
-    ];
-}
-
-/// <summary>#2048 — the user's answer to the confirm step: they were shown the plan and the RA turn direction
-/// (<see cref="PolarAlignStartPlanDto.Direction"/>), and agreed the mount may move. <c>NewOrigin</c> (#2089): the plan
-/// they saw made this pose Polar Align's new origin. <c>DirectionTest</c> (#2081): the plan they saw had the 0.5°
-/// motor-direction test.</summary>
-public sealed record PolarAlignStartConfirmation(string Direction, bool NewOrigin = false, bool DirectionTest = false);
-
-/// <summary>The RA turn directions of <see cref="PolarAlignStartPlanDto.Direction"/>.</summary>
-public static class PolarAlignDirections {
-    /// <summary>The mount's RA reading increases: the tube turns toward the east.</summary>
-    public const string East = "east";
-    /// <summary>The mount's RA reading decreases: the tube turns toward the west.</summary>
-    public const string West = "west";
-}
+/// <summary><c>POST /polaralign/start</c> body: the measurement to make (null/absent = fine). The routine starts from the
+/// mount's Home position; a mount that can find Home and is not there is refused (<c>polar-align-not-home</c>).</summary>
+public sealed record PolarAlignStartRequestDto(string? Stage = null);
 
 /// <summary>The check stage's three-point result: the axis error against the apparent pole, the
-/// cone half-angle the three pointings sat at (conditioning), how far the solved turns disagreed
-/// with the mount's reported RA turns, the last run's readout for comparison (#2082: <c>FineErrorArcmin</c> keeps its
-/// wire name from when the fine stage led into the check; it is the readout of the last run that ended with one, null
-/// when none did since the daemon started. <c>FineDeltaArcmin</c> is the distance between the two measured axes — alt
+/// cone half-angle the three pointings sat at (how far the camera looks off the RA axis), how far the solved turns
+/// disagreed with the turns the RA motor was told, the last run's readout for comparison (<c>FineErrorArcmin</c> is the
+/// readout of the last run that ended with one, null when none did since the daemon started. <c>FineDeltaArcmin</c> is the distance between the two measured axes — alt
 /// and az both — so a readout of the same size on the other side of the pole still reads as a disagreement), the verdict band
 /// (<c>excellent</c> ≤1′, <c>very_good</c> ≤3′, <c>good</c> ≤10′, <c>rough</c> ≤30′, else <c>far_off</c>), and whether a
 /// point stayed noisy after its retake (#2082, <c>Noisy</c>). The <c>*SigmaArcmin</c> fields (#2072) are the fit's 1σ on
 /// each error, from the scatter of each point's frames (a single-frame point counts a floor of 0.15 px at the solving
 /// camera's pixel scale, 1″ when that is unknown); the total's is the rms length of the error vector, √(alt² + az²) of
 /// the two. Null from an older daemon. With them, the verdict band rates the total plus twice its 1σ (#2072), so a
-/// noisy check does not read <c>excellent</c>.
-/// <c>DecSpreadArcsec</c> (#2081): how far the mount's Dec reading spread across the check's three points, when that is
-/// over 2″ (NINA's warning: the mount moved in Dec, so the result may be off); null otherwise.</summary>
+/// noisy check does not read <c>excellent</c>.</summary>
 public sealed record PolarAlignCheckResultDto(
     double AltitudeErrorArcmin,
     double AzimuthErrorArcmin,
@@ -1097,16 +970,14 @@ public sealed record PolarAlignCheckResultDto(
     // #2072 — the fit's 1σ on each error (arcmin).
     double? AltitudeSigmaArcmin = null,
     double? AzimuthSigmaArcmin = null,
-    double? TotalSigmaArcmin = null,
-    // #2081 — the mount's Dec spread across the check's three points (arcseconds) when over 2″; null otherwise.
-    double? DecSpreadArcsec = null);
+    double? TotalSigmaArcmin = null);
 
 public sealed record PolarAlignStateDto(
-    // §45 engine states: homing (retired by #2048, never published), seeding (3-point axis measurement: two RA-motor turns),
-    // adjusting (live loop, error fields populated — every stage reaches it through seeding), paused
-    // (5 consecutive failed solves — still retrying), checking (the three check solves), checked
-    // (terminal: CheckResult populated), failed (fatal routine error; see the polar_align.error WS event).
-    string State,    // "idle" | "homing" | "seeding" | "adjusting" | "paused" | "checking" | "checked" | "stopped" | "failed"
+    // §45 engine states: seeding (3-point axis measurement: two RA-motor turns), adjusting (live loop, error
+    // fields populated — reached through seeding), paused (5 consecutive failed solves — still retrying),
+    // checking (the three check solves), checked (terminal: CheckResult populated), failed (fatal routine
+    // error; see the polar_align.error WS event).
+    string State,    // "idle" | "seeding" | "adjusting" | "paused" | "checking" | "checked" | "stopped" | "failed"
     double? CurrentErrorArcmin,
     double? AzimuthAdjustmentArcmin,
     double? AltitudeAdjustmentArcmin,
@@ -1117,12 +988,10 @@ public sealed record PolarAlignStateDto(
     PolarAlignLastFrameDto? LastFrame = null,
     // Which stage is running (PolarAlignStages); null when idle/stopped before any run.
     string? Stage = null,
-    // Always false since #2048: no stage sends the mount Home or waits for it. Kept for older clients.
-    bool WaitingForHome = false,
     // Check stage: solves done so far (0–3).
     int CheckSolvesDone = 0,
     PolarAlignCheckResultDto? CheckResult = null,
-    // #1565 — the last routine to stop or finish with an error reading outside the rough stage, kept in memory per
+    // #1565 — the last routine to stop or finish with an error reading, kept in memory per
     // daemon boot (like the autofocus run tracker); null until one has. A new run does not clear it: it describes
     // the last finished one.
     PolarAlignLastResultDto? LastResult = null,
@@ -1142,10 +1011,7 @@ public sealed record PolarAlignStateDto(
     // The clients show "aligned" only when error + 2σ is inside the tolerance (Done is not held by it).
     double? CurrentSigmaArcmin = null,
     double? AzimuthSigmaArcmin = null,
-    double? AltitudeSigmaArcmin = null,
-    // #2081 — the mount's Dec spread across the seed's three points (arcseconds) when over 2″ (NINA's warning: the
-    // readout may be off), also on each polar_align.progress event; null otherwise and outside adjusting/paused.
-    double? DecSpreadArcsec = null);
+    double? AltitudeSigmaArcmin = null);
 
 /// <summary>#2072 — the tokens of <see cref="PolarAlignStateDto.ReadoutCaution"/>.</summary>
 public static class PolarAlignReadoutCautions {

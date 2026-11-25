@@ -100,34 +100,6 @@ void main() {
     expect(polarAlignErrorText(en, other), 'check focus');
   });
 
-  test('a turn the wrong way reads in both languages and says where to test again (#2081)', () {
-    const live = PolarAlignLive(
-      phase: PolarAlignStates.failed,
-      errorReason: polarAlignTurnWrongWay,
-      errorMessage: 'the daemon sentence',
-    );
-    expect(polarAlignErrorText(en, live), en.polarAlignTurnWrongWay);
-    expect(polarAlignErrorText(en, live), contains('Test direction again'));
-    expect(polarAlignErrorText(pt, live), contains('Testar a direção de novo'));
-  });
-
-  // #2081 a wrong-way turn whose stop the run could not confirm: the daemon's
-  // sentence ends in "cut the mount's power" and no mount_did_not_stop
-  // follows, so the app's own wording keeps that warning.
-  test('a turn the wrong way whose stop was not confirmed keeps the cut-power warning (#2081)', () {
-    for (final l in [en, pt]) {
-      final unconfirmed = PolarAlignLive(
-        phase: PolarAlignStates.failed,
-        errorReason: polarAlignTurnWrongWay,
-        errorMessage: 'the daemon sentence',
-        errorStopUnconfirmed: true,
-      );
-      final words = polarAlignErrorText(l, unconfirmed)!;
-      expect(words, startsWith(l.polarAlignTurnWrongWay));
-      expect(words, endsWith(l.polarAlignStopNotConfirmed));
-    }
-  });
-
   // #2067 the guards' reasons had only the daemon's English.
   PolarAlignLive failed(
     String reason, {
@@ -142,19 +114,8 @@ void main() {
 
   test('each guard reason reads in the app language, in en and pt-BR', () {
     final cases = <String, String Function(AppLocalizations)>{
-      'slew_stalled': (l) => l.polarAlignErrorSlewStalled,
-      'slew_timeout': (l) => l.polarAlignErrorSlewTimeout,
-      'dec_moved': (l) => l.polarAlignErrorDecMoved,
-      'pier_changed': (l) => l.polarAlignErrorPierChanged,
-      'turn_mismatch': (l) => l.polarAlignErrorTurnMismatch,
-      'pier_flip': (l) => l.polarAlignErrorPierFlip,
       'tracking_off': (l) => l.polarAlignErrorTrackingOff,
-      'sweep_limit': (l) => l.polarAlignErrorSweepLimit,
       'mount_parked': (l) => l.refusalPolarAlignMountParked,
-      'on_axis': (l) => l.refusalPolarAlignOnAxis,
-      'pointing_unknown': (l) => l.refusalPolarAlignPointingUnknown,
-      'pose_ambiguous': (l) => l.refusalPolarAlignPoseAmbiguous,
-      'mount_busy': (l) => l.refusalPolarAlignMountBusy,
       'mount_did_not_stop': (l) => l.polarAlignStopNotConfirmed,
       'aligner_did_not_stop': (l) => l.polarAlignerStopNotConfirmed,
     };
@@ -181,18 +142,18 @@ void main() {
   test('a guard reason keeps the cut-power warnings the daemon sent, in both languages', () {
     for (final l in [en, pt]) {
       expect(
-        polarAlignErrorText(l, failed('dec_moved', stopUnconfirmed: true)),
-        '${l.polarAlignErrorDecMoved} ${l.polarAlignStopNotConfirmed}',
+        polarAlignErrorText(l, failed('tracking_off', stopUnconfirmed: true)),
+        '${l.polarAlignErrorTrackingOff} ${l.polarAlignStopNotConfirmed}',
       );
       expect(
         polarAlignErrorText(
           l,
           failed(
-            'pier_flip',
-            message: 'the mount flipped. $alignerCutPower',
+            'mount_parked',
+            message: 'the mount is parked. $alignerCutPower',
           ),
         ),
-        '${l.polarAlignErrorPierFlip} ${l.polarAlignerStopNotConfirmed}',
+        '${l.refusalPolarAlignMountParked} ${l.polarAlignerStopNotConfirmed}',
       );
       expect(
         polarAlignErrorText(
@@ -221,7 +182,7 @@ void main() {
   });
 
   test('a reason the app cannot word still shows the daemon sentence', () {
-    for (final reason in ['slew_failed', 'solver_configuration', 'brand_new']) {
+    for (final reason in ['slew_failed', 'axis_fit_failed', 'solver_configuration', 'brand_new']) {
       expect(polarAlignErrorText(pt, failed(reason)), 'the daemon sentence');
     }
   });

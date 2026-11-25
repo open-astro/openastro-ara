@@ -301,8 +301,8 @@ SimplePreflightStep? simplePreflightNext(
 
 /// Simple Mode's Preflight: the night's steps in order, each handing over to
 /// the next. Null while it isn't running. The plan queues tonight's targets;
-/// a finished autofocus moves on to polar align, which starts its routine on
-/// entry; the last step's Done starts imaging, which ends Preflight.
+/// a finished autofocus moves on to polar align, whose routine waits for the
+/// shutter; the last step's Done starts imaging, which ends Preflight.
 class SimplePreflightNotifier extends Notifier<SimplePreflightStep?> {
   @override
   SimplePreflightStep? build() {
@@ -356,10 +356,9 @@ class SimplePreflightNotifier extends Notifier<SimplePreflightStep?> {
     if (step == SimplePreflightStep.polarAlign) _polarFinished = false;
     state = step;
     ref.read(simpleShowingProvider.notifier)._show(step.screen);
-    // #2048 — entering polar align no longer starts the routine: it turns the
-    // mount from where it points, so the user points it near the pole and
-    // starts it from the shutter, through the confirm step.
-    // Entering guide starts the guider's routine, the same exception; leaving
+    // Entering polar align does not start the routine: it turns the mount,
+    // so the user sends the mount Home and starts it from the shutter.
+    // Entering guide starts the guider's routine; leaving
     // the step keeps it guiding (imaging wants it). Not while the main camera
     // is busy (a shot, a loop, a plan's exposure): calibration turns the
     // mount, the same gate as the Guide shutter, which then says why.

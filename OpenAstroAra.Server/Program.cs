@@ -280,7 +280,7 @@ public partial class Program {
         // §28 centering — slew → solve → sync → re-slew loop over live equipment (the §58.4 flip recenter uses it).
         builder.Services.AddSingleton<OpenAstroAra.Server.Services.ICenteringService, OpenAstroAra.Server.Services.CenteringService>();
         // §57.4 — Verify-Position after a Stop Mount: one snapshot, solved, beside the mount's figures.
-        // The main-camera capture-and-solve shared by Verify Position and the polar-align coarse stage.
+        // The main-camera capture-and-solve shared by Verify Position and polar alignment's main-camera measurement.
         builder.Services.AddSingleton<OpenAstroAra.Server.Services.MainCameraPointingSolver>();
         builder.Services.AddSingleton<OpenAstroAra.Server.Services.IPolarAlignMainCameraSolver>(sp =>
             sp.GetRequiredService<OpenAstroAra.Server.Services.MainCameraPointingSolver>());
@@ -577,17 +577,14 @@ public partial class Program {
                 sp.GetRequiredService<ILogger<PolarAlignService>>(),
                 sp.GetRequiredService<IPolarAlignFrameSolver>(),
                 sp.GetRequiredService<OpenAstroAra.Equipment.Interfaces.Mediator.ITelescopeMediator>(),
-                sp.GetRequiredService<ITelescopeService>(), // #2066 — the IMountMotionControl seam: the same TelescopeService
+                sp.GetRequiredService<ITelescopeService>(), // the IMountMotionControl seam: the same TelescopeService
                 sp.GetRequiredService<IProfileStore>(),
                 sp.GetService<IWsBroadcaster>(),
                 sp.GetRequiredService<IPolarAlignmentLog>(),
                 sp.GetRequiredService<IPolarAlignFrameFetcher>(),
                 mainCamera: sp.GetRequiredService<IPolarAlignMainCameraSolver>(),
                 aligner: sp.GetRequiredService<IPolarAlignerSource>(),
-                mountClock: sp.GetRequiredService<IMountClockGate>()) {
-                // #2081 — the direction test's sign is saved only to the profile its run was planned under.
-                ActiveProfileId = () => sp.GetService<IProfileRepository>()?.ActiveId,
-            });
+                mountClock: sp.GetRequiredService<IMountClockGate>()));
         // Setup → Smart Focus: the guide-camera focus loop (frames through the guider, measured here).
         builder.Services.AddSingleton<IGuideFrameDecoder, CfitsioGuideFrameDecoder>();
         builder.Services.AddSingleton<IGuideFocusService>(sp =>

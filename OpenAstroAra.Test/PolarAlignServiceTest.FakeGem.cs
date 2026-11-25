@@ -28,25 +28,20 @@ using PierSide = OpenAstroAra.Core.Enums.PierSide;
 namespace OpenAstroAra.Test {
 
     /// <summary>
-    /// #2064 — the key Stop, exit and sweep scenarios run against <see cref="FakeGemMount"/>: the production leased-motor
+    /// #2064 — the key Stop and exit scenarios run against <see cref="FakeGemMount"/>: the production leased-motor
     /// path (the fake is the daemon's telescope service), and asserts on the mount's TRUE pose from its ledger rather than
-    /// on what it reported. A test that measures where a turn lands runs the mount on the routine's own reads
-    /// (<see cref="PolledGemAt"/>); the Stop tests, which only need the turn cut short, run it in real time. Every
-    /// scenario ends with the five common asserts of #2048 (<see cref="FakeGemMount.AssertCommon"/>).
+    /// on what it reported. A test that measures where a turn lands runs the mount on a clock the routine's own timed
+    /// turns move (<see cref="PolledGemAt"/>); the Stop tests, which only need the turn cut short, run it in real time.
+    /// Every scenario ends with the five common asserts of #2048 (<see cref="FakeGemMount.AssertCommon"/>).
     /// </summary>
     public partial class PolarAlignServiceTest {
 
         /// <summary>#2048's default counterweight limit L.</summary>
         private const double CounterweightLimitDeg = 60.0;
 
-        /// <summary>How long each of the routine's fresh reads takes on a polled mount's clock (<see cref="PolledGemAt"/>).</summary>
-        private static readonly TimeSpan FreshRead = TimeSpan.FromMilliseconds(10);
-
-        /// <summary>The RA axis's true turn past its step a bench move may make on a polled mount: the stop lands on the
-        /// first reading past the step, so at most one read's travel at the bench's slow 10°/s (0.1°), plus the tracking
-        /// of the reads while it turns (under 0.01°). Exact whatever the test machine's load: the mount moves only when
-        /// the routine reads it.</summary>
-        private const double TrueTurnToleranceDeg = (10.0 * 0.010) + 0.01;
+        /// <summary>How far a timed turn's true travel may be from its step on the fake: the fake integrates its motors in
+        /// 10 ms steps, and tracking turns the axis while the motor runs (under 0.03° in a 5 s turn).</summary>
+        private const double TrueTurnToleranceDeg = 0.05;
 
         /// <summary>A plate solve of the frame: where the tube really points (the mount's readings play no part).</summary>
         private sealed class TrueSkySolver(FakeGemMount mount) : IPolarAlignFrameSolver {
@@ -56,29 +51,34 @@ namespace OpenAstroAra.Test {
             }
         }
 
+        /// <summary>A counterweight-down mount whose tube points at (<paramref name="haHours"/>, <paramref name="decDeg"/>):
+        /// off the pole, as a camera that many degrees off the RA axis sees the sky from Home. It cannot find Home by
+        /// itself, so a start asks nothing about Home.</summary>
+        private static FakeGemMount GemAt(double haHours, double decDeg, double lstHours, double latitudeDeg = 45.0,
+                bool tracking = true, TimeProvider? clock = null) {
+            var mount = FakeGemMount.CounterweightDownAt(haHours, decDeg, lstHours, latitudeDeg, tracking, clock);
+            mount.CanFindHome = false;
+            return mount;
+        }
+
         /// <summary>The routine on the fake, with NINA's 10° steps unless <paramref name="store"/> says otherwise. With
-        /// <paramref name="benchMotors"/> the motor speeds are 30°/s and 10°/s, so a run takes seconds; without, the
-        /// daemon's 3°/s and 1°/s, so a test can land inside a turn.</summary>
+        /// <paramref name="benchMotors"/> the motor speed is 30°/s; without, the daemon's 3°/s, so a test on a real-time
+        /// mount can land inside a turn.</summary>
         private static PolarAlignService NewGemService(FakeGemMount mount, WsRecorder ws, IProfileStore? store = null, bool benchMotors = true,
-                IPolarAlignerSource? aligner = null, bool motorDirectionSaved = true) {
+                IPolarAlignerSource? aligner = null) {
             mount.EventCount = () => ws.Events.Count;
-            var svc = NewServiceOn(NewFake(), new TrueSkySolver(mount), mount, ws, store ?? TenDegreeStore(), aligner: aligner,
-                motorDirectionSaved: motorDirectionSaved);
+            var svc = NewServiceOn(NewFake(), new TrueSkySolver(mount), mount, ws, store ?? TenDegreeStore(), aligner: aligner);
             if (benchMotors) {
-                svc.AxisFastRateDegPerSec = 30.0;
-                svc.AxisSlowRateDegPerSec = 10.0;
+                svc.AxisRateDegPerSec = 30.0;
             }
             return svc;
         }
 
         /// <summary>A counterweight-down mount at (<paramref name="haHours"/>, Dec 85°), LST 20 h, that tracks, on a
-        /// <see cref="ManualMountClock"/> that only the routine's own fresh reads move (<see cref="FreshRead"/> each): it
-        /// turns a fixed amount per poll, so where a bench turn lands does not depend on how late a poll ran.</summary>
-        private static FakeGemMount PolledGemAt(double haHours) {
-            var mount = FakeGemMount.CounterweightDownAt(haHours, 85.0, lstHours: 20.0, clock: new ManualMountClock());
-            mount.FreshReadTakes = FreshRead;
-            return mount;
-        }
+        /// <see cref="ManualMountClock"/> that the routine's timed turns move: a turn takes no real time, and where it
+        /// lands does not depend on the test machine's load.</summary>
+        private static FakeGemMount PolledGemAt(double haHours) =>
+            GemAt(haHours, 85.0, lstHours: 20.0, clock: new ManualMountClock { AutoAdvance = true });
 
         /// <summary>The index of the last <paramref name="type"/> event: the run's end event for the common asserts.</summary>
         private static int LastEventIndex(WsRecorder ws, string type) {
@@ -93,13 +93,13 @@ namespace OpenAstroAra.Test {
 
         // ── a fine run, from either side of the meridian ─────────────────────────────────────
 
-        // Start hour angle (h) and the profile's east_direction (#2081: null = east in the north) → the direction the user
-        // confirms, the true φ at the start and after the seed's two 10° turns. Set away from the meridian, the turns go
-        // toward counterweight-down on both sides: φ falls 20°.
-        [TestCase(-4.0, null, PolarAlignDirections.East, 30.0, 10.0, PierSide.pierWest)]
-        [TestCase(2.0, false, PolarAlignDirections.West, 60.0, 40.0, PierSide.pierEast)]
+        // Start hour angle (h) and the profile's east_direction (null = east in the north) → the way the turns go, the true
+        // φ at the start and after the seed's two 10° turns. Set away from the meridian, the turns go toward
+        // counterweight-down on both sides: φ falls 20°.
+        [TestCase(-4.0, null, true, 30.0, 10.0, PierSide.pierWest)]
+        [TestCase(2.0, false, false, 60.0, 40.0, PierSide.pierEast)]
         public async Task A_fine_seed_on_the_GEM_turns_the_true_RA_axis_twice_by_its_step_and_never_raises_the_counterweight(
-                double haHours, bool? eastDirection, string direction, double phiStartDeg, double phiEndDeg, PierSide side) {
+                double haHours, bool? eastDirection, bool east, double phiStartDeg, double phiEndDeg, PierSide side) {
             var mount = PolledGemAt(haHours);
             Assert.That(mount.TruePhiDeg, Is.EqualTo(phiStartDeg).Within(0.01), "the start pose (the mount tracks from here on)");
             Assert.That(mount.TrueSide, Is.EqualTo(side));
@@ -108,38 +108,34 @@ namespace OpenAstroAra.Test {
             store.PutPolarAlignSettings(store.GetPolarAlignSettings() with { EastDirection = eastDirection });
             using var svc = NewGemService(mount, ws, store);
 
-            var plan = await FineRunToAdjustingAsync(svc).ConfigureAwait(false);
+            await FineRunToAdjustingAsync(svc).ConfigureAwait(false);
             await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
 
-            Assert.That(plan.Direction, Is.EqualTo(direction));
             var turns = RaTurns(mount);
             Assert.That(turns, Has.Length.EqualTo(2), mount.Describe());
             // East raises the RA reading: the true hour angle falls by the step; west, it grows.
-            var sign = direction == PolarAlignDirections.East ? -1.0 : 1.0;
+            var sign = east ? -1.0 : 1.0;
             Assert.That(turns.Select(t => t.TrueDeltaHaDeg), Has.All.EqualTo(sign * 10.0).Within(TrueTurnToleranceDeg), mount.Describe());
             Assert.That(turns.Select(t => t.End), Has.All.EqualTo(MotionEnd.Stopped), "each turn ended on its own stop");
-            Assert.That(mount.Motions.Where(m => m.Kind == MotionKind.DecMotor), Is.Empty, "Dec 85° is off the axis: no tilt");
+            Assert.That(mount.Motions.Where(m => m.Kind == MotionKind.DecMotor), Is.Empty, "the Dec axis never moves");
             Assert.That(turns[^1].TruePhiAfterDeg, Is.EqualTo(phiEndDeg).Within(2 * TrueTurnToleranceDeg));
-            Assert.That(mount.MaxTruePhiDeg, Is.LessThanOrEqualTo(phiStartDeg + 0.05), "no turn raised the true counterweight angle");
+            Assert.That(mount.MaxTruePhiDeg, Is.LessThanOrEqualTo(phiStartDeg + (2 * TrueTurnToleranceDeg)), "no turn raised the true counterweight angle");
             Assert.That(mount.TotalTrueRaSweepDeg, Is.EqualTo(20.0).Within(2 * TrueTurnToleranceDeg));
             mount.AssertEndedStopped(tracking: false);
             mount.AssertCommon(LastEventIndex(ws, WsEventCatalog.PolarAlignStopped), CounterweightLimitDeg);
         }
 
-        // ── one measurement per Start (#2082) ────────────────────────────────────────────────
+        // ── one measurement per Start ────────────────────────────────────────────────────────
 
         private static readonly string[] OnlyTheFineStage = { PolarAlignStages.Fine };
 
         [Test]
-        public async Task One_Start_on_the_GEM_makes_two_RA_turns_and_no_Dec_move_and_Next_starts_nothing() {
+        public async Task One_Start_on_the_GEM_makes_two_RA_turns_and_no_Dec_move() {
             var mount = PolledGemAt(-4.0);
             var ws = new WsRecorder();
             using var svc = NewGemService(mount, ws);
 
             await FineRunToAdjustingAsync(svc).ConfigureAwait(false);
-            // Next used to lead the run into the check: two more turns. It is retired: 409, and the loop runs on.
-            var next = await Assert.ThrowsAsync<InvalidOperationException>(() => svc.NextAsync(null, CancellationToken.None));
-            Assert.That(next!.Message, Is.EqualTo(PolarAlignService.NextRetiredMessage));
             var mark = ws.Events.Count;
             await ws.WhenAsync(events => events.Skip(mark).Count(e => e.Type == WsEventCatalog.PolarAlignProgress) >= 2).WaitAsync(SignalTimeout).ConfigureAwait(false);
             await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
@@ -153,38 +149,15 @@ namespace OpenAstroAra.Test {
             mount.AssertCommon(LastEventIndex(ws, WsEventCatalog.PolarAlignStopped), CounterweightLimitDeg);
         }
 
-        [Test]
-        public async Task A_start_at_Dec_88_on_the_GEM_is_refused_before_any_motion() {
-            // Within 3° of the pole the camera looks along the RA axis. Polar Align used to tilt it 5° off with the Dec motor;
-            // it now asks the user to point 2–5° from the pole instead, before anything moves.
-            var mount = FakeGemMount.CounterweightDownAt(-4.0, 88.0, lstHours: 20.0, clock: new ManualMountClock());
-            mount.FreshReadTakes = FreshRead;
-            var ws = new WsRecorder();
-            var fake = NewFake();
-            using var svc = NewServiceOn(fake, new TrueSkySolver(mount), mount, ws, NewStore());
-
-            var planRefusal = await Assert.ThrowsAsync<RefusalException>(() => svc.GetStartPlanAsync(null, CancellationToken.None));
-            var startRefusal = await Assert.ThrowsAsync<RefusalException>(() => svc.StartAsync(
-                null, new PolarAlignStartConfirmation(PolarAlignDirections.East, NewOrigin: true), null, CancellationToken.None));
-
-            Assert.That(planRefusal!.Cause, Is.EqualTo(RefusalCatalog.PolarAlignOnAxis), "the confirm step already says so");
-            Assert.That(startRefusal!.Cause, Is.EqualTo(RefusalCatalog.PolarAlignOnAxis));
-            Assert.That(startRefusal.Message, Does.Contain("point it 2–5° from the pole"));
-            Assert.That(mount.Motions, Is.Empty, "zero motions. " + mount.Describe());
-            Assert.That(mount.MotorTravelDeg, Is.Zero);
-            Assert.That(fake.LeaseCalls, Is.Empty, "refused before the camera is taken");
-            Assert.That(ws.Count(WsEventCatalog.PolarAlignStarted), Is.Zero);
-        }
-
         // ── Stop ─────────────────────────────────────────────────────────────────────────────
 
         [Test]
         public async Task Stop_mid_turn_on_the_GEM_aborts_the_true_turn_where_it_is_and_nothing_moves_after() {
             // The daemon's own motor speeds and the bench's 30° step: the first turn takes about 12 s.
-            var mount = FakeGemMount.CounterweightDownAt(-4.0, 85.0, lstHours: 20.0);
+            var mount = GemAt(-4.0, 85.0, lstHours: 20.0);
             var ws = new WsRecorder();
             using var svc = NewGemService(mount, ws, NewStore(), benchMotors: false);
-            await svc.StartConfirmedAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
             await mount.FirstMove.Task.WaitAsync(SignalTimeout).ConfigureAwait(false);
 
             var at = mount.Now;
@@ -202,12 +175,12 @@ namespace OpenAstroAra.Test {
 
         [Test]
         public async Task A_stop_the_GEM_ignores_is_reported_mount_did_not_stop_while_its_true_RA_axis_runs_on() {
-            var mount = FakeGemMount.CounterweightDownAt(-4.0, 85.0, lstHours: 20.0);
+            var mount = GemAt(-4.0, 85.0, lstHours: 20.0);
             mount.AbortIgnored = int.MaxValue;
             mount.MoveAxisStopIgnored = int.MaxValue;
             var ws = new WsRecorder();
             using var svc = NewGemService(mount, ws, NewStore(), benchMotors: false);
-            await svc.StartConfirmedAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
             await mount.FirstMove.Task.WaitAsync(SignalTimeout).ConfigureAwait(false);
 
             var at = mount.Now;
@@ -227,12 +200,12 @@ namespace OpenAstroAra.Test {
 
         [Test]
         public async Task A_refused_motor_move_on_the_GEM_fails_the_run_with_nothing_moved_and_tracking_off() {
-            var mount = FakeGemMount.CounterweightDownAt(-4.0, 85.0, lstHours: 20.0);
+            var mount = GemAt(-4.0, 85.0, lstHours: 20.0);
             mount.MoveAxisRefused = true;
             var ws = new WsRecorder();
             using var svc = NewGemService(mount, ws, HandBackStore());
 
-            await svc.StartConfirmedAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
             var error = await WaitForEventAsync(ws, WsEventCatalog.PolarAlignError).ConfigureAwait(false);
 
             Assert.That(error.GetProperty("reason").GetString(), Is.EqualTo("slew_failed"));
@@ -242,33 +215,5 @@ namespace OpenAstroAra.Test {
             mount.AssertCommon(LastEventIndex(ws, WsEventCatalog.PolarAlignError), CounterweightLimitDeg);
         }
 
-        // ── the sweep origin across runs ─────────────────────────────────────────────────────
-
-        [Test]
-        public async Task Repeated_starts_on_the_GEM_keep_the_true_RA_axis_within_20_degrees_of_the_origin() {
-            var mount = PolledGemAt(-4.0);
-            var ws = new WsRecorder();
-            using var svc = NewGemService(mount, ws);
-
-            var directions = new List<string>();
-            for (var run = 0; run < 5; run++) {
-                directions.Add((await FineRunToAdjustingAsync(svc).ConfigureAwait(false)).Direction);
-                await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
-            }
-
-            Assert.That(directions, Is.EqualTo(new[] {
-                PolarAlignDirections.East, PolarAlignDirections.West, PolarAlignDirections.East, PolarAlignDirections.West, PolarAlignDirections.East,
-            }));
-            Assert.That(RaTurns(mount), Has.Length.EqualTo(10), mount.Describe());
-            // The true RA axis swings between the origin and 20° east of it: never toward the walk to the pier.
-            var excursion = mount.MaxTrueRaExcursionDeg(TimeSpan.Zero);
-            Assert.That(excursion, Is.EqualTo(20.0).Within(2 * TrueTurnToleranceDeg), mount.Describe());
-            Assert.That(excursion, Is.LessThan(PolarAlignService.MaxSweepFromOriginDeg));
-            Assert.That(mount.MaxTruePhiDeg, Is.LessThanOrEqualTo(30.0 + TrueTurnToleranceDeg),
-                "every turn stayed between φ 30° and φ 10°, give or take a turn back to the origin landing a little past it");
-            Assert.That(mount.TotalTrueRaSweepDeg, Is.EqualTo(100.0).Within(10 * TrueTurnToleranceDeg));
-            mount.AssertEndedStopped(tracking: false);
-            mount.AssertCommon(LastEventIndex(ws, WsEventCatalog.PolarAlignStopped), CounterweightLimitDeg);
-        }
     }
 }

@@ -36,7 +36,7 @@ namespace OpenAstroAra.Test {
 
         [Test]
         public async Task Stop_retries_until_stopped() {
-            var mount = FakeGemMount.CounterweightDownAt(-4.0, 85.0, lstHours: 20.0);
+            var mount = GemAt(-4.0, 85.0, lstHours: 20.0);
             mount.AbortIgnored = 2; // abort_ignored=2: the Stop's first AbortSlew and the exit's first are ignored
             mount.MoveAxisStopIgnored = int.MaxValue; // only an AbortSlew stops this mount
             var ws = new WsRecorder();
@@ -60,16 +60,13 @@ namespace OpenAstroAra.Test {
         // after the last send, keep that from counting as stopped, and the stop is resent while the mount still turns.
         [Test]
         public async Task M08_Slewing_false_early_through_a_1s_cache_is_not_confirmed_and_the_stop_is_resent() {
-            var mount = FakeGemMount.CounterweightDownAt(-4.0, 85.0, lstHours: 20.0);
+            var mount = GemAt(-4.0, 85.0, lstHours: 20.0);
             mount.DriverCache = TimeSpan.FromSeconds(1);
             mount.SlewingFalseAfter = TimeSpan.FromSeconds(0.5);
             mount.AbortIgnored = 2;
             mount.MoveAxisStopIgnored = int.MaxValue;
             var ws = new WsRecorder();
-            using var svc = await InFirstGemTurnAsync(mount, ws, s => {
-                UseTheContractsStopTimings(s);
-                s.AxisMoveStall = TimeSpan.FromSeconds(10); // the daemon's: the 1 s cache holds the reading still between refreshes
-            }).ConfigureAwait(false);
+            using var svc = await InFirstGemTurnAsync(mount, ws, UseTheContractsStopTimings).ConfigureAwait(false);
             await Task.Delay(TimeSpan.FromSeconds(0.6)).ConfigureAwait(false); // Slewing lies from here on
 
             var at = mount.Now;
@@ -89,7 +86,7 @@ namespace OpenAstroAra.Test {
         // still finds two still reads inside its window.
         [Test]
         public async Task M06_Stop_mid_turn_with_1s_slow_GETs_goes_out_within_1s_and_is_confirmed() {
-            var mount = FakeGemMount.CounterweightDownAt(-4.0, 85.0, lstHours: 20.0);
+            var mount = GemAt(-4.0, 85.0, lstHours: 20.0);
             mount.SlowReads = TimeSpan.FromSeconds(1);
             var ws = new WsRecorder();
             using var svc = await InFirstGemTurnAsync(mount, ws, UseTheContractsStopTimings).ConfigureAwait(false);

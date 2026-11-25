@@ -250,47 +250,6 @@ String moonWidthComparison(double arcmin) {
   return "1/${(moon / a).round()} of the Moon's width";
 }
 
-/// Which side of the pole the mount axis sits on, from the rough stage's readout.
-enum PolarSide { above, below, east, west }
-
-/// Rough stage: which side of the pole the axis sits. Null until both errors
-/// are known; both fields null = on the pole (under half an arcminute each
-/// way). Positive az = east of the pole as seen facing it, in both
-/// hemispheres. Pure — the English sentence and Simple Mode's localised one
-/// are built on it.
-({PolarSide? vertical, PolarSide? side})? polarSideOfPole(double? altArcmin, double? azArcmin) {
-  if (altArcmin == null || azArcmin == null) return null;
-  final vertical = altArcmin.abs() < 0.5
-      ? null
-      : altArcmin > 0
-          ? PolarSide.above
-          : PolarSide.below;
-  final side = azArcmin.abs() < 0.5
-      ? null
-      : azArcmin > 0
-          ? PolarSide.east
-          : PolarSide.west;
-  return (vertical: vertical, side: side);
-}
-
-/// Rough stage: which side of the pole the axis sits, in words, in the user's
-/// language — the one sentence the Full UI and Simple Mode share. Null until
-/// both errors are known. Pure — unit-tested.
-String? polarSideOfPoleText(AppLocalizations l10n, double? altArcmin, double? azArcmin) {
-  final where = polarSideOfPole(altArcmin, azArcmin);
-  if (where == null) return null;
-  if (where.vertical == null && where.side == null) return l10n.polarSideOnPole;
-  final parts = [
-    if (where.vertical == PolarSide.above) l10n.polarSideAbove,
-    if (where.vertical == PolarSide.below) l10n.polarSideBelow,
-    if (where.side == PolarSide.east) l10n.polarSideEast,
-    if (where.side == PolarSide.west) l10n.polarSideWest,
-  ];
-  final joined = parts.join(l10n.polarSideJoin);
-  // "above the pole" but "east of the pole" / "above and east of the pole".
-  return where.side == null ? l10n.polarSideSitsVertical(joined) : l10n.polarSideSits(joined);
-}
-
 /// The zooming bullseye: three concentric rings, cross-hairs, and the RA-axis
 /// dot at [dotFraction] (unit square, (0,0) = pole).
 class BullseyePainter extends CustomPainter {

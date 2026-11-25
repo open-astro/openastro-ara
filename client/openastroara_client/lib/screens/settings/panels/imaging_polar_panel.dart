@@ -3,15 +3,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../l10n/l10n.dart';
 import '../../../models/polar_align.dart';
-import '../../../state/polar_align/polar_align_motor_direction_state.dart';
-import '../../../state/polar_align/polar_align_state.dart';
 import '../../../state/polar_align/polar_align_routine_state.dart';
 import '../../../state/settings/loaded_section.dart';
 import '../../../state/settings/polar_align_settings_state.dart';
 import '../../../util/friendly_error.dart';
 import '../../../widgets/settings/editable_field.dart';
 import '../../../widgets/settings/section_panel.dart';
-import '../../../widgets/imaging/polar_preflight_checklist.dart';
 import '../../../widgets/settings/settings_row.dart';
 import '../../../theme/ara_colors.dart';
 
@@ -30,11 +27,13 @@ class ImagingPolarPanel extends ConsumerStatefulWidget {
 class _ImagingPolarPanelState extends ConsumerState<ImagingPolarPanel>
     with SectionPanel {
   static const _auto = 'auto';
+  static const _east = 'east';
+  static const _west = 'west';
 
   static String _eastDirectionKey(bool? east) => switch (east) {
     null => _auto,
-    true => PolarAlignDirections.east,
-    false => PolarAlignDirections.west,
+    true => _east,
+    false => _west,
   };
 
   @override
@@ -137,14 +136,14 @@ class _ImagingPolarPanelState extends ConsumerState<ImagingPolarPanel>
           hint: l10n.polarKnobVerifyStepHint,
         ),
         number(
-          l10n.polarKnobRoughExposure,
+          l10n.polarKnobMainExposure,
           s.coarseExposureSeconds,
           (x) => x.coarseExposureSeconds,
           (x, v) => x.copyWith(coarseExposureSeconds: v),
           helpKey: 'img.polar.coarse_exposure_seconds',
           range: polarCoarseExposureRange,
         ),
-        // #2082 the measurement's camera; Rough first is always the main one.
+        // #2082 the measurement's camera.
         SettingsDropdownRow<String>(
           key: const Key('polar-knob-camera'),
           label: l10n.polarKnobCamera,
@@ -179,8 +178,7 @@ class _ImagingPolarPanelState extends ConsumerState<ImagingPolarPanel>
             }
           },
         ),
-        // #2081 the way a new start pose's turns go (NINA's East direction);
-        // later starts turn back toward it.
+        // #2081 the way a run's turns go (NINA's East direction).
         SettingsDropdownRow<String>(
           key: const Key('polar-knob-east-direction'),
           label: l10n.polarKnobEastDirection,
@@ -188,15 +186,15 @@ class _ImagingPolarPanelState extends ConsumerState<ImagingPolarPanel>
           value: _eastDirectionKey(s.eastDirection),
           items: {
             _auto: l10n.polarKnobEastDirectionAuto,
-            PolarAlignDirections.east: l10n.polarKnobEastDirectionEast,
-            PolarAlignDirections.west: l10n.polarKnobEastDirectionWest,
+            _east: l10n.polarKnobEastDirectionEast,
+            _west: l10n.polarKnobEastDirectionWest,
           },
           onChanged: (v) {
             final now = ref.read(polarAlignSettingsProvider).value ?? s;
             if (v == null || v == _eastDirectionKey(now.eastDirection)) return;
             final east = switch (v) {
-              PolarAlignDirections.east => true,
-              PolarAlignDirections.west => false,
+              _east => true,
+              _west => false,
               _ => null,
             };
             save((x) => x.withEastDirection(east));
@@ -211,107 +209,6 @@ class _ImagingPolarPanelState extends ConsumerState<ImagingPolarPanel>
             ),
           ),
         ),
-        // #2081 the RA motor direction the 0.5° test saved, and its retest.
-        const PolarMotorDirectionRow(),
-        // #2068 per mount: how far the run turns the mount and whether the room for it is confirmed (#2165).
-        const PolarClearanceSettingsRow(),
-      ],
-    );
-  }
-}
-
-/// #2081 Settings › Imaging › Polar align: the RA motor direction Polar align
-/// tested and saved for this mount ([polarAlignMotorDirectionProvider]), and
-/// "Test direction again", which forgets it so the next start tests it with a
-/// 0.5° turn its confirm step shows.
-class PolarMotorDirectionRow extends ConsumerStatefulWidget {
-  const PolarMotorDirectionRow({super.key});
-
-  @override
-  ConsumerState<PolarMotorDirectionRow> createState() =>
-      _PolarMotorDirectionRowState();
-}
-
-class _PolarMotorDirectionRowState
-    extends ConsumerState<PolarMotorDirectionRow> {
-  bool _busy = false;
-
-  Future<void> _retest() async {
-    final messenger = ScaffoldMessenger.of(context);
-    final l10n = context.l10n;
-    setState(() => _busy = true);
-    try {
-      await ref.read(polarAlignMotorDirectionProvider.notifier).retest();
-      messenger.showSnackBar(
-        SnackBar(content: Text(l10n.polarMotorDirectionRetestDone)),
-      );
-    } catch (e) {
-      messenger.showSnackBar(
-        SnackBar(
-          content: Text(
-            friendlyError(l10n, e, action: l10n.polarMotorDirectionRetest),
-          ),
-        ),
-      );
-    } finally {
-      if (mounted) setState(() => _busy = false);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = context.l10n;
-    final direction = ref.watch(polarAlignMotorDirectionProvider);
-    final text = direction.when(
-      data: (d) {
-        final saved = d?.saved;
-        if (d == null) return l10n.polarMotorDirectionUnknown;
-        if (saved == null) return l10n.polarMotorDirectionUntested;
-        // #2167 — the identity the rig keyed it to: the mount, and its
-        // driver's name and version only when the driver reported them.
-        final driver = [
-          saved.driverInfo.trim(),
-          saved.driverVersion.trim(),
-        ].where((p) => p.isNotEmpty).join(' ');
-        final mount = driver.isEmpty
-            ? saved.mountKey
-            : l10n.polarMotorDirectionMountDriver(saved.mountKey, driver);
-        if (d.matchesConnectedMount == false) {
-          return l10n.polarMotorDirectionOtherDriver(mount);
-        }
-        return l10n.polarMotorDirectionSaved(
-          mount,
-          saved.sign > 0 ? l10n.polarDirectionEast : l10n.polarDirectionWest,
-        );
-      },
-      loading: () => '…',
-      error: (_, _) => l10n.polarMotorDirectionReadFailed,
-    );
-    // Off while a run is going: its own 0.5° test could save a direction right
-    // after the forget (the rig refuses it then too).
-    final runActive = ref.watch(
-      polarAlignLiveProvider.select((l) => l.isActive),
-    );
-    final canRetest = direction.value?.saved != null && !_busy && !runActive;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        SettingsRow(
-          key: const Key('polar-motor-direction'),
-          label: l10n.polarMotorDirection,
-          value: text,
-          helpKey: 'img.polar.motor_direction',
-        ),
-        Align(
-          alignment: Alignment.centerLeft,
-          child: OutlinedButton.icon(
-            key: const Key('polar-motor-direction-retest'),
-            onPressed: canRetest ? _retest : null,
-            icon: const Icon(Icons.refresh, size: 18),
-            label: Text(l10n.polarMotorDirectionRetest),
-          ),
-        ),
-        const SizedBox(height: 8),
       ],
     );
   }

@@ -1,10 +1,7 @@
 import 'package:openastroara/models/polar_align.dart'
     show
-        PolarAlignDirections,
         PolarAlignLastResult,
-        PolarAlignPreflight,
         PolarAlignStages,
-        PolarAlignStartPlan,
         PolarAlignStates,
         PolarAlignStatus;
 import 'package:flutter/foundation.dart' show TargetPlatform;
@@ -48,14 +45,9 @@ class _Side extends Notifier<double> {
 final _side = NotifierProvider<_Side, double>(_Side.new);
 
 class _PolarApi implements PolarAlignClient {
-  @override
-  Future<PolarAlignPreflight?> preflight({String? stage}) async => null;
-  @override
-  Future<PolarAlignStartPlan> startPlan({String? stage}) async =>
-      PolarAlignStartPlan(stage: stage, direction: PolarAlignDirections.east);
   final calls = <String>[];
   @override
-  Future<void> start(PolarAlignStartPlan plan) async => calls.add('start');
+  Future<void> start({String? stage}) async => calls.add('start');
   @override
   Future<void> stop() async => calls.add('stop');
   @override
@@ -118,11 +110,6 @@ AutofocusLive _focusRun(String state, {bool manual = false}) => AutofocusLive(
 
 /// The rig's status: only its last polar-align result, which the test moves.
 class _StatusApi implements PolarAlignClient {
-  @override
-  Future<PolarAlignPreflight?> preflight({String? stage}) async => null;
-  @override
-  Future<PolarAlignStartPlan> startPlan({String? stage}) async =>
-      PolarAlignStartPlan(stage: stage, direction: PolarAlignDirections.east);
   PolarAlignLastResult? last;
   String state = PolarAlignStates.idle;
   @override

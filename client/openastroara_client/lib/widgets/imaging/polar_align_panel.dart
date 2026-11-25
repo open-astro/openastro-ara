@@ -8,7 +8,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../models/polar_align.dart';
 import '../../services/polar_align_api.dart' show PolarAlignClient;
 import '../../state/night_mode_state.dart';
-import '../../state/polar_align/polar_align_preflight_state.dart';
 import '../../state/polar_align/polar_align_routine_state.dart';
 import '../../state/polar_align/polar_align_state.dart';
 import '../../state/polar_align/polar_aligner_state.dart';
@@ -26,8 +25,6 @@ import '../help_icon.dart';
 import 'polar_advanced_row.dart';
 import 'polar_align_readout.dart';
 import 'polar_aligner_block.dart';
-import 'polar_preflight_checklist.dart';
-import 'polar_start_confirm.dart';
 import '../adaptive_controls.dart';
 import '../settings/section_load_state.dart';
 
@@ -276,10 +273,6 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
             ),
             const SizedBox(height: 12),
           ],
-          if (live.isActive || live.phase == PolarAlignStates.checked) ...[
-            _stageStrip(live),
-            SizedBox(height: _short ? 8 : 12),
-          ],
           // #1971 the shared Polar Aligner module, placed with no other layout change.
           if (polarAlignerShown(ref.watch(polarAlignerProvider))) ...[
             const PolarAlignerBlock(),
@@ -291,56 +284,10 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
     );
   }
 
-  /// The three measurements as chips — the one running lit, a finished check
-  /// ticked. Each Start makes one of them (#2082): none leads into another, so
-  /// no other chip is ticked.
-  Widget _stageStrip(PolarAlignLive live) {
-    // A null stage is an older daemon's one-stage routine — the fine routine,
-    // as the fold and the Simple panel read it.
-    final current = PolarAlignStages.indexOf(live.stage) ?? 1;
-    final checkedDone = live.phase == PolarAlignStates.checked;
-    const labels = ['Rough', 'Fine', 'Check'];
-    return Row(
-      key: const Key('polar-align-stages'),
-      children: [
-        for (var i = 0; i < labels.length; i++) ...[
-          if (i > 0) const Expanded(child: Divider(height: 1, color: AraColors.frameDivider)),
-          Builder(builder: (context) {
-            final done = checkedDone && i == current;
-            final active = i == current && !checkedDone;
-            final tint = active
-                ? AraColors.accentInfo
-                : done
-                    ? AraColors.accentConnected
-                    : AraColors.textDisabled;
-            return Container(
-              key: Key('polar-align-stage-${PolarAlignStages.all[i]}'),
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-              decoration: BoxDecoration(
-                color: tint.withValues(alpha: active ? 0.18 : 0.08),
-                borderRadius: BorderRadius.circular(999),
-                border: active ? Border.all(color: tint, width: 1) : null,
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  if (done) Icon(Icons.check, size: 14, color: tint),
-                  if (done) const SizedBox(width: 4),
-                  Text(labels[i],
-                      style: TextStyle(fontSize: _smallFont, fontWeight: FontWeight.w600, color: tint)),
-                ],
-              ),
-            );
-          }),
-        ],
-      ],
-    );
-  }
-
   String _headerSummary(PolarAlignLive live) {
     switch (live.phase) {
       case PolarAlignStates.homing:
-        return live.waitingForHome ? 'Put the mount at Home' : 'Going Home';
+        return 'Going Home';
       case PolarAlignStates.checking:
         return 'Checking ${live.checkSolvesDone}/${live.checkSolvesTotal}';
       case PolarAlignStates.checked:
@@ -364,7 +311,6 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
     final tint = switch (live.phase) {
       PolarAlignStates.failed => AraColors.accentError,
       PolarAlignStates.paused => AraColors.accentBusy,
-      PolarAlignStates.homing when live.waitingForHome => AraColors.accentBusy,
       PolarAlignStates.checked => AraColors.accentConnected,
       _ => AraColors.accentInfo,
     };
@@ -400,7 +346,7 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
     }
     switch (live.phase) {
       case PolarAlignStates.homing:
-        return _homingBody(live);
+        return _homingBody();
       case PolarAlignStates.seeding:
         return _seedingBody(live);
       case PolarAlignStates.adjusting:
@@ -415,37 +361,13 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
     }
   }
 
-  /// #2048 — every start goes through the confirm step: the rig says which way
-  /// RA will turn from where the mount points, and nothing moves until the
-  /// user confirms.
-  Future<void> _start({String? stage}) => _run(
-        'start polar alignment',
-        (api) => confirmAndStartPolarAlign(
-          context,
-          api,
-          stage: stage,
-          confirmClearance: (reach) => confirmPolarClearanceForStart(context, ref, reach),
-        ),
-      );
+  /// One measurement at [stage] (null = fine), from the mount's Home position.
+  Future<void> _start({String? stage}) =>
+      _run('start polar alignment', (api) => api.start(stage: stage));
 
-  /// #2082 — Check: a confirmed Start(check) through the rig's sweep plan. From
-  /// the adjust loop the rig ends the loop first (like Stop), then measures.
+  /// Check: a three-point measurement of its own. From the adjust loop the rig
+  /// ends the loop first (like Stop), then measures.
   Future<void> _check() => _start(stage: PolarAlignStages.check);
-
-  /// #2082 Rough first (the main camera's measurement) is offered only after
-  /// the guide camera could not solve the pole field (Joey, 2026-11-20): not
-  /// after a run on the main camera, which just failed.
-  static bool _roughFirstOffered(PolarAlignLive live) =>
-      live.phase == PolarAlignStates.failed &&
-      live.errorReason == 'seed_solve_failed' &&
-      !live.usesMainCamera;
-
-  /// The Rough first caption: the rig's own turn, twice. Null until its
-  /// settings are in (ADR 0015).
-  String? get _roughFirstCaption => switch (_settings) {
-    final s? => context.l10n.polarRoughFirstCaption(s.seedRotationDeg.toStringAsFixed(0)),
-    null => null,
-  };
 
   /// The Check button's caption: how far it turns the mount before it moves.
   /// Only the rig's own step: null until its settings are in (ADR 0015).
@@ -454,49 +376,35 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
     null => null,
   };
 
-  /// An older daemon only: the mount is going Home, or waits for the user to
-  /// put it there (#2048 retired both; Continue went with Next, #2082).
-  Widget _homingBody(PolarAlignLive live) {
-    final waiting = live.waitingForHome;
+  /// The mount is going Home.
+  Widget _homingBody() {
     final card = _card(
       child: Column(
         children: [
           Align(alignment: Alignment.centerLeft, child: _sectionLabel('Home position')),
           const SizedBox(height: 28),
-          if (waiting)
-            const Icon(Icons.home_outlined, size: 32, color: AraColors.accentBusy)
-          else
-            const SizedBox.square(dimension: 28, child: AdaptiveProgressIndicator(strokeWidth: 2.5)),
+          const SizedBox.square(dimension: 28, child: AdaptiveProgressIndicator(strokeWidth: 2.5)),
           const SizedBox(height: 20),
-          Text(
-            waiting ? 'Put the mount in its home position' : 'Sending the mount Home',
-            key: const Key('polar-align-homing-title'),
-            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+          const Text(
+            'Sending the mount Home',
+            key: Key('polar-align-homing-title'),
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
           ),
           const SizedBox(height: 6),
-          Text(
-            waiting
-                ? 'This mount cannot find Home by itself. Abort, point the tube 2–5° from the pole '
-                    'with the counterweights down, then start again.'
-                : 'Counterweights down, tube along the RA axis. Leave the mount alone until it stops.',
+          const Text(
+            'Counterweights down, tube along the RA axis. Leave the mount alone until it stops.',
             textAlign: TextAlign.center,
-            style: const TextStyle(fontSize: _textFont, color: AraColors.textSecondary, height: 1.4),
+            style: TextStyle(fontSize: _textFont, color: AraColors.textSecondary, height: 1.4),
           ),
           if (_status != null) ...[
             const SizedBox(height: 12),
             _callout(_status!, AraColors.accentError, Icons.error_outline),
           ],
           const SizedBox(height: 20),
-          Wrap(
-            spacing: 8,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            children: [
-              TextButton(
-                key: const Key('polar-align-abort-homing'),
-                onPressed: _busy ? null : _abort,
-                child: const Text('Abort'),
-              ),
-            ],
+          TextButton(
+            key: const Key('polar-align-abort-homing'),
+            onPressed: _busy ? null : _abort,
+            child: const Text('Abort'),
           ),
         ],
       ),
@@ -683,17 +591,11 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
                     key: const Key('polar-align-check-disagree'),
                   ),
                 ],
-                if (r?.decSpreadArcsec != null) ...[
-                  const SizedBox(height: 12),
-                  _callout(context.l10n.polarDecSpreadWarning(r!.decSpreadArcsec!.toStringAsFixed(1)), AraColors.accentBusy,
-                      Icons.warning_amber_outlined,
-                      key: const Key('polar-align-check-dec-spread')),
-                ],
                 if (r != null) ...[
                   const SizedBox(height: 14),
                   Text(
                     'Pointings ${r.coneHalfAngleDeg.toStringAsFixed(1)}° off the axis · solved turns within '
-                    "${r.turnMismatchDeg.toStringAsFixed(2)}° of the mount's own",
+                    '${r.turnMismatchDeg.toStringAsFixed(2)}° of the turns the mount was told',
                     style: const TextStyle(fontSize: 13, color: AraColors.textSecondary),
                   ),
                   const SizedBox(height: 6),
@@ -719,10 +621,7 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
             children: [
               TextButton.icon(
                 key: const Key('polar-align-adjust-again'),
-                // #2068 — a fine start: off while a pre-flight check fails.
-                onPressed: _busy || polarPreflightBlocksStart(ref.watch(polarAlignPreflightProvider))
-                    ? null
-                    : () => _start(stage: PolarAlignStages.fine),
+                onPressed: _busy ? null : () => _start(stage: PolarAlignStages.fine),
                 icon: const Icon(Icons.tune),
                 label: const Text('Adjust again'),
               ),
@@ -742,17 +641,12 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
   }
 
   Widget _idleBody(PolarAlignLive live) {
-    // #2068 — a pre-flight check that fails turns the starts off: the rig would refuse them.
-    final preflight = ref.watch(polarAlignPreflightProvider);
-    final off = _busy || polarPreflightBlocksStart(preflight);
-    // A Check turns by its own step: the fine stage's start pointing is not its own (the rig judges it).
-    final checkOff = _busy || polarPreflightBlocksCheck(preflight);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const Text(
-          'Point the tube 2–5° from the pole, counterweights down: each Start measures from there, never Home or a GoTo. '
-          'Start: the guide camera measures the axis around two RA turns, then guides the knobs live until Done. '
+          'Send the mount Home first (tube at the pole, counterweights down): each Start measures from there. '
+          'Start: three solves around two RA turns measure the axis, then the readout follows the knobs live until Done. '
           'Check: three solves around two RA turns measure the result on their own. '
           'Each is one measurement: nothing moves on to the next by itself.',
           style: TextStyle(fontSize: _textFont, color: AraColors.textSecondary, height: 1.4),
@@ -778,8 +672,6 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
           const SizedBox(height: 12),
           _callout(_status!, AraColors.accentError, Icons.error_outline),
         ],
-        const SizedBox(height: 12),
-        const PolarPreflightChecklist(),
         const SizedBox(height: 16),
         Wrap(
           spacing: 16,
@@ -789,24 +681,16 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
             _captureSettings(),
             FilledButton.icon(
               key: const Key('polar-align-start'),
-              onPressed: off ? null : () => _start(),
+              onPressed: _busy ? null : () => _start(),
               icon: const Icon(Icons.play_arrow),
               label: const Text('Start Polar Alignment'),
             ),
             OutlinedButton.icon(
               key: const Key('polar-align-start-check'),
-              onPressed: checkOff ? null : _check,
+              onPressed: _busy ? null : _check,
               icon: const Icon(Icons.fact_check_outlined),
               label: Text(context.l10n.polarCheck),
             ),
-            // #2082 — the main camera's measurement, once the guide camera could not
-            // solve the pole field (Joey, 2026-11-20).
-            if (_roughFirstOffered(live))
-              TextButton(
-                key: const Key('polar-align-start-rough'),
-                onPressed: off ? null : () => _start(stage: PolarAlignStages.coarse),
-                child: Text(context.l10n.polarRoughFirst),
-              ),
           ],
         ),
         if (_checkCaption case final caption?) ...[
@@ -817,16 +701,6 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
             style: const TextStyle(fontSize: _smallFont, color: AraColors.textSecondary),
           ),
         ],
-        // #2082 Rough first says how far it turns the mount, like Check.
-        if (_roughFirstOffered(live))
-          if (_roughFirstCaption case final caption?) ...[
-            const SizedBox(height: 4),
-            Text(
-              caption,
-              key: const Key('polar-align-rough-caption'),
-              style: const TextStyle(fontSize: _smallFont, color: AraColors.textSecondary),
-            ),
-          ],
         // #1736 the routine's four knobs, collapsed.
         const PolarAdvancedRow(),
       ],
@@ -891,21 +765,8 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
     // measurement cannot confirm it; Done stays available (Joey, 2026-11-21).
     final unconfirmed = polarUnconfirmedText(context.l10n, live.totalErrorArcmin, live.totalSigmaArcmin, tolerance);
     final single = _settings?.loopMode == PolarAlignLoopModes.single;
-    final coarse = live.stage == PolarAlignStages.coarse;
-    final side = coarse ? polarSideOfPoleText(context.l10n, live.altErrorArcmin, live.azErrorArcmin) : null;
     return FitColumn(
       children: [
-        if (coarse) ...[
-          _callout(
-            side == null
-                ? 'Rough step — the main camera measures the mount axis with a turn in RA, then follows your knob moves. Waiting for the first solve…'
-                : '$side Make the big moves now. Within a few arcminutes, Abort and start again: the guide camera refines it.',
-            AraColors.accentInfo,
-            Icons.explore_outlined,
-            key: const Key('polar-align-coarse-banner'),
-          ),
-          SizedBox(height: _short ? 8 : 12),
-        ],
         if (polarInitialErrorText(context.l10n, live.initialErrorArcmin) case final warning?) ...[
           _callout(
             warning,
@@ -1010,50 +871,32 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
                     icon: const Icon(Icons.camera),
                     label: const Text('Take Frame'),
                   ),
-                if (coarse && inTolerance)
-                  // #1875: the rough alignment may already be inside the tolerance.
-                  OutlinedButton.icon(
-                    key: const Key('polar-align-done-rough'),
-                    onPressed: _busy
+                Tooltip(
+                  message: inTolerance || tolerance == null
+                      ? ''
+                      : 'Available once the total error is under ${tolerance.toStringAsFixed(1)}′',
+                  child: FilledButton.tonalIcon(
+                    key: const Key('polar-align-done'),
+                    onPressed: _busy || !inTolerance
                         ? null
-                        : () => _run(
-                            'complete polar alignment',
-                            (api) => api.complete(),
-                          ),
+                        : () => _run('complete polar alignment', (api) => api.complete()),
                     icon: const Icon(Icons.check),
                     label: const Text('Done'),
                   ),
-                if (!coarse) ...[
-                  Tooltip(
-                    message: inTolerance || tolerance == null
-                        ? ''
-                        : 'Available once the total error is under ${tolerance.toStringAsFixed(1)}′',
-                    child: FilledButton.tonalIcon(
-                      key: const Key('polar-align-done'),
-                      onPressed: _busy || !inTolerance
-                          ? null
-                          : () => _run('complete polar alignment', (api) => api.complete()),
-                      icon: const Icon(Icons.check),
-                      label: const Text('Done'),
-                    ),
+                ),
+                Tooltip(
+                  message: inTolerance
+                      ? _checkCaption ?? ''
+                      : tolerance == null
+                      ? ''
+                      : 'Available once the total error is under ${tolerance.toStringAsFixed(1)}′',
+                  child: FilledButton.icon(
+                    key: const Key('polar-align-check'),
+                    onPressed: _busy || !inTolerance ? null : _check,
+                    icon: const Icon(Icons.fact_check_outlined),
+                    label: Text(context.l10n.polarCheck),
                   ),
-                  Tooltip(
-                    message: inTolerance
-                        ? _checkCaption ?? ''
-                        : tolerance == null
-                        ? ''
-                        : 'Available once the total error is under ${tolerance.toStringAsFixed(1)}′',
-                    child: FilledButton.icon(
-                      key: const Key('polar-align-check'),
-                      // #2068 — off while a check that does not depend on the turn step fails.
-                      onPressed: _busy || !inTolerance || polarPreflightBlocksCheck(ref.watch(polarAlignPreflightProvider))
-                          ? null
-                          : _check,
-                      icon: const Icon(Icons.fact_check_outlined),
-                      label: Text(context.l10n.polarCheck),
-                    ),
-                  ),
-                ],
+                ),
               ],
             ),
           ],
@@ -1070,7 +913,7 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
             ),
           ),
         ],
-        if (!coarse && _checkCaption != null) ...[
+        if (_checkCaption != null) ...[
           const SizedBox(height: 8),
           Align(
             alignment: Alignment.centerRight,
@@ -1268,14 +1111,6 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
           const SizedBox(height: 12),
           _callout(context.l10n.polarReadoutCautionAltitudeWeak, AraColors.accentBusy, Icons.warning_amber_outlined,
               key: const Key('polar-align-readout-caution')),
-        ],
-        // #2081 NINA's warning: the mount's Dec moved across the seed's three points.
-        if (live.decSpreadArcsec != null &&
-            (live.phase == PolarAlignStates.adjusting || live.phase == PolarAlignStates.paused)) ...[
-          const SizedBox(height: 12),
-          _callout(context.l10n.polarDecSpreadWarning(live.decSpreadArcsec!.toStringAsFixed(1)), AraColors.accentBusy,
-              Icons.warning_amber_outlined,
-              key: const Key('polar-align-dec-spread')),
         ],
         if (live.measurementNoisy &&
             (live.phase == PolarAlignStates.adjusting || live.phase == PolarAlignStates.paused)) ...[
@@ -1539,15 +1374,15 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
   /// [imageHeight] null: the image takes the card's spare height (the card
   /// needs a bounded height).
   Widget _cameraCard(PolarAlignLive live, {double? imageHeight}) {
-    // #2082 the rough stage, or the profile's camera set to main.
-    final coarse = live.usesMainCamera;
+    // #2082 the profile's camera set to main.
+    final mainCamera = live.usesMainCamera;
     // The main camera's snapshot has no preview endpoint: the card shows the solve readout only.
-    final jpeg = coarse ? null : ref.watch(polarAlignFrameProvider);
+    final jpeg = mainCamera ? null : ref.watch(polarAlignFrameProvider);
     final fill = imageHeight == null;
     final body = [
           Row(
             children: [
-              _sectionLabel(coarse ? 'Main camera' : 'Guide camera'),
+              _sectionLabel(mainCamera ? 'Main camera' : 'Guide camera'),
               const Spacer(),
               if (jpeg != null)
                 const Text('Tap to enlarge',
@@ -1569,7 +1404,7 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
                         children: [
                           const Icon(Icons.photo_camera_outlined, size: 28, color: AraColors.textDisabled),
                           const SizedBox(height: 8),
-                          Text(coarse ? 'Main-camera solves (no preview)' : 'Waiting for the first frame…',
+                          Text(mainCamera ? 'Main-camera solves (no preview)' : 'Waiting for the first frame…',
                               style: const TextStyle(fontSize: _textFont, color: AraColors.textSecondary)),
                         ],
                       ),

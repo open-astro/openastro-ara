@@ -36,13 +36,14 @@ namespace OpenAstroAra.Test {
         /// <summary>A guide-camera solver that answers at the hint's RA on the Dec-85° circle, with
         /// <see cref="DecOffsetArcsec"/> added to the frames it names by id, and records each answer. Each answer carries
         /// <see cref="PixelScaleArcsec"/> (null: unknown).</summary>
-        private sealed class ScatterSolver : IPolarAlignFrameSolver {
+        private sealed class ScatterSolver : IPolarAlignFrameSolver, IMountSky {
+            public Func<(double RaDeg, double DecDeg)>? Sky { get; set; }
             public Dictionary<string, double> DecOffsetArcsec { get; } = new(StringComparer.Ordinal);
             public double? PixelScaleArcsec { get; init; }
             public List<(string Frame, double RaDeg)> Answers { get; } = new();
             public Task<PolarAlignSolveOutcome> SolveAsync(string fitsPath, int binning, double? hintRa, double? hintDec, CancellationToken ct) {
                 var frame = Path.GetFileNameWithoutExtension(fitsPath);
-                var ra = hintRa ?? 0.0;
+                var ra = Sky?.Invoke().RaDeg ?? 0.0;
                 lock (Answers) {
                     Answers.Add((frame, ra));
                 }
@@ -73,7 +74,7 @@ namespace OpenAstroAra.Test {
             var ws = new WsRecorder();
             using var svc = NewService(NewFake(), solver, NewPoleMount(), ws, store: StoreWith(s => s with { FramesPerPoint = 3 }));
 
-            await svc.StartConfirmedAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
             var status = await PollStateAsync(svc, "adjusting", "failed").ConfigureAwait(false);
             var progress = await WaitForEventAsync(ws, WsEventCatalog.PolarAlignProgress).ConfigureAwait(false);
             await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
@@ -98,7 +99,7 @@ namespace OpenAstroAra.Test {
             var logger = new CapturingLogger();
             using var svc = NewService(NewFake(), solver, NewPoleMount(), store: NewStore(), logger: logger);
 
-            await svc.StartConfirmedAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
             var status = await PollStateAsync(svc, "adjusting", "failed").ConfigureAwait(false);
             await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
 
@@ -117,7 +118,7 @@ namespace OpenAstroAra.Test {
             var logger = new CapturingLogger();
             using var svc = NewService(NewFake(), solver, NewPoleMount(), store: NewStore(), logger: logger);
 
-            await svc.StartConfirmedAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
             var status = await PollStateAsync(svc, "adjusting", "failed").ConfigureAwait(false);
             await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
 
@@ -139,7 +140,7 @@ namespace OpenAstroAra.Test {
             var logger = new CapturingLogger();
             using var svc = NewService(NewFake(), new ScatterSolver(), NewPoleMount(), store: NewStore(), logger: logger);
 
-            await svc.StartConfirmedAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
             await PollStateAsync(svc, "adjusting", "failed").ConfigureAwait(false);
             await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
 
@@ -152,14 +153,13 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
-        public async Task Rough_Done_inside_the_tolerance_completes_even_while_the_error_plus_two_sigma_is_over_it() {
+        public async Task Done_inside_the_tolerance_completes_even_while_the_error_plus_two_sigma_is_over_it() {
             var log = new RecordingLog();
             var store = NewStore();
-            using var svc = NewService(NewFake(), new HintFollowingSolver(), NewPoleMount(), store: store, log: log, mainCamera: new FakeMainCamera());
+            using var svc = NewService(NewFake(), new MountFollowingSolver(), NewPoleMount(), store: store, log: log);
 
-            await svc.StartConfirmedAsync(PolarAlignStages.Coarse, null, CancellationToken.None).ConfigureAwait(false);
+            await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
             var status = await PollStateAsync(svc, "adjusting", "failed").ConfigureAwait(false);
-            Assert.That(status.Stage, Is.EqualTo(PolarAlignStages.Coarse));
             var total = status.CurrentErrorArcmin!.Value;
             var sigma = status.CurrentSigmaArcmin!.Value;
             Assert.That(sigma, Is.GreaterThan(0.01), "the single-frame floor gives the fit a σ");
@@ -180,7 +180,7 @@ namespace OpenAstroAra.Test {
             var ws = new WsRecorder();
             using var svc = NewService(NewFake(), solver, NewPoleMount(), ws, store: NewStore());
 
-            await svc.StartConfirmedAsync(PolarAlignStages.Check, null, CancellationToken.None).ConfigureAwait(false);
+            await svc.StartAsync(PolarAlignStages.Check, null, CancellationToken.None).ConfigureAwait(false);
             var status = await PollStateAsync(svc, "checked", "failed").ConfigureAwait(false);
             var checkedEvent = await WaitForEventAsync(ws, WsEventCatalog.PolarAlignChecked).ConfigureAwait(false);
 
@@ -199,7 +199,7 @@ namespace OpenAstroAra.Test {
             var logger = new CapturingLogger();
             using var svc = NewService(NewFake(), solver, NewPoleMount(), store: StoreWith(s => s with { FramesPerPoint = 3 }), logger: logger);
 
-            await svc.StartConfirmedAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
             var status = await PollStateAsync(svc, "adjusting", "failed").ConfigureAwait(false);
             await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
 
@@ -266,7 +266,7 @@ namespace OpenAstroAra.Test {
             // End to end: a single-frame check (1″ floor) whose error alone is "excellent".
             var solver = new ScatterSolver();
             using var svc = NewService(NewFake(), solver, NewPoleMount(), store: NewStore());
-            await svc.StartConfirmedAsync(PolarAlignStages.Check, null, CancellationToken.None).ConfigureAwait(false);
+            await svc.StartAsync(PolarAlignStages.Check, null, CancellationToken.None).ConfigureAwait(false);
             var r = (await PollStateAsync(svc, "checked", "failed").ConfigureAwait(false)).CheckResult!;
 
             Assert.That(r.TotalErrorArcmin, Is.LessThanOrEqualTo(1.0), "the error alone is in the excellent band");

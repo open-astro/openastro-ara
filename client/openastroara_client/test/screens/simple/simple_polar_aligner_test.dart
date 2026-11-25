@@ -25,16 +25,11 @@ import 'package:openastroara/state/polar_align/polar_aligner_state.dart';
 import '../../support/polar_align_section.dart';
 
 class _Api implements PolarAlignClient {
-  @override
-  Future<PolarAlignPreflight?> preflight({String? stage}) async => null;
-  @override
-  Future<PolarAlignStartPlan> startPlan({String? stage}) async =>
-      PolarAlignStartPlan(stage: stage, direction: PolarAlignDirections.east);
   final calls = <String>[];
   @override
   Future<PolarAlignStatus?> getStatus() async => null;
   @override
-  Future<void> start(PolarAlignStartPlan plan) async {}
+  Future<void> start({String? stage}) async {}
   @override
   Future<void> stop() async {}
   @override
@@ -196,31 +191,6 @@ void main() {
     _liveNotifier.set(_fine(const PolarAlignerRun(state: 'stopped', cause: 'diverging')));
     await tester.pumpAndSettle();
     expect(_key('simple-polar-done'), findsOneWidget);
-  });
-
-  testWidgets("the rough stage's Done steps aside while the motors work", (tester) async {
-    await _pump(
-        tester,
-        const PolarAlignLive(
-          phase: PolarAlignStates.adjusting,
-          stage: PolarAlignStages.coarse,
-          altErrorArcmin: 0.5,
-          azErrorArcmin: 0.5,
-          totalErrorArcmin: 0.7,
-          correction: PolarAlignerRun(state: 'probing', axis: 'altitude', arcmin: 2),
-        ));
-    expect(_key('simple-polar-next-fine'), findsNothing, reason: 'one measurement per Start (#2082)');
-    expect(_key('simple-polar-done-rough'), findsNothing);
-    _liveNotifier.set(const PolarAlignLive(
-      phase: PolarAlignStates.adjusting,
-      stage: PolarAlignStages.coarse,
-      altErrorArcmin: 0.5,
-      azErrorArcmin: 0.5,
-      totalErrorArcmin: 0.7,
-      correction: PolarAlignerRun(state: 'converged', moves: 2),
-    ));
-    await tester.pumpAndSettle();
-    expect(_key('simple-polar-done-rough'), findsOneWidget, reason: 'back once the motors rest');
   });
 
   testWidgets('Stop motors in the panel stops them in the routine', (tester) async {

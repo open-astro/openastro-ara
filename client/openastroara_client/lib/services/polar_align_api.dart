@@ -11,19 +11,10 @@ import 'refusal.dart';
 abstract interface class PolarAlignClient {
   Future<PolarAlignStatus?> getStatus();
 
-  /// #2048 — what a start at [stage] would do, for the confirm step the user
-  /// answers before the mount moves.
-  Future<PolarAlignStartPlan> startPlan({String? stage});
-
-  /// #2068 the pre-flight list for a start at [stage]: every check the rig
-  /// refuses a start on. Null from a rig that predates it (a 404).
-  Future<PolarAlignPreflight?> preflight({String? stage});
-
-  /// Begin the [plan] the user confirmed: from where the mount points, one
-  /// measurement at its stage, turning its direction (#2082: a measurement
-  /// never leads into another; a check started from the adjust loop ends the
-  /// loop first).
-  Future<void> start(PolarAlignStartPlan plan);
+  /// Begin one measurement at [stage] ([PolarAlignStages]; null = fine), from
+  /// the mount's Home position. A measurement never leads into another; a
+  /// check started from the adjust loop ends the loop first.
+  Future<void> start({String? stage});
   Future<void> stop();
   Future<void> complete();
   Future<void> requestCapture();
@@ -65,75 +56,18 @@ class PolarAlignApi implements PolarAlignClient {
     }
   }
 
-  static Map<String, dynamic>? _planQuery(String? stage) =>
-      stage == null ? null : <String, dynamic>{'stage': stage};
-
-  /// #2048 — the confirm step's plan: the RA turn direction from where the
-  /// mount points now, the step, and the most the run turns. A parked mount is
-  /// the `polar-align-mount-parked` [Refusal].
+  /// Begin one measurement at [stage]. 202-Accepted; a start the rig refuses
+  /// surfaces as a 409/422, and one with a declared cause (a parked mount, a
+  /// mount not at Home, an unverified mount clock or position) is a [Refusal].
+  /// A check waits [endTimeout]: from the adjust screen the daemon ends the
+  /// loop (a confirmed stop) first.
   @override
-  Future<PolarAlignStartPlan> startPlan({String? stage}) async {
-    final Response<dynamic> res;
-    try {
-      res = await _dio.get<dynamic>(
-        '/api/v1/equipment/polaralign/start-plan',
-        queryParameters: _planQuery(stage),
-      );
-    } on DioException catch (e) {
-      final refusal = Refusal.fromDio(e);
-      if (refusal != null) throw refusal;
-      rethrow;
-    }
-    final data = res.data;
-    if (data is! Map<String, dynamic>) {
-      throw const FormatException('start-plan returned a non-object body');
-    }
-    return PolarAlignStartPlan.fromJson(data, stage: stage);
-  }
-
-  /// #2068 (ARA-18) the Start card's pre-flight list: always 200, a check
-  /// that fails is a row. Null on a 404 (an older rig): the card then shows no
-  /// list and the rig's own start refusals stand.
-  @override
-  Future<PolarAlignPreflight?> preflight({String? stage}) async {
-    final Response<dynamic> res;
-    try {
-      res = await _dio.get<dynamic>(
-        '/api/v1/equipment/polaralign/preflight',
-        queryParameters: _planQuery(stage),
-      );
-    } on DioException catch (e) {
-      if (e.response?.statusCode == 404) return null;
-      rethrow;
-    }
-    final data = res.data;
-    if (data is! Map<String, dynamic>) {
-      throw const FormatException('preflight returned a non-object body');
-    }
-    return PolarAlignPreflight.fromJson(data);
-  }
-
-  /// Begin the routine (preflight: connected guider + mount, configured site)
-  /// at the [plan]'s stage, confirmed by the user with the plan's direction
-  /// (#2048). 202-Accepted; a failed preflight surfaces as a 409/422 — a
-  /// parked mount, a direction that changed since, a scope within 3° of the
-  /// pole or turns past the sweep limit is a [Refusal]. `/polaralign/next` is
-  /// retired (#2082): this client never calls it. A check waits [endTimeout]:
-  /// from the adjust screen the daemon ends the loop (a confirmed stop) first.
-  @override
-  Future<void> start(PolarAlignStartPlan plan) async {
+  Future<void> start({String? stage}) async {
     try {
       await _dio.post<void>(
         '/api/v1/equipment/polaralign/start',
-        data: <String, dynamic>{
-          if (plan.stage != null) 'stage': plan.stage,
-          'confirmed': true,
-          'direction': plan.direction,
-          'new_origin': plan.newOrigin,
-          // #2081 — the user saw the 0.5° motor-direction test.
-          if (plan.directionTestDeg > 0) 'direction_test': true,
-        },
-        options: plan.stage == PolarAlignStages.check ? Options(receiveTimeout: endTimeout) : null,
+        data: <String, dynamic>{'stage': ?stage},
+        options: stage == PolarAlignStages.check ? Options(receiveTimeout: endTimeout) : null,
       );
     } on DioException catch (e) {
       final refusal = Refusal.fromDio(e);
@@ -259,54 +193,6 @@ class PolarAlignerApi implements PolarAlignerClient {
 
   @override
   Future<void> resumeInRoutine() => _dio.post<void>('/api/v1/equipment/polaralign/correction/resume');
-
-  @override
-  void close() => _dio.close(force: true);
-}
-
-/// #2081 the RA motor direction Polar Align saved for this profile's mount
-/// (`/api/v1/equipment/polaralign/motor-direction`) and "Test direction
-/// again", which forgets it so the next start tests it with a 0.5° turn.
-abstract interface class PolarAlignMotorDirectionClient {
-  /// Null on a 404: a rig that predates the saved direction.
-  Future<PolarAlignMotorDirectionState?> get();
-  Future<void> retest();
-  void close();
-}
-
-class PolarAlignMotorDirectionApi implements PolarAlignMotorDirectionClient {
-  final Dio _dio;
-
-  PolarAlignMotorDirectionApi(AraServer server, {Dio? dio})
-    : _dio =
-          dio ??
-          Dio(
-            BaseOptions(
-              baseUrl: server.baseUrl,
-              connectTimeout: const Duration(seconds: 3),
-              receiveTimeout: const Duration(seconds: 5),
-            ),
-          );
-
-  @override
-  Future<PolarAlignMotorDirectionState?> get() async {
-    try {
-      final res = await _dio.get<dynamic>(
-        '/api/v1/equipment/polaralign/motor-direction',
-      );
-      final data = res.data;
-      return data is Map<String, dynamic>
-          ? PolarAlignMotorDirectionState.fromJson(data)
-          : null;
-    } on DioException catch (e) {
-      if (e.response?.statusCode == 404) return null;
-      rethrow;
-    }
-  }
-
-  @override
-  Future<void> retest() =>
-      _dio.post<void>('/api/v1/equipment/polaralign/motor-direction/retest');
 
   @override
   void close() => _dio.close(force: true);

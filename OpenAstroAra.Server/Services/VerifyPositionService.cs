@@ -83,7 +83,7 @@ public sealed class VerifyPositionService : IVerifyPositionService, IDisposable 
     private async Task<VerifyPositionResultDto> VerifyCoreAsync(double exposure, CancellationToken ct) {
         var mount = _solver.MountPointing();
         var intended = _solver.MountTarget();
-        // The main-camera capture-and-solve is shared with the polar-align coarse stage.
+        // The main-camera capture-and-solve is shared with polar alignment's main-camera measurement.
         PlateSolveResult result;
         try {
             result = await _solver.CaptureAndSolveRawAsync(exposure, mount, blindFailover: true, "Cannot verify the position", ct).ConfigureAwait(false);

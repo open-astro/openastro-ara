@@ -532,13 +532,12 @@ public sealed record Phd2SettingsDto(
 /// <see cref="OpenAstroAra.Server.Services.PolarAlignBinning"/>), 1–4 = the user's override.
 /// <c>TargetToleranceArcmin</c> gates the client's [Done] button (the server reports errors
 /// regardless); <c>SeedRotationDeg</c> is each of the 3-point seed's two RA turns; <c>CheckStepDeg</c> each
-/// of the check stage's two turns; <c>CoarseExposureSeconds</c> the main-camera exposure (the rough step, and every
-/// measurement with <c>Camera</c> = <c>main</c>);
+/// of the check stage's two turns; <c>CoarseExposureSeconds</c> the main-camera exposure (every measurement with
+/// <c>Camera</c> = <c>main</c>);
 /// <c>StopTrackingWhenDone</c> whether every end of a run turns tracking off (#2048);
 /// <c>Camera</c> the camera of the measurement and its live loop (<see cref="PolarAlignCameras"/>, #2082);
 /// <c>FramesPerPoint</c> the frames averaged at each of the measurement's three points (1–5, #2082);
-/// <c>EastDirection</c> the RA turn direction of a run that starts a new sweep origin (#2081; null = by hemisphere,
-/// <see cref="PolarAlignEastDirection"/>);
+/// <c>EastDirection</c> the way a run's RA turns go (null = by hemisphere, <see cref="PolarAlignEastDirection"/>);
 /// <c>LoopCadenceMs</c> is the live loop's target period (capture+solve time is inside it).
 /// <c>LoopMode</c> is <c>"loop"</c> (re-shoot continuously) or <c>"single"</c> (the adjust phase
 /// waits for <c>POST /equipment/polaralign/capture</c> before each frame). The live loop re-reads
@@ -549,18 +548,15 @@ public sealed record PolarAlignSettingsDto(
     int Binning = 0,
     double TargetToleranceArcmin = 1.0,
     // 10°: each of the seed's two RA turns between its three solves, as NINA's Three Point Polar
-    // Alignment (20° of travel in all from where the scope points). Clamped to 5–30°.
+    // Alignment (20° of travel in all, from the mount's Home position). Clamped to 5–30°.
     double SeedRotationDeg = 10.0,
     int LoopCadenceMs = 1000,
     double SettleSeconds = 2.0,
     string LoopMode = PolarAlignLoopModes.Loop,
     // Check stage: each of the two RA turns between the three solves. Clamped to 5–30°.
     double CheckStepDeg = 10.0,
-    // Coarse stage: the main-camera exposure (the pole field is sparse; longer than a guide frame).
+    // The main-camera exposure, for a profile whose Camera is main (the pole field is sparse; longer than a guide frame).
     double CoarseExposureSeconds = 3.0,
-    // #2048: there is no use_home any more. Polar Align never sends the mount Home (NINA's start): every run starts
-    // from where the user pointed it, after the confirm step. A use_home key in an older profile.json or PUT body is
-    // an unknown member, which the deserializer ignores.
     // #1971: with a Polar Aligner on the rig, the live stages move its motors after each
     // measurement. Off = the person turns the bolts, as on a rig without one.
     bool PolarAlignerAuto = true,
@@ -569,27 +565,14 @@ public sealed record PolarAlignSettingsDto(
     // gives back the tracking it found; a Stop or a failure still leaves tracking off.
     bool StopTrackingWhenDone = true,
     // #2082: the camera of the measurement and its live loop (PolarAlignCameras): the guide camera (the default), or the
-    // main camera with its own solver at CoarseExposureSeconds. A check measures on it too; "Rough first" is always the main.
+    // main camera with its own solver at CoarseExposureSeconds. A check measures on it too.
     string Camera = PolarAlignCameras.Guide,
     // #2082: frames per point of a measurement, the mount still, averaged as unit vectors (their rms scatter is logged).
     // A point scattered over 3″ is retaken once; still over, the result is flagged noisy. Clamped to 1–5.
     int FramesPerPoint = 3,
-    // #2081: the way a run's RA turns go when it starts a NEW sweep origin (NINA's EastDirection): true = east (the
-    // mount's RA reading rises), false = west, null = by the site's hemisphere (east in the north, west in the south).
-    // Later runs of the same session keep turning back toward the origin (#2089), whatever this says.
-    bool? EastDirection = null,
-    // #2068 (ARA-8, ARA-18): the user's clearance confirmation, per mount, keyed by the mount's identity
-    // (PolarAlignPreflightEvaluator.MountKey: its Alpaca UniqueID). No Polar Align motor motion until the connected
-    // mount's entry covers the run's reach (#2165). Null reads as empty (PolarAlignSettingsClamp).
-    IReadOnlyDictionary<string, PolarAlignMountClearanceDto>? MountClearance = null);
-
-/// <summary>#2068 — one mount's entry in <see cref="PolarAlignSettingsDto.MountClearance"/>: the user said there is room
-/// for the tube, counterweight and cables to turn this far each way (<c>ConfirmedReachDeg</c>, degrees of RA). #2165: the
-/// reach is the one the confirmation was made for (the plan's <see cref="PolarAlignPreflightPlannedDto.ReachDeg"/>): a
-/// start whose reach is bigger is not confirmed and asks again; a smaller or equal one stays confirmed. A mount with no
-/// entry is not confirmed; Take back removes the entry. An entry whose reach is not a positive number (the old slider
-/// format, a counterweight angle, has none) is dropped by <see cref="Services.PolarAlignSettingsClamp"/>.</summary>
-public sealed record PolarAlignMountClearanceDto(double ConfirmedReachDeg);
+    // The way a run's two RA turns go (NINA's EastDirection): true = a positive motor rate (east by ASCOM's convention),
+    // false = a negative one (west), null = by the site's hemisphere (east in the north, west in the south).
+    bool? EastDirection = null);
 
 /// <summary>
 /// #1364 — the guider's settings beyond Tune Guiding (profile section <c>guider_advanced</c>, endpoint
@@ -681,43 +664,14 @@ public static class PolarAlignCameras {
     public static bool IsValid(string? camera) => camera is Guide or Main;
 }
 
-/// <summary>#2081 — <see cref="PolarAlignSettingsDto.EastDirection"/>: the way a new sweep origin's RA turns go.</summary>
+/// <summary><see cref="PolarAlignSettingsDto.EastDirection"/>: the way a run's RA turns go.</summary>
 public static class PolarAlignEastDirection {
-    /// <summary>+1 (east: the mount's RA reading rises) or −1 (west) for <paramref name="eastDirection"/>; null is the
-    /// hemisphere's default: east in the north, where NINA's start field near the pole turns away from the meridian, and
-    /// west in the south, where east would end about 2° past it.</summary>
+    /// <summary>The sign of the RA motor rate a run's turns use: +1 (east by ASCOM's convention) or −1 (west) for
+    /// <paramref name="eastDirection"/>; null is the hemisphere's default, east in the north and west in the south
+    /// (NINA's).</summary>
     public static double Sign(bool? eastDirection, double latitudeDeg) =>
         (eastDirection ?? latitudeDeg >= 0) ? 1.0 : -1.0;
 }
-
-/// <summary>#2081 — the RA motor direction Polar Align learned on this profile's mount with a 0.5° test move, and
-/// saved (profile section <c>polar_align_motor_direction</c>, daemon-owned, null until a test ran). <c>Sign</c> +1: a
-/// positive primary-axis MoveAxis rate raises the mount's RA reading (east, NINA's assumption); −1: it lowers it.
-/// #2167 — <c>MountKey</c> is the tested mount's identity, the one its <c>mount_clearance</c> entry uses
-/// (<c>PolarAlignPreflightEvaluator.MountKey</c>: its Alpaca UniqueID, else its name, else <c>unidentified-mount</c>);
-/// <c>DriverInfo</c> and <c>DriverVersion</c> are its driver's name and version then, each empty when the driver reported
-/// none. A mount with another key, or whose driver reports another name or version, is tested again (an AlpacaBridge
-/// upgrade that changed the sign, or another driver set up behind the same Alpaca device, which keeps its UniqueID).
-/// <c>TestedUtc</c> is when.</summary>
-public sealed record PolarAlignMotorDirectionDto(int Sign, string MountKey, string DriverInfo, string DriverVersion, DateTimeOffset TestedUtc) {
-    /// <summary>The saved test stands for a mount whose key is <paramref name="mountKey"/> and whose driver reports
-    /// <paramref name="driverInfo"/> and <paramref name="driverVersion"/> now (compared exactly; a null name or version
-    /// reads as empty). A saved test with a blank key (a test saved before #2167, keyed on the blank DriverInfo and
-    /// DriverVersion the daemon never read) stands for no mount, so the next start tests again. An identity key against
-    /// the value saved from the same mount, not a branch on a brand or model (ADR 0003 rule 2): every mount is treated
-    /// alike, and a different string only means "not tested on this mount and driver yet".</summary>
-    public bool IsFor(string? mountKey, string? driverInfo, string? driverVersion) =>
-        Sign is 1 or -1
-        && !string.IsNullOrWhiteSpace(MountKey)
-        && string.Equals(MountKey, mountKey, StringComparison.Ordinal)
-        && string.Equals(DriverInfo ?? string.Empty, driverInfo ?? string.Empty, StringComparison.Ordinal)
-        && string.Equals(DriverVersion ?? string.Empty, driverVersion ?? string.Empty, StringComparison.Ordinal);
-}
-
-/// <summary>#2081 — <c>GET /api/v1/equipment/polaralign/motor-direction</c>: the saved test (null = never tested, or
-/// forgotten by "Test direction again"), and whether it stands for the mount connected now (null = no mount connected).
-/// A start whose mount it does not stand for tests the direction first (a 0.5° turn the confirm step shows).</summary>
-public sealed record PolarAlignMotorDirectionStateDto(PolarAlignMotorDirectionDto? Saved, bool? MatchesConnectedMount);
 
 /// <summary>§45 live-adjust capture modes (<see cref="PolarAlignSettingsDto.LoopMode"/>).</summary>
 public static class PolarAlignLoopModes {

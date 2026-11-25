@@ -1,6 +1,6 @@
 # File and the number of hard-coded user-visible literals still allowed (#1751).
 # Counts only go down. See test/hardcoded_strings_test.dart.
-lib/help/registry.dart 224
+lib/help/registry.dart 221
 lib/main.dart 2
 lib/models/sequence/condition_catalog.dart 5
 lib/models/sequence/instruction_catalog.dart 30
@@ -53,7 +53,7 @@ lib/screens/tabs/support_tab.dart 10
 lib/screens/wizard/screens/screen_guiding.dart 41
 lib/screens/wizard/screens/screen_your_equipment.dart 49
 lib/services/target_resolve_api.dart 1
-lib/settings/registry.dart 410
+lib/settings/registry.dart 406
 lib/state/diagnostics/diagnostics_state.dart 2
 lib/state/sequencer/create_imaging_run.dart 7
 lib/state/settings/settings_nav.dart 41
@@ -97,7 +97,7 @@ lib/widgets/imaging/guider_advanced_dialog.dart 15
 lib/widgets/imaging/guiding_assistant_dialog.dart 28
 lib/widgets/imaging/guiding_strip.dart 23
 lib/widgets/imaging/guiding_tune_dialog.dart 19
-lib/widgets/imaging/polar_align_panel.dart 52
+lib/widgets/imaging/polar_align_panel.dart 48
 lib/widgets/imaging/solve_panel.dart 10
 lib/widgets/launchpad_button.dart 6
 lib/widgets/library/bulk_action_bar.dart 25

@@ -41,15 +41,10 @@ class _Section extends FakePolarAlignSection {
 }
 
 class _Api implements PolarAlignClient {
-  @override
-  Future<PolarAlignPreflight?> preflight({String? stage}) async => null;
-  @override
-  Future<PolarAlignStartPlan> startPlan({String? stage}) async =>
-      PolarAlignStartPlan(stage: stage, direction: PolarAlignDirections.east);
   final calls = <String>[];
   late final section = _Section(calls);
 
-  /// The stage of each start the user confirmed (null: the default measurement).
+  /// The stage of each start (null: the default measurement).
   final stages = <String?>[];
 
   /// The rig's copy of the profile's polar-align section.
@@ -58,9 +53,9 @@ class _Api implements PolarAlignClient {
   @override
   Future<PolarAlignStatus?> getStatus() async => null;
   @override
-  Future<void> start(PolarAlignStartPlan plan) async {
+  Future<void> start({String? stage}) async {
     calls.add('start');
-    stages.add(plan.stage);
+    stages.add(stage);
   }
   @override
   Future<void> stop() async => calls.add('stop');
@@ -76,25 +71,22 @@ class _Api implements PolarAlignClient {
 
 class _FailingApi extends _Api {
   @override
-  Future<void> start(PolarAlignStartPlan plan) async => throw StateError('no camera');
+  Future<void> start({String? stage}) async => throw StateError('no camera');
 }
 
-/// A rig whose mount is parked: the start plan is refused (#2048), so no confirm step opens.
-class _ParkedApi extends _Api {
+/// A rig that refuses every start with [refusal].
+class _RefusingApi extends _Api {
+  _RefusingApi(this.refusal);
+  final Refusal refusal;
   @override
-  Future<PolarAlignStartPlan> startPlan({String? stage}) async => throw const Refusal(
-        cause: RefusalCause.polarAlignMountParked,
-        reason: 'polar-align-mount-parked',
-        detail: 'Mount is parked — unpark it and point near the pole first',
-        status: 409,
-      );
+  Future<void> start({String? stage}) async => throw refusal;
 }
 
 /// A start that waits for [gate]: the shutter's call in flight, then refused.
 class _SlowFailingApi extends _Api {
   final gate = Completer<void>();
   @override
-  Future<void> start(PolarAlignStartPlan plan) async {
+  Future<void> start({String? stage}) async {
     await gate.future;
     throw StateError('no camera');
   }
@@ -154,22 +146,6 @@ void main() {
     expect(simplePolarSummary(rigPolarAlign.copyWith(exposureSeconds: 45, loopMode: PolarAlignLoopModes.single), en),
         '45 s\nSingle');
     expect(simplePolarSummary(null, en), '', reason: 'not loaded from the rig: no made-up setup');
-  });
-
-  test('simplePolarSideText names the side of the pole in the chosen language', () {
-    final en = lookupAppLocalizations(const Locale('en'));
-    final pt = lookupAppLocalizations(const Locale('pt', 'BR'));
-    const rough = PolarAlignLive(
-        phase: PolarAlignStates.adjusting, stage: PolarAlignStages.coarse, altErrorArcmin: 40, azErrorArcmin: 12);
-    expect(simplePolarSideText(rough, en), 'The mount axis sits above and east of the pole.');
-    expect(simplePolarSideText(rough, pt), 'O eixo da montagem fica acima e a leste do polo.');
-    expect(simplePolarSideText(rough.copyWith(altErrorArcmin: -3, azErrorArcmin: 0.1), en),
-        'The mount axis sits below the pole.');
-    expect(simplePolarSideText(rough.copyWith(altErrorArcmin: 0.1, azErrorArcmin: -4), pt),
-        'O eixo da montagem fica a oeste do polo.');
-    expect(simplePolarSideText(rough.copyWith(altErrorArcmin: 0.2, azErrorArcmin: -0.3), en),
-        'The mount axis is on the pole.');
-    expect(simplePolarSideText(const PolarAlignLive(stage: PolarAlignStages.coarse), en), isNull);
   });
 
   test('simplePolarPhase names each phase', () {
@@ -289,7 +265,7 @@ void main() {
   );
 
   testWidgets(
-    'while it runs, the panel stays within 520 pt: the stepper, headings and caption of #1875 make it scroll on an iPad (388 pt)',
+    'while it runs, the panel stays within 520 pt: its headings and caption make it scroll on an iPad (388 pt)',
     (tester) async {
       // The shell scrolls a panel taller than its room; the chosen mock accepts it. 520 stops it growing further.
       await _pump(tester, _adjusting, loopMode: PolarAlignLoopModes.single);
@@ -306,133 +282,6 @@ void main() {
     await tester.pump();
     expect(api!.calls, ['capture']);
   });
-
-  testWidgets(
-    'rough stage outside the tolerance: no Done, and the caption says so (#1875)',
-    (tester) async {
-      await _pump(
-        tester,
-        const PolarAlignLive(
-          phase: PolarAlignStates.adjusting,
-          stage: PolarAlignStages.coarse,
-          altErrorArcmin: 5,
-          azErrorArcmin: 9,
-          totalErrorArcmin: 11.0,
-          zone: 'red',
-        ),
-        tolerance: 2.0,
-      );
-      expect(find.byKey(const Key('simple-polar-done-rough')), findsNothing);
-      expect(
-        find.text(
-          'Outside your 2′ tolerance: stop with the shutter, then start again to refine it with the guide camera.',
-        ),
-        findsOneWidget,
-      );
-    },
-  );
-
-  testWidgets(
-    'rough stage inside the tolerance: Done is outlined, and no Next: fine leads on (#1875, #2082)',
-    (tester) async {
-      final api = await _pump(
-        tester,
-        const PolarAlignLive(
-          phase: PolarAlignStates.adjusting,
-          stage: PolarAlignStages.coarse,
-          altErrorArcmin: 0.6,
-          azErrorArcmin: 1.4,
-          totalErrorArcmin: 1.5,
-          zone: 'green',
-        ),
-        tolerance: 2.0,
-      );
-      expect(
-        find.text(
-          'Inside your 2′ tolerance. Done keeps this alignment; stop and start again to refine it with the guide camera.',
-        ),
-        findsOneWidget,
-      );
-      expect(find.byType(OutlinedButton), findsOneWidget);
-      expect(find.byKey(const Key('simple-polar-next-fine')), findsNothing, reason: 'one measurement per Start');
-      expect(find.byKey(const Key('simple-polar-check')), findsNothing, reason: 'the rough step has no Check');
-      await tester.tap(find.byKey(const Key('simple-polar-done-rough')));
-      await tester.pump();
-      expect(api!.calls, ['complete']);
-    },
-  );
-
-  testWidgets('the stepper marks Rough and the steps behind it (#1875)', (
-    tester,
-  ) async {
-    await _pump(
-      tester,
-      const PolarAlignLive(
-        phase: PolarAlignStates.adjusting,
-        stage: PolarAlignStages.coarse,
-        totalErrorArcmin: 9,
-      ),
-    );
-    expect(find.text('Rough'), findsOneWidget);
-    expect(find.byIcon(Icons.check), findsNothing);
-    expect(find.text('Fine'), findsOneWidget);
-    expect(find.text('Check'), findsOneWidget);
-  });
-
-  testWidgets(
-    'the current step is selectionBg with white text: 4.6:1, not the brightest block at night (#1875)',
-    (tester) async {
-      await _pump(
-        tester,
-        const PolarAlignLive(
-          phase: PolarAlignStates.adjusting,
-          stage: PolarAlignStages.coarse,
-          totalErrorArcmin: 9,
-        ),
-      );
-      final box =
-          tester
-                  .widget<Container>(
-                    find.byKey(const Key('simple-polar-step-0')),
-                  )
-                  .decoration!
-              as BoxDecoration;
-      expect(box.color, AraColors.selectionBg);
-      expect(
-        tester.widget<Text>(find.text('Rough')).style!.color,
-        AraColors.selectionFg,
-      );
-    },
-  );
-
-  testWidgets(
-    'the stepper ticks no step before the one running, and a finished check its own (#2082)',
-    (tester) async {
-      await _pump(
-        tester,
-        const PolarAlignLive(
-          phase: PolarAlignStates.checked,
-          stage: PolarAlignStages.check,
-          totalErrorArcmin: 0.4,
-        ),
-      );
-      expect(
-        find.descendant(
-          of: find.byKey(const Key('simple-polar-step-2')),
-          matching: find.byIcon(Icons.check),
-        ),
-        findsOneWidget,
-      );
-      expect(find.byIcon(Icons.check), findsOneWidget, reason: 'each step is its own Start: Rough and Fine never ran');
-      expect(find.text('Rough'), findsOneWidget);
-      expect(find.text('Fine'), findsOneWidget);
-      expect(
-        tester.widget<Icon>(find.byIcon(Icons.check)).semanticLabel,
-        'Done',
-        reason: 'a screen reader hears the tick',
-      );
-    },
-  );
 
   testWidgets("the setup rows wait for the profile from the rig: Not loaded with Retry, then save over the rig's copy (ADR 0015)",
       (tester) async {
@@ -479,45 +328,25 @@ void main() {
     expect(api.section.puts.single.loopMode, PolarAlignLoopModes.single);
   });
 
-  testWidgets('idle: no stepper, only the settings (#1875)', (tester) async {
-    await _pump(tester, const PolarAlignLive());
-    expect(find.byKey(const Key('simple-polar-stepper')), findsNothing);
+  testWidgets('the panel shows no stepper, checklist or Rough first: idle, running, or after the guide camera could not solve', (tester) async {
+    for (final live in const [
+      PolarAlignLive(),
+      _adjusting,
+      PolarAlignLive(phase: PolarAlignStates.failed, stage: PolarAlignStages.fine, errorReason: 'seed_solve_failed'),
+    ]) {
+      await _pump(tester, live);
+      expect(find.byKey(const Key('simple-polar-stepper')), findsNothing);
+      expect(find.byKey(const Key('polar-preflight')), findsNothing);
+      expect(find.byKey(const Key('simple-polar-rough-first')), findsNothing);
+    }
   });
 
-  test('simplePolarStep: verifying and the verdict are the Verify step', () {
-    expect(
-      simplePolarStep(
-        const PolarAlignLive(
-          phase: PolarAlignStates.checking,
-          stage: PolarAlignStages.check,
-        ),
-      ),
-      2,
-    );
-    expect(
-      simplePolarStep(
-        const PolarAlignLive(
-          phase: PolarAlignStates.checked,
-          stage: PolarAlignStages.check,
-        ),
-      ),
-      2,
-    );
-    expect(
-      simplePolarStep(
-        const PolarAlignLive(
-          phase: PolarAlignStates.adjusting,
-          stage: PolarAlignStages.coarse,
-        ),
-      ),
-      0,
-    );
-    expect(
-      simplePolarStep(const PolarAlignLive(phase: PolarAlignStates.adjusting)),
-      1,
-      reason: 'an older daemon: one fine stage',
-    );
-    expect(simplePolarStep(const PolarAlignLive()), isNull);
+  test('simplePolarVerifying: a running check and its verdict, nothing else', () {
+    expect(simplePolarVerifying(const PolarAlignLive(phase: PolarAlignStates.checking, stage: PolarAlignStages.check)), isTrue);
+    expect(simplePolarVerifying(const PolarAlignLive(phase: PolarAlignStates.checked, stage: PolarAlignStages.check)), isTrue);
+    expect(simplePolarVerifying(const PolarAlignLive(phase: PolarAlignStates.adjusting)), isFalse);
+    expect(simplePolarVerifying(const PolarAlignLive(phase: PolarAlignStates.stopped, stage: PolarAlignStages.check)), isFalse);
+    expect(simplePolarVerifying(const PolarAlignLive()), isFalse);
   });
 
   testWidgets(
@@ -540,11 +369,7 @@ void main() {
         ),
         findsOneWidget,
       );
-      expect(
-        find.text('Check'),
-        findsNWidgets(2),
-        reason: 'the stepper step and the button',
-      );
+      expect(find.text('Check'), findsOneWidget);
       expect(find.text('Setup'), findsOneWidget);
       expect(find.text('Error'), findsOneWidget);
     },
@@ -673,33 +498,6 @@ void main() {
   );
 
   testWidgets(
-    "the rough stage offers Done inside the tolerance; its caption says inside only once the error plus 2σ is, and can't confirm before (#2072)",
-    (tester) async {
-      // The noisy test's window: a caution line takes room.
-      tester.view.physicalSize = const Size(1024, 768);
-      tester.view.devicePixelRatio = 1;
-      addTearDown(tester.view.reset);
-      await _pump(
-        tester,
-        const PolarAlignLive(
-          phase: PolarAlignStates.adjusting,
-          stage: PolarAlignStages.coarse,
-          altErrorArcmin: 0.6,
-          azErrorArcmin: 1.4,
-          totalErrorArcmin: 1.5,
-          totalSigmaArcmin: 0.4,
-          zone: 'green',
-        ),
-        tolerance: 2.0,
-      );
-      expect(find.byKey(const Key('simple-polar-done-rough')), findsOneWidget, reason: 'Done is not held by the σ');
-      final caption = tester.widget<Text>(find.byKey(const Key('simple-polar-tolerance-caption')));
-      expect(caption.data, startsWith("Inside your 2′ tolerance, but at ± 0.4′ this measurement can't confirm the alignment."));
-      expect(caption.data, isNot(startsWith('Inside your 2′ tolerance. Done keeps')));
-    },
-  );
-
-  testWidgets(
     "Simple Mode's checked line rates the error plus twice its 1σ: 0.2′ ± 1.3′ does not read Excellent (#2072)",
     (tester) async {
       await _pump(
@@ -773,15 +571,13 @@ void main() {
       );
       await tester.tap(find.byKey(const Key('simple-polar-check')));
       await tester.pumpAndSettle();
-      expect(api!.calls, isEmpty, reason: 'nothing moves before the confirm step (#2082)');
-      await tester.tap(find.byKey(const Key('polar-start-confirm-go')));
-      await tester.pumpAndSettle();
-      expect(api.stages, [PolarAlignStages.check], reason: 'a confirmed Start(check), never Next');
+      expect(find.byType(Dialog), findsNothing);
+      expect(api!.stages, [PolarAlignStages.check]);
     },
   );
 
   testWidgets(
-    'after Done, Check again says how far it turns and starts a confirmed check (#2082)',
+    'after Done, Check again says how far it turns and starts a check',
     (tester) async {
       final api = await _pump(
         tester,
@@ -793,46 +589,9 @@ void main() {
       );
       await tester.tap(find.byKey(const Key('simple-polar-check-again')));
       await tester.pumpAndSettle();
-      expect(api!.calls, isEmpty, reason: 'nothing moves before the confirm step');
-      await tester.tap(find.byKey(const Key('polar-start-confirm-go')));
-      await tester.pumpAndSettle();
-      expect(api.stages, [PolarAlignStages.check]);
+      expect(api!.stages, [PolarAlignStages.check]);
     },
   );
-
-  testWidgets('after the guide camera could not solve, Rough first says how far it turns and starts a confirmed rough run (#2082)',
-      (tester) async {
-    tester.view.physicalSize = const Size(1024, 768);
-    tester.view.devicePixelRatio = 1;
-    addTearDown(tester.view.reset);
-    // A seed turn unlike the check step (10°): the caption is the rig's seed turn, not the check's.
-    final api = await _pump(
-        tester,
-        const PolarAlignLive(
-            phase: PolarAlignStates.failed, stage: PolarAlignStages.fine, errorReason: 'seed_solve_failed',
-            errorMessage: 'the seed-a seed frame failed to solve'),
-        rig: rigPolarAlign.copyWith(seedRotationDeg: 15));
-    expect(find.text('Rough first turns the mount 2 × 15° and measures with the main camera.'), findsOneWidget);
-    await tester.tap(find.byKey(const Key('simple-polar-rough-first')));
-    await tester.pumpAndSettle();
-    expect(api!.stages, isEmpty, reason: 'nothing moves before the confirm step');
-    await tester.tap(find.byKey(const Key('polar-start-confirm-go')));
-    await tester.pumpAndSettle();
-    expect(api.stages, [PolarAlignStages.coarse]);
-  });
-
-  testWidgets('a main-camera run that could not solve offers no Rough first (#2082)', (tester) async {
-    await _pump(tester, const PolarAlignLive(
-        phase: PolarAlignStates.failed, stage: PolarAlignStages.fine, camera: PolarAlignCameras.main,
-        errorReason: 'seed_solve_failed'));
-    expect(find.byKey(const Key('simple-polar-rough-first')), findsNothing);
-  });
-
-  testWidgets('another failure offers no Rough first (#2082)', (tester) async {
-    await _pump(tester, const PolarAlignLive(
-        phase: PolarAlignStates.failed, stage: PolarAlignStages.fine, errorReason: 'slew_failed'));
-    expect(find.byKey(const Key('simple-polar-rough-first')), findsNothing);
-  });
 
   testWidgets('a noisy measurement says so while adjusting and beside the verdict (#2082)', (tester) async {
     tester.view.physicalSize = const Size(1024, 768);
@@ -970,35 +729,6 @@ void main() {
     expect(find.text(en.polarReadoutCautionAltitudeWeak), findsOneWidget);
   });
 
-  testWidgets('a Dec that moved across the three points is warned about while adjusting (#2081)', (tester) async {
-    tester.view.physicalSize = const Size(1024, 768);
-    tester.view.devicePixelRatio = 1;
-    addTearDown(tester.view.reset);
-    final en = lookupAppLocalizations(const Locale('en'));
-    await _pump(tester, _adjusting);
-    expect(find.byKey(const Key('simple-polar-dec-spread')), findsNothing);
-    final live = ProviderScope.containerOf(tester.element(find.byType(SimplePolarPanel)))
-        .read(polarAlignLiveProvider.notifier) as _Live;
-    live.frame(_adjusting.copyWith(decSpreadArcsec: 2.6));
-    await tester.pumpAndSettle();
-    expect(find.byKey(const Key('simple-polar-dec-spread')), findsOneWidget);
-    expect(find.text(en.polarDecSpreadWarning('2.6')), findsOneWidget);
-  });
-
-  test('the Dec-spread warning is the verdict one once checked, the seed one only while the readout runs (#2081)', () {
-    const verdict = PolarAlignCheckResult(altErrorArcmin: 0, azErrorArcmin: 0, totalErrorArcmin: 0.5, decSpreadArcsec: 3.0);
-    expect(
-      simplePolarDecSpread(
-          const PolarAlignLive(phase: PolarAlignStates.checked, checkResult: verdict, decSpreadArcsec: 9.0),
-          verifying: true),
-      3.0,
-    );
-    expect(simplePolarDecSpread(const PolarAlignLive(phase: PolarAlignStates.adjusting, decSpreadArcsec: 2.5), verifying: false), 2.5);
-    expect(simplePolarDecSpread(const PolarAlignLive(phase: PolarAlignStates.paused, decSpreadArcsec: 2.5), verifying: false), 2.5);
-    expect(simplePolarDecSpread(const PolarAlignLive(phase: PolarAlignStates.checking, decSpreadArcsec: 2.5), verifying: true), isNull);
-    expect(simplePolarDecSpread(const PolarAlignLive(phase: PolarAlignStates.stopped, decSpreadArcsec: 2.5), verifying: false), isNull);
-  });
-
   testWidgets('failed solves say so', (tester) async {
     await _pump(tester, _adjusting.copyWith(consecutiveSolveFailures: 2));
     expect(find.text('No solve (2 in a row). Check the sky.'), findsOneWidget);
@@ -1046,36 +776,37 @@ void main() {
         child: const MaterialApp(home: Scaffold(body: Center(child: SimplePolarShutter()))),
       ));
       await tester.tap(find.byKey(const Key('simple-shutter')));
-      await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const Key('polar-start-confirm-go')));
       await tester.pump();
       expect(c.read(simpleMessagesProvider).single.kind, SimpleMessageKind.error);
       expect(find.byType(SnackBar), findsNothing);
     });
 
-    testWidgets('a parked mount is refused before the confirm step, in a pill, and nothing starts (#2048)', (tester) async {
-      final api = _ParkedApi();
-      final c = ProviderContainer(overrides: [
-        polarAlignApiProvider.overrideWithValue(api),
-        polarAlignLiveProvider.overrideWith(() => _Live(const PolarAlignLive())),
-        simpleModePrefsProvider.overrideWithValue(_SimplePrefs()),
-        simpleModeFeaturePrefsProvider.overrideWithValue(_SimplePrefs()),
-      ]);
-      addTearDown(c.dispose);
-      await c.read(simpleModeProvider.future);
-      await c.read(simpleModeFeatureProvider.future);
-      await tester.pumpWidget(UncontrolledProviderScope(
-        container: c,
-        child: const MaterialApp(home: Scaffold(body: Center(child: SimplePolarShutter()))),
-      ));
-      await tester.tap(find.byKey(const Key('simple-shutter')));
-      await tester.pumpAndSettle();
-      expect(find.byKey(const Key('polar-start-confirm')), findsNothing, reason: 'no confirm step for a start the rig refuses');
-      expect(api.calls, isNot(contains('start')));
-      final pill = c.read(simpleMessagesProvider).single;
-      expect(pill.kind, SimpleMessageKind.error);
-      expect('${pill.title} ${pill.detail ?? ''}', contains('The mount is parked. Unpark it and point it near the pole first.'));
-    });
+    for (final (cause, words) in const [
+      (RefusalCause.polarAlignMountParked, 'The mount is parked. Unpark it and send it Home first.'),
+      (RefusalCause.polarAlignNotHome, 'The mount is not at Home. Send it Home first, then start polar alignment.'),
+    ]) {
+      testWidgets("a start the rig refuses (${cause.token}) says why in a pill, in the app's words", (tester) async {
+        final api = _RefusingApi(Refusal(cause: cause, reason: cause.token, detail: 'the daemon sentence', status: 409));
+        final c = ProviderContainer(overrides: [
+          polarAlignApiProvider.overrideWithValue(api),
+          polarAlignLiveProvider.overrideWith(() => _Live(const PolarAlignLive())),
+          simpleModePrefsProvider.overrideWithValue(_SimplePrefs()),
+          simpleModeFeaturePrefsProvider.overrideWithValue(_SimplePrefs()),
+        ]);
+        addTearDown(c.dispose);
+        await c.read(simpleModeProvider.future);
+        await c.read(simpleModeFeatureProvider.future);
+        await tester.pumpWidget(UncontrolledProviderScope(
+          container: c,
+          child: const MaterialApp(home: Scaffold(body: Center(child: SimplePolarShutter()))),
+        ));
+        await tester.tap(find.byKey(const Key('simple-shutter')));
+        await tester.pumpAndSettle();
+        final pill = c.read(simpleMessagesProvider).single;
+        expect(pill.kind, SimpleMessageKind.error);
+        expect('${pill.title} ${pill.detail ?? ''}', contains(words));
+      });
+    }
 
     testWidgets('a start runs through the shared module: busy while it runs, its failure in the pill only (#1764)', (tester) async {
       final api = _SlowFailingApi();
@@ -1089,9 +820,6 @@ void main() {
         child: const MaterialApp(home: Scaffold(body: Center(child: SimplePolarShutter()))),
       ));
       await tester.tap(find.byKey(const Key('simple-shutter')));
-      await tester.pumpAndSettle();
-      expect(c.read(polarAlignActionProvider).busy, isTrue, reason: 'the confirm step is part of the start in flight');
-      await tester.tap(find.byKey(const Key('polar-start-confirm-go')));
       await tester.pump();
       expect(c.read(polarAlignActionProvider).busy, isTrue, reason: 'the module knows the start is in flight');
       expect(tester.widget<SimpleShutterButton>(find.byType(SimpleShutterButton)).onPressed, isNull,
@@ -1131,11 +859,8 @@ void main() {
           findsOneWidget, reason: 'a routine starts with play');
       await tester.tap(find.byKey(const Key('simple-shutter')));
       await tester.pumpAndSettle();
-      expect(find.byKey(const Key('polar-start-confirm')), findsOneWidget, reason: '#2048: the confirm step first');
-      expect(api!.calls, isEmpty);
-      await tester.tap(find.byKey(const Key('polar-start-confirm-go')));
-      await tester.pumpAndSettle();
-      expect(api.calls, ['start']);
+      expect(find.byType(Dialog), findsNothing);
+      expect(api!.calls, ['start']);
     });
     testWidgets('Loop running: the square stops it', (tester) async {
       final api = await shutter(tester, _adjusting);

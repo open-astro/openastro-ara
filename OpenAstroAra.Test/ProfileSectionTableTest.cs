@@ -51,7 +51,6 @@ internal static class ProfileSectionSamples {
         ["SavedTargets"] = new SavedTargetsDto([new SavedTargetDto("M31", ["Andromeda"], 10.5, 41.25, "typed", Now)]),
         ["FilterFocusOffsets"] = new FilterFocusOffsetsDto([new FilterFocusOffsetDto(2, 14)]),
         ["CoolingFan"] = new CoolingFanDto("sample-switch", 2),
-        ["PolarAlignMotorDirection"] = new PolarAlignMotorDirectionDto(-1, "sample-mount-id", "AlpacaBridge iOptron", "6.0.0", Now),
     };
 
     public static object Sample(PropertyInfo section, object defaultValue) {

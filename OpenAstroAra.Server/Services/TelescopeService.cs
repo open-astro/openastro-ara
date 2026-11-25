@@ -92,14 +92,6 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
     // #2073 — the mount type, read with the capabilities once per connect; null = unknown (the counterweight
     // check then runs, as for a German equatorial mount).
     private AlignmentMode? _alignmentMode;
-    // #2083 — CanMoveAxis(Primary), read with the capabilities once per connect; null = unknown.
-    private bool? _canMovePrimaryAxis;
-    // #2167 — the driver's DriverVersion, read once per connect with the capabilities: Polar Align keys the RA motor
-    // direction it saves by the mount's identity and this. Null until read; empty when the driver reports none.
-    private string? _driverVersion;
-    // #2167 — the driver's DriverInfo, read with DriverVersion: another driver behind the same Alpaca device keeps its
-    // UniqueID and the bridge's version, so the name is what tells it apart. Null until read; empty when none.
-    private string? _driverInfo;
     // #1064/#1072/#1078 — per-axis MoveAxis rate BANDS (deg/s, ASCOM AxisRates [Min,Max] pairs;
     // index = TelescopeAxis), cached for the session so the nudge start path stays a single driver
     // call: an inline AxisRates GET on the press leg let a fast release's MoveAxis(0) overtake the
@@ -212,9 +204,6 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
         _capabilities = null;       // re-read for the new device
         _mountActions = null;
         _alignmentMode = null;
-        _canMovePrimaryAxis = null;
-        _driverVersion = null;
-        _driverInfo = null;
         _axisBands = null;          // #1064 — per-axis rate bands re-read for the new device
         _axisRatesSettled = false;
         _axisRatesDeadline = DateTimeOffset.UtcNow + AxisRatesSettleWindow;
@@ -1407,9 +1396,6 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
         var pad = needCaps || needAxisRates ? ReadPadAxisBands(client) : default;
         var caps = needCaps ? ReadCapabilities(client, pad) : null;
         var alignmentMode = needCaps ? ReadAlignmentMode(client) : null;
-        var canMovePrimary = needCaps ? ReadCanMovePrimaryAxis(client) : null;
-        var driverVersion = needCaps ? ReadDriverVersion(client) : null;
-        var driverInfo = needCaps ? ReadDriverInfo(client) : null;
         var actions = needCaps
             ? new LiveDriverActions(LiveDriverActions.Read(() => client.SupportedActions), () => _lifecycle.IsLive(client), client.Action)
             : null;
@@ -1444,9 +1430,6 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
                     _capabilities = caps;
                     _mountActions = actions;
                     _alignmentMode = alignmentMode;
-                    _canMovePrimaryAxis = canMovePrimary;
-                    _driverVersion = driverVersion;
-                    _driverInfo = driverInfo;
                 }
                 if (needAxisRates) {
                     // Keep any axis already known; fill the rest from this pass.
@@ -2035,45 +2018,6 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
         get {
             lock (_gate) {
                 return _alignmentMode;
-            }
-        }
-    }
-
-    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
-        Justification = "Per-field read boundary: a driver that fails CanMoveAxis reads as unknown (null); Polar Align then lists its check as unknown and does not refuse on it.")]
-    private static bool? ReadCanMovePrimaryAxis(ITelescopeDevice c) {
-        try {
-            return c.CanMoveAxis(TelescopeAxis.Primary);
-        } catch (Exception) {
-            return null;
-        }
-    }
-
-    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
-        Justification = "Per-field read boundary: a driver that fails DriverVersion reports none (empty); Polar Align then keys its saved RA motor direction by the mount's identity alone.")]
-    private static string ReadDriverVersion(ITelescopeDevice c) {
-        try {
-            return c.DriverVersion?.Trim() ?? string.Empty;
-        } catch (Exception) {
-            return string.Empty;
-        }
-    }
-
-    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
-        Justification = "Per-field read boundary: a driver that fails DriverInfo reports none (empty); Polar Align then keys its saved RA motor direction by the mount's identity and version alone.")]
-    private static string ReadDriverInfo(ITelescopeDevice c) {
-        try {
-            return c.DriverInfo?.Trim() ?? string.Empty;
-        } catch (Exception) {
-            return string.Empty;
-        }
-    }
-
-    /// <summary>#2083 — CanMoveAxis(Primary) read at connect; see <see cref="IMountMotionControl.CanMovePrimaryAxis"/>.</summary>
-    public bool? CanMovePrimaryAxis {
-        get {
-            lock (_gate) {
-                return _canMovePrimaryAxis;
             }
         }
     }
