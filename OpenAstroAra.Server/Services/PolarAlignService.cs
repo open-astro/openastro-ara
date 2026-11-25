@@ -791,6 +791,7 @@ namespace OpenAstroAra.Server.Services {
             var exited = false;
             bool? exitStopped = null;
             var tellNotStopped = false;
+            var exitGoesOn = false;
             async Task<bool?> ExitMountOnceAsync(string why, bool handedToGuiding = false, bool takenOver = false) {
                 if (exited) {
                     return exitStopped;
@@ -820,7 +821,11 @@ namespace OpenAstroAra.Server.Services {
                         return null;
                     }
                     // #2066 — an unconfirmed stop (or a mount that reconnected while the run ran) leaves the pose unverified.
-                    NotePoseUnverifiedAfterRun(end, exitStopped);
+                    // Not at Done's confirmed stop: the run goes on to its own Find Home, which the flag would refuse; its
+                    // final exit flags a reconnect.
+                    if (!(exitGoesOn && exitStopped == true)) {
+                        NotePoseUnverifiedAfterRun(end, exitStopped);
+                    }
                     lock (_gate) {
                         // #2066 — recorded under the lock the stop path reads it and marks the run reported in
                         // (EndRoutineAsync): once the stop path has told the client the run ended, the finding is this run's
@@ -848,6 +853,7 @@ namespace OpenAstroAra.Server.Services {
             // not confirmed fails the run. With <paramref name="runGoesOn"/> (Done) the run moves the mount again
             // afterwards, so it owes its exit once more, and the stop path a new finding.
             async Task StopMountOrFailAsync(string why, bool runGoesOn) {
+                exitGoesOn = runGoesOn;
                 switch (await ExitMountOnceAsync(why).ConfigureAwait(false)) {
                     case false:
                         throw new RoutineFailedException(MountDidNotStop, CutPowerSentence);
@@ -855,6 +861,7 @@ namespace OpenAstroAra.Server.Services {
                         throw new OperationCanceledException("the mount is no longer this run's to stop");
                 }
                 if (runGoesOn) {
+                    exitGoesOn = false;
                     exited = false;
                     exitStopped = null;
                     end.MountStopped = null;

@@ -169,9 +169,6 @@ namespace OpenAstroAra.Server.Services {
                 }
                 watch = (w.Epoch, w.OwnAborts, w.End);
             }
-            // #2066 — a mount that reconnected since the Start (a Wi-Fi drop, a power cycle) may have moved meanwhile: its
-            // position is flagged at once, so nothing moves it by the model until the user confirms Home.
-            NotePoseUnverifiedAfterRun(watch.End, mountStopped: null);
             var own = Interlocked.Read(ref _ownAborts) - watch.OwnAborts;
             if (service.AbortEpoch - watch.Epoch <= own) {
                 return;

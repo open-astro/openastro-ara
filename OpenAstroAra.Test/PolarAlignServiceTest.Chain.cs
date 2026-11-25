@@ -198,6 +198,24 @@ namespace OpenAstroAra.Test {
             }
         }
 
+        // A Wi-Fi blip in the adjust loop (a new mount session) must not block the run's own moves after Done: the pose is
+        // flagged at the run's end, not before its Home and verify turns.
+        [Test]
+        public async Task A_reconnect_during_adjust_still_verifies_after_Done_and_flags_the_pose_at_the_end() {
+            var mount = PolledGemAt(-4.0);
+            var ws = new WsRecorder();
+            using var svc = NewGemService(mount, ws);
+            await FineRunToAdjustingAsync(svc).ConfigureAwait(false);
+            mount.Reconnect();
+            var mark = ws.Events.Count;
+
+            await svc.CompleteAsync(null, CancellationToken.None).ConfigureAwait(false);
+            var status = await PollStateAsync(svc, mark, "checked", "failed").ConfigureAwait(false);
+
+            Assert.That(status.State, Is.EqualTo("checked"), mount.Describe());
+            Assert.That(mount.PositionUnverifiedReason, Is.EqualTo(MountPoseTrust.StopUnconfirmed), "flagged once the run ended");
+        }
+
         [Test]
         public async Task A_mount_that_cannot_find_Home_verifies_with_two_turns_back_and_no_Home() {
             var mount = PolledGemAt(-4.0); // cannot find Home
