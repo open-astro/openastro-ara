@@ -31,7 +31,9 @@ extension MosaicGridX on MosaicGrid {
 
 /// Panel offsets in the tangent plane (arcmin, x east-west / y north-south
 /// BEFORE rotation) — row-major, same order the overlay emits. Rotation is
-/// applied here so callers draw or deproject the same points.
+/// applied here so callers draw or deproject the same points: [rotationDeg]
+/// is the camera's up axis in degrees east of north (the daemon's meaning,
+/// #2150), so +y lands at that position angle and +x at 90° more.
 List<(double, double)> mosaicPanelOffsetsArcmin(
   (double, double) fovArcmin,
   MosaicGrid g, {
@@ -46,7 +48,7 @@ List<(double, double)> mosaicPanelOffsetsArcmin(
         () {
           final gx = (ix - (g.cols - 1) / 2) * sw;
           final gy = (iy - (g.rows - 1) / 2) * sh;
-          return (gx * cosT - gy * sinT, gx * sinT + gy * cosT);
+          return (gx * cosT + gy * sinT, -gx * sinT + gy * cosT);
         }(),
   ];
 }

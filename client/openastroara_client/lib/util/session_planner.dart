@@ -29,8 +29,8 @@ class SessionPlanTarget {
   final double? subSeconds;
   final int? subCount;
 
-  /// Camera rotation the user dialled for this slot (degrees, clockwise on
-  /// the sky as framed; same convention as the planetarium's framing dial).
+  /// Camera rotation the user dialled for this slot: the camera's up axis in
+  /// degrees east of north, the planetarium framing dial's meaning (#2150).
   /// Null = not set → the run keeps a plain slew, exactly like an untouched
   /// framing dial.
   final double? positionAngleDeg;

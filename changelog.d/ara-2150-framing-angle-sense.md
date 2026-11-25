@@ -1,0 +1,2 @@
+### Fixed (framing)
+- **The framing box turns the way the camera does** (#2150): the box drawn on the planetarium, the solved-field box, the mosaic panel centres of a run and the session planner's preview turned the opposite way from the frame the rig takes, so the taken frame was the mirror of the box; they now use the daemon's angle (the camera's up axis, east of north), Snap to catalogue angle picks the matching dial (M 31 snaps to 125° on a landscape sensor), and the solved-field box's up tick sits on its top edge.

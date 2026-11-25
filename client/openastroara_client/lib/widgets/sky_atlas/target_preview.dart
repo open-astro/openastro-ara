@@ -26,9 +26,9 @@ class TargetPreview extends ConsumerWidget {
   final TonightSkyObject object;
 
   /// The camera's single-frame FOV (width, height arcmin) to draw as a box
-  /// over the field, rotated by [rotationDeg] (clockwise, the planetarium
-  /// dial's convention). Null = no box, and the field is sized to the object
-  /// alone.
+  /// over the field, rotated by [rotationDeg]: the camera's up axis in
+  /// degrees east of north, the planetarium dial's meaning (#2150). Null = no
+  /// box, and the field is sized to the object alone.
   final (double, double)? frameFovArcmin;
   final double rotationDeg;
 
@@ -387,7 +387,9 @@ class _FramePainter extends CustomPainter {
         .toList();
     canvas.save();
     canvas.translate(c.dx, c.dy);
-    canvas.rotate(rotationDeg * math.pi / 180);
+    // North is up and east left on the survey cutout, so turning the up axis
+    // toward east is counter-clockwise on screen (#2150).
+    canvas.rotate(-rotationDeg * math.pi / 180);
     final union = Path();
     for (final p in panels) {
       union.addRect(Rect.fromCenter(center: p, width: w, height: h));

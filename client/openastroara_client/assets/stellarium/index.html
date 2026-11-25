@@ -1389,12 +1389,12 @@ function catalogueAngle(sel) {
 }
 
 // The dial angle that lays the box's long side along the catalogue position
-// angle, 0 to 179, or null without one. mosaicData puts the box's width axis
-// at position angle 90 − dial and its height axis at −dial.
+// angle, 0 to 179, or null without one. mosaicData puts the box's height (up)
+// axis at position angle dial and its width axis at dial + 90 (#2150).
 function snapDialDeg() {
   if (frameCatPaDeg == null) return null;
   var portrait = !!(optics && optics.ok && optics.fovHDeg > optics.fovWDeg);
-  var turn = (portrait ? 0 : 90) - frameCatPaDeg;
+  var turn = frameCatPaDeg - (portrait ? 0 : 90);
   return ((turn % 180) + 180) % 180;
 }
 
@@ -1475,6 +1475,15 @@ function tanToRaDec(xiDeg, etaDeg, ra0Deg, dec0Deg) {
   return [ra / D2R, dec / D2R];
 }
 
+// A point (lx, ly) of a box, in degrees along its width and its height (up),
+// turned into tangent-plane offsets [east, north] for a dial with cosine cosT
+// and sine sinT. The dial is the camera's up axis, east of north (the daemon's
+// meaning, #2150): +ly lands at PA dial, +lx at dial + 90. Every box and panel
+// the page draws or sends turns through here, so they cannot disagree.
+function upAxisTurn(lx, ly, cosT, sinT) {
+  return [lx * cosT + ly * sinT, -lx * sinT + ly * cosT];
+}
+
 // Build the GeoJSON for the box (or mosaic grid). Each panel is a rectangle of the
 // camera FOV, offset on the mosaic grid and rotated by the position angle in the
 // local tangent plane, then deprojected onto the sky with the gnomonic inverse
@@ -1494,9 +1503,8 @@ function mosaicData() {
       var gx = (ix - (frameCols - 1) / 2) * stepW;
       var gy = (iy - (frameRows - 1) / 2) * stepH;
       var ring = corners.map(function (c) {
-        var lx = c[0] + gx, ly = c[1] + gy;
-        var dx = lx * cosT - ly * sinT, dy = lx * sinT + ly * cosT;
-        return tanToRaDec(dx, dy, frameRaDeg, frameDecDeg);
+        var d = upAxisTurn(c[0] + gx, c[1] + gy, cosT, sinT);
+        return tanToRaDec(d[0], d[1], frameRaDeg, frameDecDeg);
       });
       polys.push([ring]); // a polygon = [exterior ring]
     }
@@ -1523,12 +1531,12 @@ function scopeBoxData() {
   var th = scopeBox.paDeg * D2R, cosT = Math.cos(th), sinT = Math.sin(th);
   var hw = scopeBox.fovWDeg / 2, hh = scopeBox.fovHDeg / 2;
   function pt(lx, ly) {
-    var dx = lx * cosT - ly * sinT, dy = lx * sinT + ly * cosT;
-    return tanToRaDec(dx, dy, scopeBox.ra, scopeBox.dec);
+    var d = upAxisTurn(lx, ly, cosT, sinT);
+    return tanToRaDec(d[0], d[1], scopeBox.ra, scopeBox.dec);
   }
   var ring = [[-hw, -hh], [hw, -hh], [hw, hh], [-hw, hh], [-hw, -hh]].map(function (c) { return pt(c[0], c[1]); });
   var tickW = Math.max(hw * 0.02, 0.002), tickH = hh * 0.18;
-  var tick = [[-tickW, -hh], [tickW, -hh], [tickW, -hh + tickH], [-tickW, -hh + tickH], [-tickW, -hh]].map(function (c) { return pt(c[0], c[1]); });
+  var tick = [[-tickW, hh], [tickW, hh], [tickW, hh - tickH], [-tickW, hh - tickH], [-tickW, hh]].map(function (c) { return pt(c[0], c[1]); });
   return { type: 'FeatureCollection', features: [{
     type: 'Feature', geometry: { type: 'MultiPolygon', coordinates: [[ring], [tick]] },
     properties: {
@@ -1805,8 +1813,8 @@ function addFrameToSequence() {
       for (var ix = 0; ix < frameCols; ix++) {
         var gx = (ix - (frameCols - 1) / 2) * stepW;
         var gy = (iy - (frameRows - 1) / 2) * stepH;
-        var dx = gx * cosT - gy * sinT, dy = gx * sinT + gy * cosT;
-        var c = tanToRaDec(dx, dy, frameRaDeg, frameDecDeg);
+        var d = upAxisTurn(gx, gy, cosT, sinT);
+        var c = tanToRaDec(d[0], d[1], frameRaDeg, frameDecDeg);
         panels.push({ raDeg: c[0], decDeg: c[1] });
       }
     }
