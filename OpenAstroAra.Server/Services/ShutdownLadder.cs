@@ -113,7 +113,7 @@ public sealed partial class ShutdownLadder {
     /// through its own stop, the mount's holders first. A running polar alignment holds the mount, and the mediator refuses
     /// a Find Home or park while it does: it ends through its takeover (it stops its motor, leaves the mount to this step
     /// and gives the mount back). A Center is cancelled, so it does not re-slew. Each stop is bounded by
-    /// <see cref="RoutineStopTimeout"/>; a routine still running is logged and the step goes on.</summary>
+    /// <see cref="RoutineStopTimeout"/>; a stop that does not return within it, or throws, is logged and the step goes on.</summary>
     private async Task EndRoutinesFirstAsync() {
         if (_occupancy is null) {
             return;

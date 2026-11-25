@@ -30,7 +30,7 @@ internal static class ReactionMountStops {
     /// <summary>#2066, #2142 — the park's first step: every routine that holds the mount ends through its own stop in
     /// <see cref="RigOccupancy"/> (polar alignment leaves the mount to the park, with no stop confirmation of its own that
     /// would hold the park back; a Center is cancelled), then the Polar Aligner stops. Each step is bounded by
-    /// <paramref name="bound"/>; a fault, a hang or a routine still running is logged and the park goes ahead.</summary>
+    /// <paramref name="bound"/>; a stop that does not return within the bound, or throws, is logged and the park goes ahead.</summary>
     /// <param name="takeoverBy">The park's name for the routines' logs (<see cref="MountStopReasons.SafetyPark"/> or
     /// <see cref="MountStopReasons.FaultPark"/>).</param>
     public static async Task StopMountHoldersBeforeParkAsync(RigOccupancy? occupancy, IPolarAlignerService? aligner,

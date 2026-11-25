@@ -119,9 +119,9 @@ namespace OpenAstroAra.Test {
             sequencer.Verify(s => s.PauseActiveRunsAsync(It.IsAny<CancellationToken>()), Times.Never);
         }
 
-        // #2142 — the Polar Align Routine's stop is its takeover, named for the ladder, and its own IsActive confirms it.
+        // #2142 — the Polar Align Routine's stop is its takeover, named for the ladder, and the takeover's return confirms it.
         [Test]
-        public async Task Polar_alignment_stops_by_its_takeover_and_is_confirmed_by_its_own_reading() {
+        public async Task Polar_alignment_stops_by_its_takeover_and_is_confirmed_by_its_return() {
             var runs = true;
             var polar = new Mock<IPolarAlignService>();
             polar.SetupGet(p => p.IsActive).Returns(() => runs);
