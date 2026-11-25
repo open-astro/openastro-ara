@@ -16,11 +16,6 @@ import '../../support/polar_preflight.dart';
 
 /// A rig whose pre-flight list follows the profile's polar-align section.
 class _Rig implements PolarAlignClient {
-  @override
-  Future<PolarAlignMoveToStartResult> moveToStart(
-    PolarAlignMoveToStartOffer offer,
-  ) =>
-      throw UnimplementedError();
   final section = FakePolarAlignSection(loaded: true);
   bool parked = true;
 

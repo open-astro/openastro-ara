@@ -714,25 +714,6 @@ public sealed record PolarAlignMotorDirectionDto(int Sign, string MountKey, stri
         && string.Equals(DriverVersion ?? string.Empty, driverVersion ?? string.Empty, StringComparison.Ordinal);
 }
 
-/// <summary>#2166 rig check — the Dec motor direction the move to the start position learned on this profile's mount,
-/// and saved (profile section <c>polar_align_dec_motor_direction</c>, daemon-owned, null until a move arrived after a
-/// probe). <c>TowardPoleSign</c> +1: a positive secondary-axis MoveAxis rate moved the scope toward the pole; −1: away.
-/// <c>PierSide</c> is the side it was learned on (<c>west</c> or <c>east</c>): it stands for that side only, since a
-/// driver may map the Dec rate to the axis (opposite on the other side) or to the sky (the same on both). Keyed like
-/// <see cref="PolarAlignMotorDirectionDto"/> (the mount's key and its driver's name and version), so another mount, driver
-/// or side probes again. With a saved direction the move skips its 0.3° probe, which from Home cannot tell which way it
-/// went until the mount's pier side catches up.</summary>
-public sealed record PolarAlignDecMotorDirectionDto(int TowardPoleSign, string PierSide, string MountKey, string DriverInfo, string DriverVersion, DateTimeOffset TestedUtc) {
-    /// <summary>As <see cref="PolarAlignMotorDirectionDto.IsFor"/>, and learned on <paramref name="pierSide"/>.</summary>
-    public bool IsFor(string? mountKey, string? driverInfo, string? driverVersion, string? pierSide) =>
-        TowardPoleSign is 1 or -1
-        && !string.IsNullOrWhiteSpace(MountKey)
-        && string.Equals(PierSide, pierSide, StringComparison.Ordinal)
-        && string.Equals(MountKey, mountKey, StringComparison.Ordinal)
-        && string.Equals(DriverInfo ?? string.Empty, driverInfo ?? string.Empty, StringComparison.Ordinal)
-        && string.Equals(DriverVersion ?? string.Empty, driverVersion ?? string.Empty, StringComparison.Ordinal);
-}
-
 /// <summary>#2081 — <c>GET /api/v1/equipment/polaralign/motor-direction</c>: the saved test (null = never tested, or
 /// forgotten by "Test direction again"), and whether it stands for the mount connected now (null = no mount connected).
 /// A start whose mount it does not stand for tests the direction first (a 0.5° turn the confirm step shows).</summary>

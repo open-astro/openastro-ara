@@ -40,11 +40,6 @@ public interface IMountMotionControl {
     /// connection; null when not connected, not read yet, or the driver would not answer. Polar Align's motor turn needs it.</summary>
     bool? CanMovePrimaryAxis => null;
 
-    /// <summary>#2166 — whether the mount can turn its Dec axis by rate (ASCOM <c>CanMoveAxis(Secondary)</c>), read once
-    /// per connection; null when not connected, not read yet, or the driver would not answer. Polar Align's move to the
-    /// start position needs it.</summary>
-    bool? CanMoveSecondaryAxis => null;
-
     /// <summary>#2173 — the driver says its FindHome is a real home-sensor search (AlpacaBridge's
     /// <c>findhomeissensorsearch</c>), read once per connection; false when not connected, not read yet, or the read
     /// failed. A Home then clears an unverified position by itself, for every reason, so the refusals word it so.</summary>

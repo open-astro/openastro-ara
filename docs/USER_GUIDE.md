@@ -214,11 +214,11 @@ framing/focus loop when you need to point or focus by eye.
   first, because the assistant needs the star to drift uncorrected. Run it on a calm night after polar alignment, and again after you change the
   guide camera, scope or mount.
 - **Starting Polar Align.** Point the tube 2–5° from the pole with the counterweights down, then
-  start. Polar Align starts from there: it never sends the mount Home and never slews it, and a run
-  never moves its Dec axis, as NINA's three-point alignment. A parked mount is refused ("Mount is
-  parked — unpark it and point near the pole first"); Polar Align never unparks it. A tube within 3°
-  of the pole is refused too ("point it 2–5° from the pole"): the camera would look along the RA
-  axis. Point it off yourself, or use **Move to start position** (below). Polar Align also refuses, like NINA, a site with
+  start. Polar Align starts from there: it never sends the mount Home, never slews it and never moves
+  its Dec axis, as NINA's three-point alignment. A parked mount is refused ("Mount is parked — unpark
+  it and point near the pole first"); Polar Align never unparks it. A tube within 3° of the pole is
+  refused too ("point it 2–5° from the pole"): the camera would look along the RA axis, and Polar
+  Align no longer tilts it off with the Dec motor. Polar Align also refuses, like NINA, a site with
   no longitude or one still at latitude 0° and longitude 0° (set your site first: it steers by the
   sidereal time), an alt-az mount (turning it would turn azimuth, not RA), and a mount that cannot
   turn its RA axis by motor speed: Polar Align always turns RA with the motor. Before anything moves,
@@ -233,24 +233,6 @@ framing/focus loop when you need to point or focus by eye.
   Cancel just closes the question, and nothing moves. The answer is kept for each mount: a smaller or
   equal turn stays confirmed, a bigger one (a larger turn size, or a Check whose step is bigger) asks
   again when you start it. **Take back** withdraws it.
-- **Move to start position** (#2166). When the pre-flight list's "Where the scope points" check fails
-  because the tube points within 3° of the pole, a **Move to start position** button shows under it.
-  It moves only the Dec axis, never RA and never a GoTo, until the tube points about 4° from the pole;
-  the counterweights stay where they are. The first time on a mount it moves Dec 0.3° to learn which
-  way the Dec motor turns, and Ara saves that for the mount and the side of the pier, so later moves
-  go straight off the pole (**Test direction again** forgets it too; a saved direction that turns out
-  wrong is forgotten). From Home or within half a degree of the pole the scope has no side yet: the
-  first small move only takes it off the pole, onto whichever side the mount picks, and the move
-  carries on from that side. Next to the pole it waits about 10 seconds after a small move, because
-  some mounts report a pass over the pole a few seconds late.
-  While the mount is parked, the site is not set, its position is not trusted, the clearance
-  is not confirmed, it is an alt-az mount or it cannot turn Dec by motor speed, the button is off and
-  the reason is written beside it. A tap asks first ("Move to the start position?"); nothing moves
-  until you confirm. While it moves, "Moving the scope to the start position…" shows above the list
-  with **Stop**, also after you switch tab or mode and come back; Stop Mount and Emergency Stop work
-  too. It stops on its own if Dec stalls, takes too long, goes the wrong way, RA moves, or the pier
-  side changes, and a mount too slow to finish within 5 minutes is refused before it moves. Then the
-  list is read again: once the check passes, start Polar Align.
 - **Turn direction and the motor test.** Settings › Imaging › Polar align › **Turn direction** picks
   which way RA turns when Polar Align starts from a new pose: **Automatic** (east in the north, west
   in the south, as NINA), **East** or **West**. Pick the one whose turns do not cross the meridian from

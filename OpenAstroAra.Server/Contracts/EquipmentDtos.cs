@@ -985,52 +985,12 @@ public sealed record PolarAlignStartPlanDto(string? Stage, string Direction, dou
 /// fails, with that check's cause. A <c>warn</c> or <c>unknown</c> check never refuses: <c>unknown</c> is a check this
 /// daemon does not make yet (its detail names the issue that adds it). <c>MountKey</c> is the connected mount's key in
 /// the polar-align section's <c>mount_clearance</c> (null with no mount connected): the clearance confirmation writes
-/// there. <c>MoveToStart</c> (#2166) is the offer of <c>POST /polaralign/move-to-start</c>: present only when the
-/// <c>start_pointing</c> check fails because the scope points within 3° of the pole, null otherwise.</summary>
+/// there.</summary>
 public sealed record PolarAlignPreflightDto(
     bool Ready,
     IReadOnlyList<PolarAlignPreflightCheckDto> Checks,
     PolarAlignPreflightPlannedDto Planned,
-    string? MountKey,
-    PolarAlignMoveToStartOfferDto? MoveToStart);
-
-/// <summary>#2166 — the "Move to start position" offer on the pre-flight list: Polar Align can move the mount's Dec
-/// axis alone to <see cref="PolarAlignMoveToStartOfferDto.TargetOffPoleDeg"/> from the pole (counterweights stay where
-/// they are). <c>BlockedBy</c> is null when the move may be asked for, else why not
-/// (<see cref="PolarAlignMoveToStartBlocks"/>): the app shows the button disabled with that reason. <c>ReachDeg</c> is
-/// the most the move takes the Dec axis from where it starts (the target plus the probe), the reach the mount's
-/// clearance must cover.</summary>
-public sealed record PolarAlignMoveToStartOfferDto(string? BlockedBy, double TargetOffPoleDeg, double ReachDeg);
-
-/// <summary>#2166 — why the move to the start position cannot be asked for now (<see cref="PolarAlignMoveToStartOfferDto.BlockedBy"/>).</summary>
-public static class PolarAlignMoveToStartBlocks {
-    /// <summary>The mount is parked: Polar Align never unparks it.</summary>
-    public const string MountParked = "mount_parked";
-    /// <summary>The site's latitude is not set: the pole's side is not known.</summary>
-    public const string SiteLatitude = "site_latitude";
-    /// <summary>The mount's position is not trusted (#2070): confirm Home first.</summary>
-    public const string PoseUnverified = "pose_unverified";
-    /// <summary>The mount's clearance is not confirmed for the move's reach.</summary>
-    public const string ClearanceNotConfirmed = "clearance_not_confirmed";
-    /// <summary>The mount reports alt-az: its second axis is altitude, not Dec.</summary>
-    public const string AltAzMount = "alt_az_mount";
-    /// <summary>The mount reports CanMoveAxis(Secondary) false: it cannot turn its Dec axis by rate.</summary>
-    public const string CannotMoveDec = "cannot_move_dec";
-}
-
-/// <summary>#2166 — what <c>POST /polaralign/move-to-start</c> did once it moved: <c>Outcome</c> is <c>arrived</c> (the
-/// scope now points 2–5° from the pole), <c>stopped</c> (Stop, Stop Mount or Emergency Stop ended it; the mount stands
-/// where it stopped) or <c>failed</c> (a guard stopped it: <c>Reason</c> is the <c>polar_align.error</c> reason, such as
-/// <c>slew_stalled</c>, <c>ra_moved</c> or <c>pier_changed</c>, and <c>Message</c> says what to do). <c>Preflight</c> is the
-/// list read again after the move, from a fresh reading of the mount.</summary>
-public sealed record PolarAlignMoveToStartResultDto(string Outcome, string? Reason, string? Message, PolarAlignPreflightDto Preflight);
-
-/// <summary>The outcomes of <see cref="PolarAlignMoveToStartResultDto"/>.</summary>
-public static class PolarAlignMoveToStartOutcomes {
-    public const string Arrived = "arrived";
-    public const string Stopped = "stopped";
-    public const string Failed = "failed";
-}
+    string? MountKey);
 
 /// <summary>One check of <see cref="PolarAlignPreflightDto"/>: its id (<see cref="PolarAlignPreflightChecks"/>), its
 /// status (<see cref="PolarAlignPreflightStatuses"/>) and a sentence for people (English).</summary>
@@ -1099,15 +1059,6 @@ public static class PolarAlignPreflightChecks {
 /// they saw made this pose Polar Align's new origin. <c>DirectionTest</c> (#2081): the plan they saw had the 0.5°
 /// motor-direction test.</summary>
 public sealed record PolarAlignStartConfirmation(string Direction, bool NewOrigin = false, bool DirectionTest = false);
-
-/// <summary>#2166 — <c>POST /polaralign/move-to-start</c> body: the user's confirmation of the move (the app's motion
-/// confirm). The mount moves only with <c>Confirmed</c> true and <c>TargetOffPoleDeg</c> and <c>ReachDeg</c> equal to the
-/// pre-flight list's <see cref="PolarAlignMoveToStartOfferDto"/> the confirm showed; no body, <c>confirmed: false</c> or
-/// other numbers is the <c>polar-align-move-not-confirmed</c> Refusal, with nothing moved.</summary>
-public sealed record PolarAlignMoveToStartRequestDto(bool Confirmed = false, double? TargetOffPoleDeg = null, double? ReachDeg = null);
-
-/// <summary>#2166 — the move's confirmation as the service reads it: the offer's numbers the user confirmed.</summary>
-public sealed record PolarAlignMoveToStartConfirmation(double TargetOffPoleDeg, double ReachDeg);
 
 /// <summary>The RA turn directions of <see cref="PolarAlignStartPlanDto.Direction"/>.</summary>
 public static class PolarAlignDirections {

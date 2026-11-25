@@ -487,17 +487,6 @@ public interface IPolarAlignService {
     /// <c>fail</c>, and <see cref="StartAsync"/> and <see cref="GetStartPlanAsync"/> refuse on the first one. Throws
     /// <see cref="ArgumentException"/> for an unknown stage only.</summary>
     Task<PolarAlignPreflightDto> GetPreflightAsync(string? stage, CancellationToken ct);
-    /// <summary>#2166 — "Move to start position": the scope points within 3° of the pole, so move its Dec axis alone (no
-    /// GoTo, the counterweights stay down) to 4° from the site's pole, with the guards of every Polar Align turn, then
-    /// read the pointing again. Refuses before anything moves (409) with the pre-flight list's cause: a run going
-    /// (<c>polar-align-run-active</c>), another motion owner (<c>polar-align-mount-busy</c>), a parked mount, an unverified
-    /// position, a clearance not confirmed for the move's reach, an alt-az mount, CanMoveAxis(Secondary) false
-    /// (<c>polar-align-cannot-move-dec</c>), or a scope not within 3° of the pole (<c>polar-align-move-to-start-not-needed</c>).
-    /// Once it moved, answers with the outcome and the fresh list; Stop (<see cref="StopAsync"/>) ends it. Nothing moves
-    /// without the user's <paramref name="confirmation"/> of the offer's numbers as they are now (else
-    /// <c>polar-align-move-not-confirmed</c>).</summary>
-    Task<PolarAlignMoveToStartResultDto> MoveToStartAsync(PolarAlignMoveToStartConfirmation? confirmation, CancellationToken ct) =>
-        throw new InvalidOperationException("this daemon cannot move the mount to the polar-align start position");
     /// <summary>Begin ONE measurement (#2082) at <paramref name="stage"/> (<see cref="PolarAlignStages"/>; null =
     /// fine), from where the mount points now: no stage sends the mount Home or slews it (#2048), and none leads into
     /// another. The mount moves only with a <paramref name="confirmation"/> whose direction is the one the run would

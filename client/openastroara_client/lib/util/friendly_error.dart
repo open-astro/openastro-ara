@@ -144,12 +144,6 @@ String? _refusalWords(AppLocalizations l, Refusal r) {
     RefusalCause.polarAlignSiteNotSet => l.refusalPolarAlignSiteNotSet,
     RefusalCause.polarAlignAltAzMount => l.refusalPolarAlignAltAzMount,
     RefusalCause.polarAlignCannotMoveAxis => l.refusalPolarAlignCannotMoveAxis,
-    RefusalCause.polarAlignRunActive => l.refusalPolarAlignRunActive,
-    RefusalCause.polarAlignCannotMoveDec => l.refusalPolarAlignCannotMoveDec,
-    RefusalCause.polarAlignMoveToStartNotNeeded =>
-      l.refusalPolarAlignMoveToStartNotNeeded,
-    RefusalCause.polarAlignMoveNotConfirmed =>
-      l.refusalPolarAlignMoveNotConfirmed,
     RefusalCause.poseCheckNotNeeded => l.refusalPoseCheckNotNeeded,
     RefusalCause.poseSyncNotOffered => l.refusalPoseSyncNotOffered,
     RefusalCause.mountNotConnected => l.refusalMountNotConnected,

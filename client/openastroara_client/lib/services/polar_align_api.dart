@@ -24,16 +24,6 @@ abstract interface class PolarAlignClient {
   /// never leads into another; a check started from the adjust loop ends the
   /// loop first).
   Future<void> start(PolarAlignStartPlan plan);
-
-  /// #2166 "Move to start position": the rig moves the scope's Dec axis alone
-  /// from within 3° of the pole to its start position, and answers once the
-  /// move ended, with its outcome and the fresh pre-flight list. A refusal
-  /// before anything moved is a [Refusal]. [stop] ends the move. Sent only
-  /// after the motion confirm: it carries the user's confirmation of [offer]'s
-  /// numbers, which the rig checks against its offer now (ADR 0024 rule 1).
-  Future<PolarAlignMoveToStartResult> moveToStart(
-    PolarAlignMoveToStartOffer offer,
-  );
   Future<void> stop();
   Future<void> complete();
   Future<void> requestCapture();
@@ -151,42 +141,6 @@ class PolarAlignApi implements PolarAlignClient {
       rethrow;
     }
   }
-
-  /// #2166 the move answers once the mount stood still and the list was read
-  /// again: the probe and the move (each bounded by twice its planned time),
-  /// two settles and the confirmed stop fit well inside [moveToStartTimeout].
-  @override
-  Future<PolarAlignMoveToStartResult> moveToStart(
-    PolarAlignMoveToStartOffer offer,
-  ) async {
-    final Response<dynamic> res;
-    try {
-      res = await _dio.post<dynamic>(
-        '/api/v1/equipment/polaralign/move-to-start',
-        data: {
-          'confirmed': true,
-          'target_off_pole_deg': offer.targetOffPoleDeg,
-          'reach_deg': offer.reachDeg,
-        },
-        options: Options(receiveTimeout: moveToStartTimeout),
-      );
-    } on DioException catch (e) {
-      final refusal = Refusal.fromDio(e);
-      if (refusal != null) throw refusal;
-      rethrow;
-    }
-    final data = res.data;
-    if (data is! Map<String, dynamic>) {
-      throw const FormatException('move-to-start returned a non-object body');
-    }
-    return PolarAlignMoveToStartResult.fromJson(data);
-  }
-
-  /// #2166 how long the app waits for the move to the start position. Going
-  /// away stops the move, so this is above the rig's worst case: the rig fails
-  /// a mount whose probe and move could take more than 5 min before anything
-  /// moves (`MoveToStartMotorBudget`), and the settles, stops and lists after.
-  static const moveToStartTimeout = Duration(minutes: 10);
 
   /// Abort — the mount stops where it is (#2048: AbortSlew and both motors
   /// stopped, confirmed on the daemon, tracking left off); logged as

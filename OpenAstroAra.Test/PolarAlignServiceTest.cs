@@ -352,8 +352,6 @@ namespace OpenAstroAra.Test {
                 ShutdownGrace = TimeSpan.FromSeconds(2),
                 // #2066 (ARA-2) — the two readings before each turn back to back (the daemon waits 1 s between them).
                 MountSteadyFor = TimeSpan.Zero,
-                // #2166 — the wait after a probe next to the pole: two equal readings back to back (the daemon's is 10 s).
-                PoleReadingQuietFor = TimeSpan.Zero,
                 // #2189 — no ramp allowance at bench speeds (30°/s would excuse 15°); the daemon's is 0.5 s.
                 MotorRampAllowance = TimeSpan.Zero,
             };

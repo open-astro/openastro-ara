@@ -71,15 +71,14 @@ namespace OpenAstroAra.Server.Services {
             return (second.RaDeg, second.DecDeg, second.Side);
         }
 
-        /// <summary><see cref="EnsureMountSteadyAsync"/> returning the whole second reading; <paramref name="foldPastPole"/>
-        /// as <see cref="ReadFreshPointingAsync"/> (#2166, a Dec move's).</summary>
-        private async Task<FreshPointing> EnsureMountSteadyReadingAsync(int gen, CancellationToken ct, bool foldPastPole = false) {
+        /// <summary><see cref="EnsureMountSteadyAsync"/> returning the whole second reading.</summary>
+        private async Task<FreshPointing> EnsureMountSteadyReadingAsync(int gen, CancellationToken ct) {
             ThrowIfGuiderBusy();
-            var first = await RunReadingAsync(gen, MountReadKind.Full, ct, foldPastPole).ConfigureAwait(false);
+            var first = await RunReadingAsync(gen, MountReadKind.Full, ct).ConfigureAwait(false);
             ThrowIfSlewing(first.Slewing);
             await Task.Delay(MountSteadyFor, ct).ConfigureAwait(false);
             ThrowIfStoppedFromOutside(gen);
-            var second = await RunReadingAsync(gen, MountReadKind.Full, ct, foldPastPole).ConfigureAwait(false);
+            var second = await RunReadingAsync(gen, MountReadKind.Full, ct).ConfigureAwait(false);
             ThrowIfSlewing(second.Slewing);
             var movedRa = Math.Abs(Wrap180(second.RaDeg - first.RaDeg));
             var movedDec = Math.Abs(second.DecDeg - first.DecDeg);

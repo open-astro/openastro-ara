@@ -7,18 +7,14 @@ const preflightMountKey = 'mount-1';
 /// (or not): the clearance check passes or fails, the rest as a fresh rig has
 /// them. The run turns RA up to [reachDeg] each way (#2165: the two 10° turns
 /// plus the 0.5° direction test); [parked] adds the parked mount's failing
-/// check. [onAxis] (#2166): the scope points within 3° of the pole, so the
-/// start pointing fails, and the rig offers [moveToStart].
+/// check.
 PolarAlignPreflight rigPreflight({
   required bool confirmed,
   bool parked = false,
   double reachDeg = 20.5,
-  bool onAxis = false,
-  PolarAlignMoveToStartOffer? moveToStart,
 }) => PolarAlignPreflight(
-  ready: confirmed && !parked && !onAxis,
+  ready: confirmed && !parked,
   mountKey: preflightMountKey,
-  moveToStart: onAxis ? moveToStart : null,
   checks: [
     const PolarAlignPreflightCheck(
       id: 'mount_connected',
@@ -41,12 +37,6 @@ PolarAlignPreflight rigPreflight({
           ? 'You confirmed this mount clears the pier.'
           : 'Not confirmed for this mount.',
     ),
-    if (onAxis)
-      const PolarAlignPreflightCheck(
-        id: PolarAlignPreflightChecks.startPointing,
-        status: PolarAlignPreflightStatuses.fail,
-        detail: 'The scope points within 3° of the pole.',
-      ),
     const PolarAlignPreflightCheck(
       id: 'mount_type',
       status: PolarAlignPreflightStatuses.unknown,
@@ -75,15 +65,11 @@ PolarAlignPreflight rigPreflightFor(
   PolarAlignSettings? settings, {
   bool parked = false,
   double reachDeg = 20.5,
-  bool onAxis = false,
-  PolarAlignMoveToStartOffer? moveToStart,
 }) {
   final entry = settings?.mountClearance[preflightMountKey];
   return rigPreflight(
     confirmed: entry != null && reachDeg <= entry.confirmedReachDeg,
     parked: parked,
     reachDeg: reachDeg,
-    onAxis: onAxis,
-    moveToStart: moveToStart,
   );
 }

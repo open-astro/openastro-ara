@@ -100,7 +100,7 @@ namespace OpenAstroAra.Server.Services {
         /// this fraction of what the motor was told did not follow it: the mount stopped (a soft limit) or the reading froze.
         /// No top-up goes out then (no new motor command toward a limit), unless the reading was still moving at the stop
         /// (<see cref="ClockStopAdvancingDeg"/>): a mount slower than its speed creeps on to the time bound. A reading that
-        /// lags but catches up in the settle reads nearly all of it (the rig: 0.38° for a 0.3° probe).</summary>
+        /// lags but catches up in the settle reads nearly all of it.</summary>
         internal const double ClockStopFollowFraction = 0.8;
 
         /// <summary>#2189 review — how much of a segment's travel a mount that ramps its motor up may lose (its rate times
@@ -110,16 +110,11 @@ namespace OpenAstroAra.Server.Services {
         /// <summary>A reading step at the last poll before a clock stop above this is a reading still moving (creeping).</summary>
         internal const double ClockStopAdvancingDeg = 0.001;
 
-        /// <summary>The fraction of a short move's commanded travel its settled reading may go the wrong way before it is
-        /// wrong-way (<see cref="SettledWrongWayDeg"/>).</summary>
-        internal const double SettledWrongWayFraction = 0.5;
-
         /// <summary>
         /// #2166 rig check — how far a move's motor has been told to turn: the rates commanded, times how long each ran, on
         /// the run's monotonic clock. The HAE29C's readings trailed its motor by up to 2 s (no RA change for 2 s of a
-        /// 2.13°/s turn; a 0.3° Dec probe ran 1.9 s, 1°, before a hand Stop), so a move that stopped only on its reading
-        /// overshot by the rate times that lag. Each move also stops once this reaches its distance; the settle's fresh
-        /// readings then say where it ended.
+        /// 2.13°/s turn), so a move that stopped only on its reading overshot by the rate times that lag. Each move also
+        /// stops once this reaches its distance; the settle's fresh readings then say where it ended.
         /// </summary>
         private sealed class CommandedTravel(TimeProvider clock) {
             private double _done;
@@ -146,14 +141,6 @@ namespace OpenAstroAra.Server.Services {
             public TimeSpan TimeTo(double degrees, long at) =>
                 _rate <= 0 ? TimeSpan.MaxValue : TimeSpan.FromSeconds(Math.Max(0.0, (degrees - DegreesAt(at)) / _rate));
         }
-
-        /// <summary>After a stop by the clock, how far a Dec move's settled reading may go the other way before the move is
-        /// wrong-way: <see cref="WrongWayDeg"/>, or less for a short move: a reading that followed the motor (half of what it
-        /// was told, <see cref="SettledWrongWayFraction"/>) the wrong way, but never under <see cref="ClockStopTopUpDeg"/>, so a
-        /// tiny segment's noise is not wrong-way. A 0.3° leg never reaches 0.5° (#2189 review). An
-        /// RA turn is at least 1°, so it keeps <see cref="WrongWayDeg"/>.</summary>
-        private static double SettledWrongWayDeg(double commandedDeg) =>
-            Math.Max(ClockStopTopUpDeg, Math.Min(WrongWayDeg, SettledWrongWayFraction * Math.Abs(commandedDeg)));
 
         /// <summary>The next poll's wait: <see cref="AxisMovePoll"/>, or sooner when the motor's commanded travel reaches the
         /// move's distance before then, so the clock's stop lands on time.</summary>
@@ -277,12 +264,12 @@ namespace OpenAstroAra.Server.Services {
 
         /// <summary>A poll's RA reading that changed further than the motor could have turned it since the last change: a
         /// reading that jumped (a bad read, a driver glitch), never motion to steer by.</summary>
-        private void ThrowIfReadingJumped(double changeDeg, double fastRate, TimeSpan sinceLastChange, string axisName = "RA") {
+        private void ThrowIfReadingJumped(double changeDeg, double fastRate, TimeSpan sinceLastChange) {
             var possible = (2.0 * fastRate * sinceLastChange.TotalSeconds) + ReadingJumpSlackDeg;
             if (Math.Abs(changeDeg) > possible) {
                 LogTurnReadingJumped(changeDeg, possible);
                 throw new RoutineFailedException(TurnMismatch, string.Create(CultureInfo.InvariantCulture,
-                    $"the mount's {axisName} reading jumped {Math.Abs(changeDeg):F1}° in one read during a turn, more than the motor can turn — check the mount and its connection, then start again"));
+                    $"the mount's RA reading jumped {Math.Abs(changeDeg):F1}° in one read during a turn, more than the motor can turn — check the mount and its connection, then start again"));
             }
         }
 
@@ -292,13 +279,10 @@ namespace OpenAstroAra.Server.Services {
         /// checked like a poll of the turn (Dec, pier side). A mount that runs on more than <see cref="RunawayPastStepDeg"/>
         /// past the step, or does not stand still within <see cref="AxisSteadyWindow"/>, did not obey the stop: the confirmed
         /// stop goes out at once (<see cref="FailTurnNotStoppedAsync"/>). Returns the last reading: where the turn ended.
-        /// <paramref name="checkPose"/> (#2166) replaces the RA turn's Dec and pier-side check for a Dec move, whose
-        /// readings fold a Dec past the pole back over it (<paramref name="foldPastPole"/>).
         /// </summary>
         private async Task<(double RaDeg, double DecDeg, PierSide Side)> SettleAfterTurnAsync(
                 (double RaDeg, double DecDeg) start, PierSide startSide, double degrees,
-                Func<(double RaDeg, double DecDeg), (double RaDeg, double DecDeg), double> progress, int gen, CancellationToken ct,
-                Action<FreshPointing>? checkPose = null, bool foldPastPole = false) {
+                Func<(double RaDeg, double DecDeg), (double RaDeg, double DecDeg), double> progress, int gen, CancellationToken ct) {
             var began = Clock.GetTimestamp(); // monotonic: a wall clock that steps must not stretch or cut the settle
             (double RaDeg, double DecDeg, long At)? anchor = null;
             while (true) {
@@ -307,15 +291,11 @@ namespace OpenAstroAra.Server.Services {
                     throw new OperationCanceledException("the run was superseded while the turn settled");
                 }
                 ThrowIfStoppedFromOutside(gen);
-                var r = await RunReadingAsync(gen, MountReadKind.Full, ct, foldPastPole).ConfigureAwait(false);
+                var r = await RunReadingAsync(gen, MountReadKind.Full, ct).ConfigureAwait(false);
                 var at = Clock.GetTimestamp();
                 var side = r.Side is PierSide.pierUnknown ? startSide : r.Side;
                 NoteMountLeft((r.RaDeg, r.DecDeg), side);
-                if (checkPose is null) {
-                    ThrowIfTurnLeftItsAxis(start.DecDeg, startSide, r.DecDeg, r.Side);
-                } else {
-                    checkPose(r);
-                }
+                ThrowIfTurnLeftItsAxis(start.DecDeg, startSide, r.DecDeg, r.Side);
                 var past = progress(start, (r.RaDeg, r.DecDeg)) - degrees;
                 if (past > RunawayPastStepDeg) {
                     await FailTurnNotStoppedAsync(string.Create(CultureInfo.InvariantCulture,

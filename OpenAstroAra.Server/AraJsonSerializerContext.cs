@@ -227,8 +227,6 @@ namespace OpenAstroAra.Server;
 [JsonSerializable(typeof(PolarAlignStateDto))]
 [JsonSerializable(typeof(PolarAlignStartPlanDto))]
 [JsonSerializable(typeof(PolarAlignPreflightDto))]
-[JsonSerializable(typeof(PolarAlignMoveToStartRequestDto))]
-[JsonSerializable(typeof(PolarAlignMoveToStartResultDto))]
 [JsonSerializable(typeof(PolarAlignLastFrameDto))]
 [JsonSerializable(typeof(ProfileShareDto))]
 [JsonSerializable(typeof(ProfileShareImportPreviewDto))]
@@ -314,7 +312,6 @@ namespace OpenAstroAra.Server;
 [JsonSerializable(typeof(IReadOnlyList<FocusCalibrationSampleDto>))]
 [JsonSerializable(typeof(TrackingCalibrationDto))]
 [JsonSerializable(typeof(PolarAlignMotorDirectionDto))]
-[JsonSerializable(typeof(PolarAlignDecMotorDirectionDto))]
 [JsonSerializable(typeof(PolarAlignMotorDirectionStateDto))]
 // #1140 P2 — sky-model calibration store.
 [JsonSerializable(typeof(SkyModelCalibrationDto))]

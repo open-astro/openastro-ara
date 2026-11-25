@@ -66,7 +66,6 @@ namespace OpenAstroAra.Server.Services {
                 CanMovePrimaryAxis: () => _motionControl.CanMovePrimaryAxis,
                 // #2165 — the reach when the plan cannot be made: the same test PlanStartAsync owes.
                 DirectionTestOwedDeg: () => SavedRaMotorSign(ReadMountDriver()) is null ? DirectionTestDeg : 0.0,
-                CanMoveSecondaryAxis: () => _motionControl.CanMoveSecondaryAxis,
                 HomeIsSensorSearch: () => _motionControl.HomeIsSensorSearch);
             var result = await PolarAlignPreflightEvaluator.EvaluateAsync(inputs, ct).ConfigureAwait(false);
             return new StartPreflight(result, settings ?? PolarAlignSettingsClamp.Apply(new PolarAlignSettingsDto()), start);

@@ -11,11 +11,6 @@ import 'package:openastroara/widgets/imaging/polar_start_confirm.dart';
 /// The rig's side of the confirm step: the plan it answers, and the starts it got.
 class _Rig implements PolarAlignClient {
   @override
-  Future<PolarAlignMoveToStartResult> moveToStart(
-    PolarAlignMoveToStartOffer offer,
-  ) =>
-      throw UnimplementedError();
-  @override
   Future<PolarAlignPreflight?> preflight({String? stage}) async => null;
   _Rig(this.plan, {this.refusal});
   final PolarAlignStartPlan plan;

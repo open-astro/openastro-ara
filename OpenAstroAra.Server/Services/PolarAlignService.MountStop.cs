@@ -394,7 +394,7 @@ namespace OpenAstroAra.Server.Services {
             lock (_gate) {
                 _endRequests++;
                 live = _liveRun;
-                active = _active || _movingToStart; // #2166 — the move to the start position gets the stop round too
+                active = _active;
                 if (live is not null) {
                     _generation++;
                 }

@@ -26,10 +26,9 @@ namespace OpenAstroAra.Test {
 
     /// <summary>
     /// #2166 rig check (HAE29C on AlpacaBridge 6.0.0-beta.4, 2026-11-22) — the mount's position reads trailed its motor by
-    /// up to 2 s, so a move that stopped only on its reading overshot by its rate times that lag: the 0.3° Dec probe of
-    /// Move to start position ran 1.9 s, Dec 88.00° → 89.01°, before a hand Stop. Each move also stops once the motor has
-    /// been told its distance (the rates commanded times how long they ran). The fake mount's driver cache plays the lag:
-    /// it answers every read with a sample up to 2 s old.
+    /// up to 2 s, so a move that stopped only on its reading overshot by its rate times that lag. Each move also stops
+    /// once the motor has been told its distance (the rates commanded times how long they ran). The fake mount's driver
+    /// cache plays the lag: it answers every read with a sample up to 2 s old.
     /// </summary>
     public partial class PolarAlignServiceTest {
 
@@ -50,32 +49,6 @@ namespace OpenAstroAra.Test {
         /// <summary>A move stopped by the clock lands within one fresh read's travel of its distance: at most 10 ms at
         /// 2.13°/s (0.02°), plus the sky's turn while it moves (under 0.05° in 7 s).</summary>
         private const double ClockStopToleranceDeg = 0.1;
-
-        [Test]
-        public async Task Behind_a_2_s_reading_lag_the_move_to_starts_probe_stops_by_the_clock_at_0_3_degrees_and_the_move_arrives() {
-            var mount = PolledGemNearThePole();
-            var startOffPole = OffPoleDeg(mount);
-            using var svc = NewRigLagService(mount, new WsRecorder());
-            double? afterProbe = null;
-            mount.OnFullRead = () => {
-                // The second move's steady check reads the mount after the probe stood still, before the move starts.
-                if (DecMoves(mount).Length == 1 && !mount.IsMoving) {
-                    afterProbe = OffPoleDeg(mount);
-                }
-            };
-
-            var result = await svc.MoveToStartAsync(MoveConfirmed, CancellationToken.None).ConfigureAwait(false);
-
-            Assert.Multiple(() => {
-                Assert.That(afterProbe, Is.Not.Null, mount.Describe());
-                Assert.That(afterProbe!.Value - startOffPole, Is.EqualTo(PolarAlignService.MoveToStartProbeDeg).Within(ClockStopToleranceDeg),
-                    "the probe stops at 0.3°, not 1° on a reading 2 s behind. " + mount.Describe());
-                Assert.That(result.Outcome, Is.EqualTo(PolarAlignMoveToStartOutcomes.Arrived), result.Message + " " + mount.Describe());
-                Assert.That(OffPoleDeg(mount), Is.EqualTo(PolarAlignService.MoveToStartOffPoleDeg).Within(ClockStopToleranceDeg),
-                    "4° from the pole, not past it by the lag's travel");
-            });
-            mount.AssertEndedStopped(tracking: true);
-        }
 
         [Test]
         public async Task Behind_a_2_s_reading_lag_each_10_degree_RA_turn_stops_by_the_clock_at_its_step_and_the_run_reaches_adjusting() {
@@ -122,40 +95,14 @@ namespace OpenAstroAra.Test {
             mount.AssertEndedStopped(tracking: false);
         }
 
-        [Test]
-        public async Task A_Dec_move_stopped_by_the_clock_that_settles_the_wrong_way_fails_as_turn_wrong_way() {
-            // The probe learns the Dec motor's way; then the motor's sign flips, so the move off the pole goes toward it.
-            // At the bench's speeds that 0.9° move ends by the clock before the 2 s-old reading moves: only the settled
-            // reading shows it went the wrong way.
-            var mount = PolledGemNearThePole(decDeg: 87.2);
-            using var svc = NewBenchLagService(mount, new WsRecorder());
-            var flipped = false;
-            mount.OnFullRead = () => {
-                if (!flipped && DecMoves(mount).Length == 1 && !mount.IsMoving) {
-                    flipped = true;
-                    mount.DecMotorSign = -mount.DecMotorSign;
-                }
-            };
-
-            var result = await svc.MoveToStartAsync(MoveConfirmed, CancellationToken.None).ConfigureAwait(false);
-
-            Assert.Multiple(() => {
-                Assert.That(flipped, Is.True, mount.Describe());
-                Assert.That(result.Outcome, Is.EqualTo(PolarAlignMoveToStartOutcomes.Failed), result.Message);
-                Assert.That(result.Reason, Is.EqualTo(PolarAlignService.TurnWrongWay), result.Message + " " + mount.Describe());
-                Assert.That(DecMoves(mount), Has.Length.EqualTo(2), "the probe and the one move: no top-up, never reversed. " + mount.Describe());
-                Assert.That(mount.IsMoving, Is.False);
-            });
-        }
-
         // ── #2189 rig check: reads that block while the motor runs ──────────────────────────────
 
         /// <summary>The rig's readings on a fake in real time: a driver cache and a blocking read together up to 2 s old (the
         /// HAE29C's reads took 0.6 s and more right after a motor command), at its matched speeds and the daemon's 2 s stall.</summary>
-        private static PolarAlignService NewBlockingReadService(FakeGemMount mount, WsRecorder ws, InMemoryProfileStore? store = null) {
+        private static PolarAlignService NewBlockingReadService(FakeGemMount mount, WsRecorder ws) {
             mount.DriverCache = TimeSpan.FromSeconds(1.4);
             mount.SlowReads = TimeSpan.FromSeconds(0.6);
-            var svc = NewGemService(mount, ws, store, benchMotors: false);
+            var svc = NewGemService(mount, ws, benchMotors: false);
             svc.AxisFastRateDegPerSec = 2.13;
             svc.AxisSlowRateDegPerSec = 0.53;
             svc.AxisMoveStall = TimeSpan.FromSeconds(2);
@@ -173,26 +120,6 @@ namespace OpenAstroAra.Test {
         /// <summary>A real-time move stops within this of its distance: the clock's stop lands on its timer (tens of ms at
         /// 0.53°/s is under 0.05°), whatever a read in flight is doing.</summary>
         private const double BlockingReadToleranceDeg = 0.1;
-
-        [Test]
-        public async Task Behind_blocking_reads_the_3_6_degree_move_off_the_pole_stops_by_the_clock_and_ends_4_degrees_off_it() {
-            // Rig run 1 on d27bba26d: after the probe the 3.6° move off the pole at 2.13°/s ran on 1.4° past its distance (ended
-            // 5.33° off the pole) on reads that took ~0.6 s: the clock's stop waited for the read. A real-time fake: the probe
-            // goes toward the pole from 0.7° off to 0.4°, then the 3.6° move: fast, stopped by the clock at the slow zone, then
-            // slow for the rest.
-            var mount = FakeGemMount.CounterweightDownAt(2.0, 89.3, lstHours: 20.0, latitudeDeg: SiteLatDeg);
-            mount.DecMotorSign = -1.0; // a positive rate goes toward the pole
-            using var svc = NewBlockingReadService(mount, new WsRecorder());
-
-            var result = await svc.MoveToStartAsync(MoveConfirmed, CancellationToken.None).WaitAsync(TimeSpan.FromMinutes(2)).ConfigureAwait(false);
-
-            Assert.Multiple(() => {
-                Assert.That(result.Outcome, Is.EqualTo(PolarAlignMoveToStartOutcomes.Arrived), result.Message + " " + mount.Describe());
-                Assert.That(OffPoleDeg(mount), Is.EqualTo(PolarAlignService.MoveToStartOffPoleDeg).Within(BlockingReadToleranceDeg),
-                    "4° from the pole, not 5.3°. " + mount.Describe());
-            });
-            mount.AssertEndedStopped(tracking: true);
-        }
 
         [Test]
         public async Task Behind_blocking_reads_each_10_degree_RA_turn_stops_by_the_clock_at_its_step() {
@@ -219,54 +146,6 @@ namespace OpenAstroAra.Test {
                     mount.Describe());
             });
             mount.AssertEndedStopped(tracking: false);
-        }
-
-        [Test]
-        public async Task A_mount_that_takes_half_a_second_to_reach_its_speed_arrives_after_a_short_fast_phase_with_no_reading() {
-            // #2189 review (Joey): the 3.6° move's fast phase is 0.6° at 2.13°/s, about 0.28 s, and ends by the clock before a
-            // 0.6 s read lands. A mount that ramps its motor up over 0.5 s has moved only ~0.17° by then: under 80% of what it
-            // was told, with no reading to judge. That segment gives no stall verdict; it settles and the top-ups go on.
-            var mount = FakeGemMount.CounterweightDownAt(2.0, 89.3, lstHours: 20.0, latitudeDeg: SiteLatDeg);
-            mount.DecMotorSign = -1.0; // a positive rate goes toward the pole: the probe ends 0.4° off, then the 3.6° move
-            mount.MotorRampUp = TimeSpan.FromSeconds(0.5);
-            using var svc = NewBlockingReadService(mount, new WsRecorder());
-
-            var result = await svc.MoveToStartAsync(MoveConfirmed, CancellationToken.None).WaitAsync(TimeSpan.FromMinutes(3)).ConfigureAwait(false);
-
-            Assert.Multiple(() => {
-                Assert.That(result.Outcome, Is.EqualTo(PolarAlignMoveToStartOutcomes.Arrived), result.Message + " " + mount.Describe());
-                Assert.That(result.Reason, Is.Not.EqualTo(PolarAlignService.SlewStalled));
-                Assert.That(OffPoleDeg(mount), Is.EqualTo(PolarAlignService.MoveToStartOffPoleDeg).Within(BlockingReadToleranceDeg),
-                    "4° from the pole. " + mount.Describe());
-            });
-            mount.AssertEndedStopped(tracking: true);
-        }
-
-        [Test]
-        public async Task A_ramping_mount_behind_fast_reads_of_a_cached_sample_arrives_with_no_stall_verdict() {
-            // #2189 review: with reads every 10 ms from a 1.4 s driver cache, the 0.28 s fast phase sees readings, but every
-            // one is the same cached sample (no step between them), while the mount ramps up over 0.5 s and moves ~0.17° of
-            // the 0.6° told. The settle shows the mount past the last reading: it was stale, so no verdict; the top-ups go on.
-            var mount = PolledGemNearThePole(89.3);
-            mount.DecMotorSign = -1.0; // a positive rate goes toward the pole: the probe ends 0.4° off, then the 3.6° move
-            mount.MotorRampUp = TimeSpan.FromSeconds(0.5);
-            mount.DriverCache = TimeSpan.FromSeconds(1.4);
-            var svc = NewGemService(mount, new WsRecorder(), benchMotors: false);
-            using var disposable = svc;
-            svc.AxisFastRateDegPerSec = 2.13;
-            svc.AxisSlowRateDegPerSec = 0.53;
-            svc.AxisMoveStall = TimeSpan.FromSeconds(2);
-            svc.AxisSettle = TimeSpan.FromSeconds(2.5);
-            svc.MotorRampAllowance = TimeSpan.FromSeconds(0.5); // the daemon's
-
-            var result = await svc.MoveToStartAsync(MoveConfirmed, CancellationToken.None).WaitAsync(TimeSpan.FromMinutes(1)).ConfigureAwait(false);
-
-            Assert.Multiple(() => {
-                Assert.That(result.Outcome, Is.EqualTo(PolarAlignMoveToStartOutcomes.Arrived), result.Message + " " + mount.Describe());
-                Assert.That(OffPoleDeg(mount), Is.EqualTo(PolarAlignService.MoveToStartOffPoleDeg).Within(ClockStopToleranceDeg),
-                    "4° from the pole. " + mount.Describe());
-            });
-            mount.AssertEndedStopped(tracking: true);
         }
     }
 }

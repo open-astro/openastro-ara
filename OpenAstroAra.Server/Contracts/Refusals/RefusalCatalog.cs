@@ -108,16 +108,6 @@ public static class RefusalCatalog {
     // #2083 — the mount reports CanMoveAxis(Primary) false: it cannot turn its RA axis by rate, so Polar Align cannot run
     // (#2170: there is no hand-turn fallback).
     public static readonly RefusalCause PolarAlignCannotMoveAxis = new("polar-align-cannot-move-axis", 409, "The mount cannot turn its RA axis by rate");
-    // #2166 — Move to start position while a Polar Align run is going (or its exit still stops the mount): stop it first.
-    public static readonly RefusalCause PolarAlignRunActive = new("polar-align-run-active", 409, "A Polar Align run is going");
-    // #2166 — the mount reports CanMoveAxis(Secondary) false: it cannot turn its Dec axis by rate, so Polar Align cannot
-    // move it to the start position (point it 2–5° from the pole with its hand controller).
-    public static readonly RefusalCause PolarAlignCannotMoveDec = new("polar-align-cannot-move-dec", 409, "The mount cannot turn its Dec axis by rate");
-    // #2166 — Move to start position when the scope does not point within 3° of the pole: there is nothing to move.
-    public static readonly RefusalCause PolarAlignMoveToStartNotNeeded = new("polar-align-move-to-start-not-needed", 409, "The scope is not within 3° of the pole");
-    // #2166 — Move to start position without the user's confirmation of the offer it moves by (no body, confirmed false,
-    // or numbers that are not the offer's now): confirm the move again.
-    public static readonly RefusalCause PolarAlignMoveNotConfirmed = new("polar-align-move-not-confirmed", 409, "Polar Align needs your confirmation before it moves the scope to the start position");
 
     // #2173 — the plate-solve check of the mount's position while it is trusted already (or not read yet): nothing to check.
     public static readonly RefusalCause PoseCheckNotNeeded = new("pose-check-not-needed", 409, "The mount's position is not unverified");
@@ -135,8 +125,6 @@ public static class RefusalCatalog {
         FirstFlipNotCompleted, MountClockNotVerified, PolarAlignAlreadyRunning,
         PolarAlignClearanceNotConfirmed,
         AboveClearanceLimit, PolarAlignSiteNotSet, PolarAlignAltAzMount, PolarAlignCannotMoveAxis,
-        PolarAlignRunActive, PolarAlignCannotMoveDec, PolarAlignMoveToStartNotNeeded,
-        PolarAlignMoveNotConfirmed,
         PoseCheckNotNeeded, PoseSyncNotOffered, MountNotConnected,
     ];
 }

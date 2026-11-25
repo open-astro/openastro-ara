@@ -19,9 +19,6 @@ class _Rig implements HttpClientAdapter {
   final int status;
   final seen = <(String, Map<String, dynamic>)>[];
 
-  /// #2166 each request's body.
-  final bodies = <Object?>[];
-
   @override
   void close({bool force = false}) {}
 
@@ -32,7 +29,6 @@ class _Rig implements HttpClientAdapter {
     Future<void>? cancelFuture,
   ) async {
     seen.add((options.path, Map.of(options.queryParameters)));
-    bodies.add(options.data);
     return ResponseBody.fromString(
       status == 200 ? jsonEncode(reply) : '',
       status,
@@ -73,7 +69,6 @@ const _list = {
     'start_cw_angle_deg': 12.5,
     'min_altitude_deg': null,
   },
-  'move_to_start': null,
 };
 
 PolarAlignApi _api(_Rig rig) => PolarAlignApi(
@@ -82,37 +77,6 @@ PolarAlignApi _api(_Rig rig) => PolarAlignApi(
 );
 
 void main() {
-  test(
-    'move-to-start sends the confirmation with the offer the confirm showed (#2166)',
-    () async {
-      final rig = _Rig(
-        reply: {
-          'outcome': 'arrived',
-          'reason': null,
-          'message': null,
-          'preflight': _list,
-        },
-      );
-      final api = _api(rig);
-
-      final result = await api.moveToStart(
-        const PolarAlignMoveToStartOffer(
-          blockedBy: null,
-          targetOffPoleDeg: 4,
-          reachDeg: 4.3,
-        ),
-      );
-
-      expect(result.outcome, PolarMoveToStartOutcomes.arrived);
-      expect(rig.seen.single.$1, endsWith('/polaralign/move-to-start'));
-      expect(rig.bodies.single, {
-        'confirmed': true,
-        'target_off_pole_deg': 4.0,
-        'reach_deg': 4.3,
-      }, reason: 'the rig moves only on this confirmation (ADR 0024 rule 1)');
-    },
-  );
-
   test('start-plan sends the stage alone, never hand_turn (#2170)', () async {
     final rig = _Rig(reply: _plan);
     final api = _api(rig);
@@ -168,11 +132,6 @@ void main() {
       expect((p.startCwAngleDeg, p.minAltitudeDeg), (12.5, null));
     },
   );
-
-  test('a preflight list without move_to_start is a FormatException', () async {
-    final missing = Map<String, Object?>.of(_list)..remove('move_to_start');
-    expect(_api(_Rig(reply: missing)).preflight(), throwsFormatException);
-  });
 
   test('preflight from a rig without the list (404) is null', () async {
     expect(await _api(_Rig(status: 404)).preflight(), isNull);

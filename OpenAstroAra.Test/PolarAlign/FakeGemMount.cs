@@ -97,8 +97,6 @@ namespace OpenAstroAra.Test.PolarAlign {
         private TimeSpan _motionStartedAt;
         private (double RaDeg, double DecDeg)? _frozenReading;
         private DriverSample? _sample;
-        // The live RA and pier side samples, oldest first, for RaAndSideLag.
-        private readonly System.Collections.Generic.List<(TimeSpan At, double RaDeg, PierSide Side)> _raSideHistory = [];
         private double _motorTravelDeg;
         private double _maxPhiDeg;
         private bool _limitHit;
@@ -177,10 +175,6 @@ namespace OpenAstroAra.Test.PolarAlign {
         /// <summary>The driver answers position and Slewing from a cache refreshed at most this often (<c>cache_ms</c>;
         /// AlpacaBridge iOptron: 1 s). Zero: every read is live.</summary>
         public TimeSpan DriverCache { get; set; }
-        /// <summary>#2166 rig check — the reported RA and pier side trail the mount by this much while its Dec reading is
-        /// live (the HAE29C on AlpacaBridge 6.0.0-beta.4 showed a pole crossing in them ~6 s after its Dec reading moved).
-        /// Zero: no lag.</summary>
-        public TimeSpan RaAndSideLag { get; set; }
         /// <summary>Slewing reads false once a motion has run this long, while it still moves (<c>slewing_false_early</c>).</summary>
         public TimeSpan? SlewingFalseAfter { get; set; }
         /// <summary>Slewing reads true from the first motion on, whatever the mount does (<c>slewing_stuck</c>).</summary>
@@ -212,22 +206,6 @@ namespace OpenAstroAra.Test.PolarAlign {
         /// <summary>The driver's Dec motor sign: +1 = a positive rate lowers the Dec axis angle (from the pole toward the
         /// equator on the normal side), the way PA's tilt off the axis assumes; −1 inverts it.</summary>
         public double DecMotorSign { get; set; } = 1.0;
-        /// <summary>#2189 rig check — the Dec MoveAxis rate is sky-relative, as AlpacaBridge iOptron's: a positive rate moves
-        /// the pointing north on either side of the pier (the driver picks <c>:mn#</c> or <c>:ms#</c> from the pier side),
-        /// and the axis direction is picked when a move starts, then held while it runs (renewals do not re-pick). At the
-        /// pole either sign moves away from it, onto the side <see cref="PoleMovePicksOver"/> says. Northern sites only.</summary>
-        public bool DecRateSkyRelative { get; set; }
-        /// <summary>With <see cref="DecRateSkyRelative"/>: a move that starts at the pole goes over it (the Dec axis past 90°,
-        /// the other side of the pier) when true, or stays on the side the mount is on when false.</summary>
-        public bool PoleMovePicksOver { get; set; }
-        /// <summary>#2189 review — a motor move reaches its speed this long after it starts (linearly from rest), as a mount
-        /// that ramps its MoveAxis up. Zero: at once.</summary>
-        public TimeSpan MotorRampUp { get; set; }
-        // When each axis's current motor move started, for MotorRampUp.
-        private readonly TimeSpan[] _rampStart = new TimeSpan[2];
-        // The Dec axis direction a sky-relative move picked when it started, and the rate sign it picked it for.
-        private double _skyDecAxisDir;
-        private int _skyDecRateSign;
         /// <summary>The firmware GoTo's speed on each axis (degrees per second; the slew rate).</summary>
         public double GoToRateDegPerSec { get; set; } = 4.0;
         /// <summary>The fastest motor rate the mount takes; a faster one is clamped (TelescopeService snaps into AxisRates).</summary>
@@ -241,8 +219,6 @@ namespace OpenAstroAra.Test.PolarAlign {
         /// <summary>#2070 — why the daemon does not trust the reported pose (a routine's motor move is refused); null = trusted.</summary>
         public string? PositionUnverifiedReason { get; set; }
         public bool CanFindHome { get; set; } = true;
-        /// <summary>#2166 — CanMoveAxis(Secondary), as the telescope service read it at connect (null: unknown).</summary>
-        public bool? CanMoveSecondaryAxis { get; set; } = true;
         /// <summary>Where a park takes the mount, as the mount believes it (Home by default).</summary>
         public GemPose? ParkPose { get; set; }
         /// <summary>How long one fresh driver read (position, Slewing, <see cref="ReadNowAsync"/>) takes on a
@@ -380,14 +356,6 @@ namespace OpenAstroAra.Test.PolarAlign {
                 }
             }
         }
-
-        /// <summary>#2166 — the frame the fresh readings are labelled in. J2000: a mount that reports its own axes as J2000
-        /// coordinates (no precession), so the daemon's JNOW conversion moves its RA near the pole as the Dec axis turns.</summary>
-        public Epoch ReportedFrame { get; set; } = Epoch.JNOW;
-
-        /// <summary>#2166 — through the pole the mount reports its Dec axis unfolded (Dec past ±90°, the RA and the
-        /// hour-angle pier side of the axis as it is), the way some drivers do.</summary>
-        public bool DecPastPoleUnfolded { get; set; }
 
         /// <summary>#2066 — the reported Dec is off by this much and never folded over the pole: a synced mount whose Dec
         /// axis zero is off reads past ±90° near the pole (an iOptron HAE29C read 90.9°, #2075).</summary>
@@ -782,7 +750,7 @@ namespace OpenAstroAra.Test.PolarAlign {
                 _staleReads--;
                 age = StaleReadAge;
             }
-            return new MountReading(s.RaDeg / 15.0, s.DecDeg, slewing, side, _t0 + s.At - age, _sessionEpoch, ReportedFrame);
+            return new MountReading(s.RaDeg / 15.0, s.DecDeg, slewing, side, _t0 + s.At - age, _sessionEpoch, Epoch.JNOW);
         }
 
         private void TakeFreshReadTime() {
@@ -1204,7 +1172,6 @@ namespace OpenAstroAra.Test.PolarAlign {
                     }
                     _rate[axis] = effective;
                     _runaway[axis] = false;
-                    _rampStart[axis] = _t;
                     _openMotor[axis] = OpenMotionLocked(kind, rate, target: null, otherMotion);
                 }
                 _leaseUntil[axis] = leaseMs is int ms ? _t + TimeSpan.FromMilliseconds(Math.Clamp(ms, 250, 5000)) : null;
@@ -1408,8 +1375,7 @@ namespace OpenAstroAra.Test.PolarAlign {
             new(GemGeometry.Wrap180(believed.MechHaDeg - _zeroErrHaDeg), believed.DecAxisDeg - _zeroErrDecDeg);
 
         private double EffectiveRateLocked(int axis) =>
-            (_runaway[axis] && RunawayDegPerSec is double r ? Math.CopySign(r, _rate[axis]) : _rate[axis])
-            * (MotorRampUp > TimeSpan.Zero ? Math.Min(1.0, (_t - _rampStart[axis]) / MotorRampUp) : 1.0);
+            _runaway[axis] && RunawayDegPerSec is double r ? Math.CopySign(r, _rate[axis]) : _rate[axis];
 
         private bool TrulyMovingLocked() => _rate[0] != 0 || _rate[1] != 0 || _goto is not null;
 
@@ -1446,24 +1412,6 @@ namespace OpenAstroAra.Test.PolarAlign {
             }
         }
 
-        /// <summary>The Dec axis direction of a sky-relative move (<see cref="DecRateSkyRelative"/>): picked when the rate's sign
-        /// changes (a move starts), from where the mount believes it points: north is toward 90° on the normal side and away
-        /// from it through the pole; at the pole (within 0.01°) the mount's own pick.</summary>
-        private double SkyRelativeDecAxisDirLocked(GemPose believed, double decRate) {
-            var sign = Math.Sign(decRate);
-            if (sign == 0) {
-                _skyDecRateSign = 0;
-                return 0.0;
-            }
-            if (sign != _skyDecRateSign) {
-                _skyDecRateSign = sign;
-                _skyDecAxisDir = Math.Abs(believed.DecAxisDeg - 90.0) < 0.01 ? (PoleMovePicksOver ? 1.0 : -1.0)
-                    : believed.DecAxisDeg < 90.0 ? sign
-                    : -sign;
-            }
-            return _skyDecAxisDir;
-        }
-
         private void StepLocked(TimeSpan dt) {
             var s = dt.TotalSeconds;
             var before = _true;
@@ -1485,8 +1433,7 @@ namespace OpenAstroAra.Test.PolarAlign {
             var raRate = EffectiveRateLocked(0);
             var decRate = EffectiveRateLocked(1);
             var dHa = -RaMotorSign * raRate * s;
-            var dDec = (DecRateSkyRelative ? SkyRelativeDecAxisDirLocked(believedBefore, decRate) * Math.Abs(decRate) * s
-                    : -(South ? -1.0 : 1.0) * DecMotorSign * decRate * s) + (raRate != 0 ? DecDriftDegPerSec * s : 0.0);
+            var dDec = (-(South ? -1.0 : 1.0) * DecMotorSign * decRate * s) + (raRate != 0 ? DecDriftDegPerSec * s : 0.0);
             travel += Math.Abs(raRate * s) + Math.Abs(dDec);
             if (_tracking && !_atPark && _goto is null) {
                 dHa += GemGeometry.SiderealDegPerSecond * s;
@@ -1588,10 +1535,7 @@ namespace OpenAstroAra.Test.PolarAlign {
             if (_frozenReading is { } frozen) {
                 return frozen;
             }
-            var believed = BelievedLocked();
-            var (ha, dec) = DecPastPoleUnfolded && GemGeometry.ThroughThePole(believed, South)
-                ? (believed.MechHaDeg, believed.DecAxisDeg)
-                : GemGeometry.Pointing(believed, South);
+            var (ha, dec) = GemGeometry.Pointing(BelievedLocked(), South);
             return (GemGeometry.Wrap360(MountLstDeg - ha + (RaJumpHours * 15.0)), dec + ReportedDecOffsetDeg);
         }
 
@@ -1608,17 +1552,7 @@ namespace OpenAstroAra.Test.PolarAlign {
                 return cached;
             }
             var (ra, dec) = ReportedLiveLocked();
-            var side = ReportedSideLocked(ra);
-            if (RaAndSideLag > TimeSpan.Zero) {
-                _raSideHistory.Add((_t, ra, side));
-                // The newest sample at least the lag old answers; the very first one until then.
-                var due = _t - RaAndSideLag;
-                while (_raSideHistory.Count > 1 && _raSideHistory[1].At <= due) {
-                    _raSideHistory.RemoveAt(0);
-                }
-                (ra, side) = (_raSideHistory[0].RaDeg, _raSideHistory[0].Side);
-            }
-            var fresh = new DriverSample(_t, ra, dec, TrulyMovingLocked(), side);
+            var fresh = new DriverSample(_t, ra, dec, TrulyMovingLocked(), ReportedSideLocked(ra));
             _sample = fresh;
             return fresh;
         }

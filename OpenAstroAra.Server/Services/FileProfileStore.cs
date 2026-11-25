@@ -228,8 +228,6 @@ public sealed partial class FileProfileStore : IProfileStore {
 
     public PolarAlignMotorDirectionDto? GetPolarAlignMotorDirection() { lock (_lock) { return _snapshot.PolarAlignMotorDirection; } }
     public void PutPolarAlignMotorDirection(PolarAlignMotorDirectionDto? value) => UpdateAndPersist(s => s with { PolarAlignMotorDirection = value });
-    public PolarAlignDecMotorDirectionDto? GetPolarAlignDecMotorDirection() { lock (_lock) { return _snapshot.PolarAlignDecMotorDirection; } }
-    public void PutPolarAlignDecMotorDirection(PolarAlignDecMotorDirectionDto? value) => UpdateAndPersist(s => s with { PolarAlignDecMotorDirection = value });
 
     public SkyModelCalibrationDto? GetSkyModelCalibration() { lock (_lock) { return _snapshot.SkyModelCalibration; } }
     public void PutSkyModelCalibration(SkyModelCalibrationDto? value) => UpdateAndPersist(s => s with { SkyModelCalibration = value });
