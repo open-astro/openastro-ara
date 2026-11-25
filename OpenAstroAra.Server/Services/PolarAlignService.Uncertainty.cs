@@ -26,7 +26,7 @@ namespace OpenAstroAra.Server.Services {
     /// carries the 1σ of its mean from the scatter of its frames (<see cref="PolarAlignSolveOutcome.SigmaArcsec"/>); the
     /// fit carries those through to a 1σ on the altitude and azimuth errors and on the total
     /// (<see cref="PolarAlignGeometry.AxisErrorSigma"/>). The readout shows it ("0.2′ ± 1.1′"), the fit's log line carries
-    /// it with the axis and the solves, and the Check's verdict rates the error plus twice its 1σ
+    /// it with the axis and the solves, and the verdict rates the error plus twice its 1σ
     /// (<see cref="VerdictFor"/>). Done is not held by the σ (Joey, 2026-11-21): the clients show "aligned" only when the
     /// error plus twice its 1σ is inside the tolerance, and otherwise say the measurement cannot confirm it.
     /// <para>The live readout keeps the seed fit's σ: each live frame adds its own solve noise once (about 1″, against
@@ -63,7 +63,7 @@ namespace OpenAstroAra.Server.Services {
         internal sealed record FitUncertainty(double AltSigmaArcmin, double AzSigmaArcmin, double TotalSigmaArcmin, string Solves,
             string Floor = "");
 
-        // The current measurement's fit uncertainty: the seed's while the live readout runs, the check's once it has a
+        // The current measurement's fit uncertainty: the seed's while the live readout runs, the verify measurement's once it has a
         // verdict. Null before a fit; cleared per run (StartAsync). Guarded by _gate.
         private FitUncertainty? _fitSigma;
 
@@ -134,7 +134,7 @@ namespace OpenAstroAra.Server.Services {
                 FloorText([p1.S, p2.S, p3.S]));
         }
 
-        /// <summary>#2072 — what the Check's verdict rates (Joey, 2026-11-21): the total error plus twice its 1σ, so a noisy
+        /// <summary>#2072 — what the verdict rates (Joey, 2026-11-21): the total error plus twice its 1σ, so a noisy
         /// fit cannot read "excellent". A result with no σ counts σ as 0. Both are taken at the 0.01′ the clients see
         /// them, so the band the app shows beside "0.2′ ± 1.3′" is the daemon's.</summary>
         internal static double RatedErrorArcmin(double totalArcmin, double? sigmaArcmin) =>
@@ -142,7 +142,7 @@ namespace OpenAstroAra.Server.Services {
 
         private static double? RoundedSigma(double? sigmaArcmin) => sigmaArcmin is double s ? Math.Round(s, 2) : null;
 
-        /// <summary>A check verdict's σ as the status and the session row carry it; null from a result without one.</summary>
+        /// <summary>A verdict's σ as the status and the session row carry it; null from a result without one.</summary>
         private static FitUncertainty? CheckSigma(PolarAlignCheckResultDto result) =>
             result.TotalSigmaArcmin is double total
                 ? new FitUncertainty(result.AltitudeSigmaArcmin ?? 0.0, result.AzimuthSigmaArcmin ?? 0.0, total, Solves: "")

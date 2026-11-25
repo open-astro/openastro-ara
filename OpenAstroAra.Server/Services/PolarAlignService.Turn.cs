@@ -28,9 +28,9 @@ namespace OpenAstroAra.Server.Services {
     /// axis, never a GoTo), so the firmware picks no pier side and the Dec axis cannot move. A turn is timed, not read:
     /// the motor runs at the fastest rate the mount offers at or below <see cref="AxisRateDegPerSec"/> for the time the
     /// turn takes at that rate on <see cref="Clock"/>, then it is stopped and the mount is given <see cref="AxisSettle"/>
-    /// to stand still. No mount reading is taken during or after a turn. Every run starts from the mount's Home position
-    /// (tube at the pole, counterweights down), where the two turns are safe on any equatorial mount, and the plate solves
-    /// say what the mount did (<see cref="FitThreePointOrFail"/>).
+    /// to stand still. No mount reading is taken during or after a turn. Every measurement starts from the mount's Home
+    /// position (tube at the pole, counterweights down), where the two turns are safe on any equatorial mount, and the
+    /// plate solves say what the mount did (<see cref="FitThreePointOrFail"/>).
     /// </summary>
     public sealed partial class PolarAlignService {
 
@@ -39,16 +39,21 @@ namespace OpenAstroAra.Server.Services {
         internal double AxisRateDegPerSec { get; set; } = 3.0;
 
         /// <summary>The motor runs on a lease: a daemon that stops renewing it (hung, crashed run) stops the axis.</summary>
-        private const int AxisMoveLeaseMs = 3000;
+        private static readonly TimeSpan AxisMoveLease = TimeSpan.FromSeconds(3);
 
         /// <summary>How often a turn renews the motor's lease.</summary>
         internal TimeSpan AxisLeaseRenew { get; set; } = TimeSpan.FromSeconds(1);
 
+        /// <summary>A renewal is left out once the lease already granted outlasts the turn's end by this much: the stop is
+        /// then never queued behind a renewal that stalls, and the lease does not lapse as the stop goes out.</summary>
+        private static readonly TimeSpan AxisLeaseMargin = TimeSpan.FromMilliseconds(500);
+
         /// <summary>How long the mount is given to stand still after a turn's stop, before the next frame.</summary>
         internal TimeSpan AxisSettle { get; set; } = TimeSpan.FromSeconds(2.5);
 
-        /// <summary>The clock a turn is timed on (its monotonic timestamp and its timers), and the one a stop's readings
-        /// are aged on (<see cref="UntrustedForStillness"/>). A test sets its own.</summary>
+        /// <summary>The clock a turn is timed on (its monotonic timestamp and its timers), the one the wait for the mount's
+        /// Find Home is paced on, and the one a stop's send is stamped on, against the sample times of the readings that
+        /// confirm it (<see cref="UntrustedForStillness"/>). A test sets its own.</summary>
         internal TimeProvider Clock { get; set; } = TimeProvider.System;
 
         /// <summary>The rate a turn runs the RA motor at (°/s, unsigned): the fastest the mount offers at or below
@@ -71,7 +76,8 @@ namespace OpenAstroAra.Server.Services {
 
         /// <summary>Turn the RA axis by <paramref name="signedDeltaDeg"/> (+ a positive motor rate, east by ASCOM's
         /// convention): run the RA motor at the matched rate for degrees / rate seconds, renewing its lease every
-        /// <see cref="AxisLeaseRenew"/>, send the stop, and wait <see cref="AxisSettle"/>. The motion is marked from before
+        /// <see cref="AxisLeaseRenew"/> until the lease granted covers the rest of the turn, send the stop, and wait
+        /// <see cref="AxisSettle"/>. The motion is marked from before
         /// the motor starts until the settle is over, so a Stop meanwhile sends AbortSlew. A stop from outside (Stop Mount,
         /// Emergency Stop, a park) ends the run and gets no renewal; every exit stops the motor, unless a takeover fenced
         /// the run's stops; a motor command the mount refuses fails the run with <c>slew_failed</c>.</summary>
@@ -90,6 +96,8 @@ namespace OpenAstroAra.Server.Services {
             LogTurn(degrees, rate, runFor.TotalSeconds);
             BeginMotion(MountMotion.AxisMove, gen, ct);
             try {
+                // A lease lasts at least AxisMoveLease from before its command was sent.
+                var leased = Clock.GetTimestamp();
                 await RunAxisAsync(TelescopeAxes.Primary, rate, abortEpoch).ConfigureAwait(false);
                 // Timed from when the mount took the motor command, on the monotonic clock: a wall clock that steps (chrony,
                 // a UTCDate write) neither stretches nor cuts the turn.
@@ -101,9 +109,14 @@ namespace OpenAstroAra.Server.Services {
                     }
                     await Task.Delay(TurnWait(left), Clock, ct).ConfigureAwait(false);
                     ThrowIfRunEnded(gen);
-                    if (Clock.GetElapsedTime(began) >= runFor) {
+                    left = runFor - Clock.GetElapsedTime(began);
+                    if (left <= TimeSpan.Zero) {
                         break;
                     }
+                    if (AxisMoveLease - Clock.GetElapsedTime(leased) >= left + AxisLeaseMargin) {
+                        continue; // the lease already granted outlasts the turn: no renewal for the stop to wait behind
+                    }
+                    leased = Clock.GetTimestamp();
                     await RunAxisAsync(TelescopeAxes.Primary, rate, abortEpoch).ConfigureAwait(false); // the lease renewed
                 }
                 if (RunStopsFenced(gen)) {
@@ -167,7 +180,7 @@ namespace OpenAstroAra.Server.Services {
         /// <summary>The daemon's leased motor command (the same one the app's direction pad uses), through the seam. Never
         /// the mediator's <c>MoveAxis</c>: <c>TelescopeService</c>'s is a no-op stub.</summary>
         private Task RunAxisAsync(TelescopeAxes axis, double rate, long? abortEpoch = null) =>
-            _motionControl.MoveAxisAsync((int)axis, rate, rate == 0 ? null : AxisMoveLeaseMs, rate == 0 ? null : abortEpoch, CancellationToken.None);
+            _motionControl.MoveAxisAsync((int)axis, rate, rate == 0 ? null : (int)AxisMoveLease.TotalMilliseconds, rate == 0 ? null : abortEpoch, CancellationToken.None);
 
         private bool AbortedSince(long? abortEpoch) =>
             abortEpoch is long since && _motionControl.AbortEpoch != since;

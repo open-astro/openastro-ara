@@ -217,8 +217,9 @@ framing/focus loop when you need to point or focus by eye.
   then start. Polar Align always starts from Home, where its two short RA turns are safe on any
   equatorial mount. A mount that can find Home by itself and is not there is refused ("The mount is
   not at Home"); a mount that cannot find Home is not asked: set it to its home position yourself.
-  Polar Align never sends the mount Home, never slews it and never moves its Dec axis, as NINA's
-  three-point alignment. A parked mount is refused ("Mount is parked — unpark it and send it Home
+  Polar Align never slews the mount and never moves its Dec axis with a motor command of its own, as
+  NINA's three-point alignment; after **Done** it sends the mount Home with the mount's own Home
+  command. A parked mount is refused ("Mount is parked — unpark it and send it Home
   first"); Polar Align never unparks it. There is no checklist and nothing to confirm: tap **Start**
   and the RA motor turns about 10° twice. In Simple Mode's Preflight, the polar step does not start
   on its own: start it from the shutter.
@@ -237,25 +238,30 @@ framing/focus loop when you need to point or focus by eye.
   that speed, then stops, and the mount gets a moment to settle. Nothing reads the mount's position
   during or after a turn, so a slow, stale or wrong reading cannot end a run. The plate solves say
   what the mount did. When the three frames show the same field (the mount did not turn, or the
-  camera looks straight down the RA axis), or a turn the frames show is more than 5° from the turn
-  the motor was told (a slipping clutch, a stalled motor), the run ends and says so; check the mount
-  and start again.
-- **Polar Align makes one measurement per Start.** **Start**: from Home, the RA motor makes two 10°
-  turns, never a GoTo, the camera solving a frame at each of the three stops; the circle through them
-  is where the mount's axis really points. Then the camera follows your knob moves live, a frame a
-  second on the guide camera, until **Done** or **Stop**. A Start never moves on to another
-  measurement by itself. **Check**: three solves, 10° apart by default, measure the result on their
-  own, not read off the loop, so it says how good the alignment really is and how far it disagrees
-  with the last run's readout. A Check is a start like any other: from Home. On a mount that can
-  find Home, tap **Done**, send the mount Home, then tap **Check**.
+  camera looks straight down the RA axis), or a turn the frames show is under 0.3 or over 3 times
+  the turn the motor was told (a slipping clutch, a stalled motor), the run ends and says so; check
+  the mount and start again. A turn that ran a few degrees long because the mount was slow to take
+  its stop still measures.
+- **One button starts Polar Align, one button finishes it.** **Start**: from Home, the RA motor makes
+  two 10° turns, never a GoTo, the camera solving a frame at each of the three stops; the circle
+  through them is where the mount's axis really points. Then the camera follows your knob moves live,
+  a frame a second on the guide camera. **Done**, when you are happy with the readout: Ara stops the
+  mount, sends it Home, and verifies the alignment by itself with the same three-point measurement
+  again, on its own solves, not read off the live readout. It then sends the mount Home once more and
+  shows the verdict: how good the alignment really is, and how far it is from your last readout. The
+  mount is at Home with tracking off, ready for you to image; to adjust again, tap **Start**. **Stop**
+  works at any moment, also while the mount is on its way Home, and leaves the mount where it is. A
+  mount that cannot find Home by itself makes no Home trip: the verify measurement turns it back to
+  where the run started. If the mount refuses Home or does not get there, the run ends, the mount is
+  stopped and the card says so: check the mount, send it Home and start again.
 - **Polar Align's camera and frames per point.** Settings › Imaging › Polar align › *Camera* picks
-  the camera for every measurement, its live readout and Check: the guide camera (the default) or
+  the camera for both measurements and the live readout: the guide camera (the default) or
   the main camera, with its own plate solver at the main camera exposure. Use the main camera when the
   guide camera cannot solve the pole field; Start refuses while it is not connected. *Frames per point* (1 to 5, 3 by default) is how many frames each of the
   three points takes with the mount still; they are averaged, so one bad solve does not move the
   axis, and their scatter is in the log. A point whose solves scatter more than 3″ is taken again
   once; if it is still scattered, or a cloud hides the retake, the run goes on but says the
-  measurement is noisy, under the readout or under the Check. Check focus and seeing, or take more
+  measurement is noisy, under the readout or under the verdict. Check focus and seeing, or take more
   frames per point.
 - **How sure the readout is (#2072).** The total error shows with its uncertainty, for example
   **0.2′ ± 1.1′** (one sigma), in the full UI and Simple Mode. The uncertainty comes from how much
@@ -264,18 +270,19 @@ framing/focus loop when you need to point or focus by eye.
   among the point's frames (÷ √3 for three); when Ara does not know the pixel scale it counts 1″.
   With 10° turns, each arcsecond of solve noise is about 1.3′ of axis error.
   The screen says **inside your tolerance** only when the error plus twice its uncertainty is inside
-  it. While only the error is, it says the measurement can't confirm the alignment; **Done** and
-  **Check** stay available. Larger turns shrink the uncertainty most: 20° in place of 10°
-  (**Polar align turn** and **Check step** in Settings → Imaging → Polar align) cuts it about four
-  times; more frames per point help a little. The Check's verdict (Excellent, Very good, …) is rated
-  on the error plus twice its uncertainty too, so a noisy check does not read Excellent. The
+  it. While only the error is, it says the measurement can't confirm the alignment; **Done**
+  stays available. Larger turns shrink the uncertainty most: 20° in place of 10°
+  (**Polar align turn** in Settings → Imaging → Polar align) cuts it about four
+  times; more frames per point help a little. The verdict after Done (Excellent, Very good, …) is rated
+  on the error plus twice its uncertainty too, so a noisy measurement does not read Excellent. The
   uncertainty covers only what the frames of each point show: a mount that shifts between points
   (flexure, a slipping clutch) is not in it. With a Polar Aligner, the motors stop once the error is
   inside the tolerance (more moves cannot shrink the uncertainty), and the line says when the
   alignment is not confirmed.
-- **Polar Align's Stop stops the mount.** Stop, Done, a failure and the end of a Check all stop the
-  mount where it is: Ara stops both motors and checks on fresh readings
-  that the mount stands still. If it cannot confirm that, the card says so: cut the mount's power and
+- **Polar Align's Stop stops the mount.** Stop, a failure and the end of a run all stop the
+  mount where it is, and so does Done before the mount goes Home: Ara stops both motors and checks on
+  readings the mount took after the stop that it stands still (a reading that is slow to arrive
+  counts too). If it cannot confirm that, the card says so: cut the mount's power and
   check the mount before you start again. Ara then stops trusting where the mount says it points,
   as after a power loss: GoTo, Park and Polar Align stay blocked. Press Home in the app (it works while
   the position is unverified, as in NINA). If only the stop was unconfirmed and the mount kept its power,
@@ -289,10 +296,8 @@ framing/focus loop when you need to point or focus by eye.
   the mount window then says so. A Home that fails, never moves, loses a reading or happens across a
   reconnect still clears nothing. A mount with no Home in Ara: run its zero search from its hand controller or app, then
   confirm Home. The same happens when
-  the mount disconnects and connects again while Polar Align is open. Then tracking goes off, as NINA does by default, so the mount
-  cannot track into the pier while nobody watches. With *Stop tracking when polar align ends* off
-  (Settings › Imaging › Polar align), Done and the end of a Check give back the tracking the run found;
-  a Stop or a failure still leaves tracking off. A GoTo turns tracking on again by itself; a sequence
+  the mount disconnects and connects again while Polar Align is open. Every end of a run turns tracking off, so the mount
+  cannot track into the pier while nobody watches. A GoTo turns tracking on again by itself; a sequence
   started over an open run needs a slew or *Set Tracking* before it guides or images. Starting
   guiding while Polar Align is still open stops the mount the same way, then gives back the tracking
   Polar Align found, because guiding needs it.
@@ -305,7 +310,7 @@ framing/focus loop when you need to point or focus by eye.
   kept tracking*, *started tracking during the live readout*, *reads as slewing*, or *is not
   connected* when tracking off is sent) when it does not. When the camera points nearly due
   east or west of the pole, the readout reads the altitude bolt poorly and the card says so: trust
-  **Check**.
+  the verdict after **Done**.
   When Polar Align carries its uncertainty, the two numbers are said to disagree only when the
   guiding figure is above Polar Align's by more than twice their combined uncertainty, and the
   tooltip shows both with it (for example *12″ ± 66″ vs at least 17′ ± 70″*).
@@ -315,10 +320,10 @@ framing/focus loop when you need to point or focus by eye.
   direction pad, or the safety or equipment-fault reaction when it could not park the mount. The card
   says what stopped it, in the app's language, and no further turn starts. Emergency Stop latches before any of its other
   steps, so Polar Align cannot start a turn or switch tracking on while the rest of the stop runs.
-  From Start until it ends (its solves and the live adjust loop too), Polar Align holds the mount: a
+  From Start until it ends (its solves, the live adjust loop and its own trips Home too), Polar Align holds the mount: a
   GoTo, a sync, Center, Home and Park are refused ("Polar alignment is using the mount"), and so are a
   sequence's GoTo, Park, Find Home and meridian flip; a direction-pad move is refused while it turns
-  the mount. Stop Polar Align first, tap **Done**, or tap Stop Mount. Emergency Stop, Stop Mount, a pad
+  the mount. Stop Polar Align first, or tap Stop Mount. Emergency Stop, Stop Mount, a pad
   release and Tracking off always get through. When the sky turns unsafe, a device fault ends in a
   park, or End Night (or the unattended shutdown) homes and parks the mount, it stops Polar Align and
   the Polar Aligner first. A Home you tap just before Stop Mount or Emergency Stop does not start
@@ -341,9 +346,9 @@ framing/focus loop when you need to point or focus by eye.
   device that cannot stop on command gets moves of at most 10′.
 - **Starting guiding ends Polar Align.** Polar Align holds the guide camera while it runs. If guiding
   is started while it is still open (a run's Start Guiding after the Polar Align step was left
-  without **Done**, a re-guide after a meridian flip, or Guide pressed by hand in the guider panel), Ara stops the
-  alignment, without saving a result, and then guides. Finish Polar Align with **Done** first if you
-  want its result kept.
+  unfinished, a re-guide after a meridian flip, or Guide pressed by hand in the guider panel), Ara stops the
+  alignment, without saving a result, and then guides. Finish Polar Align with **Done** first, and let it
+  verify, if you want its result kept.
 - **Polar alignment left after Align.** Each time guiding starts, Ara measures how much polar
   alignment error is really left, at no setup cost: over the first 5 minutes of clean guiding
   (dithers and settling are left out) it adds the guider's Dec corrections back onto the star's

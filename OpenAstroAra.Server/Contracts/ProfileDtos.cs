@@ -531,10 +531,9 @@ public sealed record Phd2SettingsDto(
 /// <c>Binning</c> 0 = auto (§45.4: the tier for the guide camera's frame size, see
 /// <see cref="OpenAstroAra.Server.Services.PolarAlignBinning"/>), 1–4 = the user's override.
 /// <c>TargetToleranceArcmin</c> gates the client's [Done] button (the server reports errors
-/// regardless); <c>SeedRotationDeg</c> is each of the 3-point seed's two RA turns; <c>CheckStepDeg</c> each
-/// of the check stage's two turns; <c>CoarseExposureSeconds</c> the main-camera exposure (every measurement with
+/// regardless); <c>SeedRotationDeg</c> is each of a three-point measurement's two RA turns (the align measurement's and
+/// the verify measurement's alike); <c>CoarseExposureSeconds</c> the main-camera exposure (every measurement with
 /// <c>Camera</c> = <c>main</c>);
-/// <c>StopTrackingWhenDone</c> whether every end of a run turns tracking off (#2048);
 /// <c>Camera</c> the camera of the measurement and its live loop (<see cref="PolarAlignCameras"/>, #2082);
 /// <c>FramesPerPoint</c> the frames averaged at each of the measurement's three points (1–5, #2082);
 /// <c>EastDirection</c> the way a run's RA turns go (null = by hemisphere, <see cref="PolarAlignEastDirection"/>);
@@ -547,25 +546,19 @@ public sealed record PolarAlignSettingsDto(
     double ExposureSeconds = 1.0,
     int Binning = 0,
     double TargetToleranceArcmin = 1.0,
-    // 10°: each of the seed's two RA turns between its three solves, as NINA's Three Point Polar
+    // 10°: each of a measurement's two RA turns between its three solves, as NINA's Three Point Polar
     // Alignment (20° of travel in all, from the mount's Home position). Clamped to 5–30°.
     double SeedRotationDeg = 10.0,
     int LoopCadenceMs = 1000,
     double SettleSeconds = 2.0,
     string LoopMode = PolarAlignLoopModes.Loop,
-    // Check stage: each of the two RA turns between the three solves. Clamped to 5–30°.
-    double CheckStepDeg = 10.0,
     // The main-camera exposure, for a profile whose Camera is main (the pole field is sparse; longer than a guide frame).
     double CoarseExposureSeconds = 3.0,
     // #1971: with a Polar Aligner on the rig, the live stages move its motors after each
     // measurement. Off = the person turns the bolts, as on a rig without one.
     bool PolarAlignerAuto = true,
-    // #2048: NINA's StopTrackingWhenDone, on by default like NINA's ("to not run into pier collisions").
-    // On: every end of a run turns tracking off. Off: a run that finishes (Done, or the check's verdict)
-    // gives back the tracking it found; a Stop or a failure still leaves tracking off.
-    bool StopTrackingWhenDone = true,
     // #2082: the camera of the measurement and its live loop (PolarAlignCameras): the guide camera (the default), or the
-    // main camera with its own solver at CoarseExposureSeconds. A check measures on it too.
+    // main camera with its own solver at CoarseExposureSeconds. The verify measurement uses it too.
     string Camera = PolarAlignCameras.Guide,
     // #2082: frames per point of a measurement, the mount still, averaged as unit vectors (their rms scatter is logged).
     // A point scattered over 3″ is retaken once; still over, the result is flagged noisy. Clamped to 1–5.

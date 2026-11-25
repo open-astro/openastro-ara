@@ -129,7 +129,7 @@ namespace OpenAstroAra.Test {
             var ws = new WsRecorder();
             using var svc = NewGemServiceWith(mount, ws, new NeverSolves());
 
-            await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            await svc.StartAsync(null, CancellationToken.None).ConfigureAwait(false);
             var error = await RunErrorAsync(ws).ConfigureAwait(false);
             // The failure is published before the exit stops the mount; the owner goes back once the exit is done.
             var deadline = DateTime.UtcNow + SignalTimeout;
@@ -151,7 +151,7 @@ namespace OpenAstroAra.Test {
             var solver = new StuckSolver();
             using var svc = NewGemServiceWith(mount, ws, solver);
             svc.RunUnwindGrace = TimeSpan.FromMilliseconds(200);
-            await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            await svc.StartAsync(null, CancellationToken.None).ConfigureAwait(false);
             await solver.Entered.Task.WaitAsync(SignalTimeout).ConfigureAwait(false);
 
             try {
@@ -176,7 +176,7 @@ namespace OpenAstroAra.Test {
             var solver = new StuckSolver();
             using var svc = NewGemServiceWith(mount, ws, solver);
             svc.TakeoverStopBound = TimeSpan.FromMilliseconds(200); // the daemon's 9 s
-            await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            await svc.StartAsync(null, CancellationToken.None).ConfigureAwait(false);
             await solver.Entered.Task.WaitAsync(SignalTimeout).ConfigureAwait(false);
             mount.CanFindHome = true; // the ladder's Find Home step is for a mount that can
             var ladder = new ShutdownLadder(telescope: mount, polarAlign: () => svc);
@@ -212,7 +212,7 @@ namespace OpenAstroAra.Test {
             var log = new HangingSessionLog();
             using var svc = NewServiceOn(NewFake(), new NeverSolves(), mount, ws, TenDegreeStore(), log: log);
             svc.RunUnwindGrace = TimeSpan.FromMilliseconds(50);
-            await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            await svc.StartAsync(null, CancellationToken.None).ConfigureAwait(false);
             var error = await RunErrorAsync(ws).ConfigureAwait(false);
             await log.Entered.Task.WaitAsync(SignalTimeout).ConfigureAwait(false);
             Assert.That(error.Reason, Is.EqualTo("seed_solve_failed"));
@@ -220,7 +220,7 @@ namespace OpenAstroAra.Test {
 
             mount.PositionUnverifiedReason = MountPoseTrust.NotReadYet;
             try {
-                await Assert.ThrowsAsync<RefusalException>(() => svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None)).ConfigureAwait(false);
+                await Assert.ThrowsAsync<RefusalException>(() => svc.StartAsync(null, CancellationToken.None)).ConfigureAwait(false);
 
                 Assert.That(mount.MotionOwner, Is.Null, "the Start gave the old run's hold back");
             } finally {
@@ -251,7 +251,7 @@ namespace OpenAstroAra.Test {
             using var svc = NewGemServiceWith(mount, ws, new TrueSkySolver(mount), guider);
             var other = mount.AcquireMotion("another-routine");
 
-            var ex = await Assert.ThrowsAsync<RefusalException>(() => svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None)).ConfigureAwait(false);
+            var ex = await Assert.ThrowsAsync<RefusalException>(() => svc.StartAsync(null, CancellationToken.None)).ConfigureAwait(false);
 
             Assert.That(ex!.Cause, Is.EqualTo(RefusalCatalog.PolarAlignMountBusy));
             Assert.That(RaTurns(mount), Is.Empty, "nothing turned. " + mount.Describe());

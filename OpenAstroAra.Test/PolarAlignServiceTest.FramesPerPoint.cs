@@ -29,7 +29,7 @@ using TelescopeAxes = OpenAstroAra.Core.Enums.TelescopeAxes;
 namespace OpenAstroAra.Test {
 
     /// <summary>
-    /// #2082 part 2 — one measurement per Start, with the camera the profile picks (<c>polar_align.camera</c>: guide, or
+    /// #2082 part 2 — a run's measurements, with the camera the profile picks (<c>polar_align.camera</c>: guide, or
     /// main) and several frames per point (<c>polar_align.frames_per_point</c>, 1–5, default 3): each point's frames,
     /// taken with the mount still, are averaged as unit vectors and their rms scatter is logged; a point scattered over
     /// 3″ is retaken once, and the result is flagged noisy when the retake is no better.
@@ -80,7 +80,7 @@ namespace OpenAstroAra.Test {
             var logger = new CapturingLogger();
             using var svc = NewService(NewFake(), solver, NewPoleMount(), store: StoreWith(s => s with { FramesPerPoint = 3 }), logger: logger);
 
-            await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            await svc.StartAsync(null, CancellationToken.None).ConfigureAwait(false);
             var status = await PollStateAsync(svc, "adjusting", "failed").ConfigureAwait(false);
             await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
 
@@ -104,7 +104,7 @@ namespace OpenAstroAra.Test {
             var ws = new WsRecorder();
             using var svc = NewService(NewFake(), solver, NewPoleMount(), ws, store: StoreWith(s => s with { FramesPerPoint = 3 }), logger: logger);
 
-            await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            await svc.StartAsync(null, CancellationToken.None).ConfigureAwait(false);
             var status = await PollStateAsync(svc, "adjusting", "failed").ConfigureAwait(false);
             var progress = await WaitForEventAsync(ws, WsEventCatalog.PolarAlignProgress).ConfigureAwait(false);
             await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
@@ -122,7 +122,7 @@ namespace OpenAstroAra.Test {
             var solver = new OffsetFrameSolver { DecOffsetArcsec = { ["seed-a-3"] = 10.0 } };
             using var svc = NewService(NewFake(), solver, NewPoleMount(), store: StoreWith(s => s with { FramesPerPoint = 3 }));
 
-            await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            await svc.StartAsync(null, CancellationToken.None).ConfigureAwait(false);
             var status = await PollStateAsync(svc, "adjusting", "failed").ConfigureAwait(false);
             await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
 
@@ -139,7 +139,7 @@ namespace OpenAstroAra.Test {
             var logger = new CapturingLogger();
             using var svc = NewService(NewFake(), solver, NewPoleMount(), store: StoreWith(s => s with { FramesPerPoint = 3 }), logger: logger);
 
-            await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            await svc.StartAsync(null, CancellationToken.None).ConfigureAwait(false);
             var status = await PollStateAsync(svc, "adjusting", "failed").ConfigureAwait(false);
             await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
 
@@ -157,8 +157,7 @@ namespace OpenAstroAra.Test {
             var ws = new WsRecorder();
             using var svc = NewService(NewFake(), solver, NewPoleMount(), ws, store: StoreWith(s => s with { FramesPerPoint = 3 }));
 
-            await svc.StartAsync(PolarAlignStages.Check, null, CancellationToken.None).ConfigureAwait(false);
-            var status = await PollStateAsync(svc, "checked", "failed").ConfigureAwait(false);
+            var status = await RunThroughDoneAsync(svc).ConfigureAwait(false);
             var checkedEvent = await WaitForEventAsync(ws, WsEventCatalog.PolarAlignChecked).ConfigureAwait(false);
 
             Assert.That(status.State, Is.EqualTo("checked"));
@@ -174,7 +173,7 @@ namespace OpenAstroAra.Test {
             using var svc = NewService(fake, new MountFollowingSolver(), NewPoleMount(), ws,
                 store: StoreWith(s => s with { Camera = PolarAlignCameras.Main }), mainCamera: mainCamera);
 
-            await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            await svc.StartAsync(null, CancellationToken.None).ConfigureAwait(false);
             var started = await WaitForEventAsync(ws, WsEventCatalog.PolarAlignStarted).ConfigureAwait(false);
             var status = await PollStateAsync(svc, "adjusting", "failed").ConfigureAwait(false);
             var mark = ws.Events.Count;
@@ -184,7 +183,7 @@ namespace OpenAstroAra.Test {
             await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
 
             Assert.That(started.GetProperty("camera").GetString(), Is.EqualTo(PolarAlignCameras.Main));
-            Assert.That((status.State, status.Stage, status.Camera), Is.EqualTo(("adjusting", PolarAlignStages.Fine, PolarAlignCameras.Main)));
+            Assert.That((status.State, status.Stage, status.Camera), Is.EqualTo(("adjusting", PolarAlignStages.Align, PolarAlignCameras.Main)));
             Assert.That(mainCamera.Calls, Is.GreaterThanOrEqualTo(4), "three seed frames and the live loop's");
             Assert.That(fake.Captures, Is.Empty, "the guide camera takes no frame");
             Assert.That(mainCamera.Exposures, Is.All.EqualTo(3.0), "the main camera's exposure");
@@ -199,8 +198,7 @@ namespace OpenAstroAra.Test {
             using var svc = NewService(fake, new MountFollowingSolver(), mount,
                 store: StoreWith(s => s with { Camera = PolarAlignCameras.Main }), mainCamera: mainCamera);
 
-            await AssertThrowsAsync<InvalidOperationException>(() => svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None)).ConfigureAwait(false);
-            await AssertThrowsAsync<InvalidOperationException>(() => svc.StartAsync(PolarAlignStages.Check, null, CancellationToken.None)).ConfigureAwait(false);
+            await AssertThrowsAsync<InvalidOperationException>(() => svc.StartAsync(null, CancellationToken.None)).ConfigureAwait(false);
 
             Assert.That(fake.LeaseCalls, Is.Empty, "refused before the camera is taken");
             mount.Verify(m => m.MoveAxis(It.IsAny<TelescopeAxes>(), It.Is<double>(r => r != 0)), Times.Never, "nothing moved");
@@ -214,11 +212,10 @@ namespace OpenAstroAra.Test {
             using var svc = NewService(fake, new MountFollowingSolver(), NewPoleMount(),
                 store: StoreWith(s => s with { Camera = PolarAlignCameras.Main }), mainCamera: mainCamera);
 
-            await svc.StartAsync(PolarAlignStages.Check, null, CancellationToken.None).ConfigureAwait(false);
-            var status = await PollStateAsync(svc, "checked", "failed").ConfigureAwait(false);
+            var status = await RunThroughDoneAsync(svc).ConfigureAwait(false);
 
             Assert.That(status.State, Is.EqualTo("checked"));
-            Assert.That(mainCamera.Calls, Is.EqualTo(3), "the check's three points on the main camera");
+            Assert.That(mainCamera.Calls, Is.GreaterThanOrEqualTo(7), "the seed's three points, the live loop's frames and the check's three points, all on the main camera");
             Assert.That(fake.Captures, Is.Empty, "the guide camera takes no frame");
         }
 

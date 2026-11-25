@@ -145,7 +145,7 @@ public static class PolarAlignGeometry {
 
     /// <summary>
     /// The mount's RA-axis direction from THREE solved pointings taken with two RA turns between
-    /// them (the check stage's three-point measurement). Three points on a sphere fix the small
+    /// them (a three-point measurement). Three points on a sphere fix the small
     /// circle through them exactly: the axis is the circle's pole, <c>normalize((P₂−P₁)×(P₃−P₁))</c>,
     /// with the end nearer the target celestial pole chosen. Unlike the two-point fit this needs
     /// neither the commanded rotation nor its direction, and has no mirror ambiguity — the
@@ -322,8 +322,8 @@ public static class PolarAlignGeometry {
     /// The signed angle (degrees, −180..180) the pointing turned about <paramref name="axisRaDeg"/>/<paramref name="axisDecDeg"/>
     /// from (<paramref name="ra1Deg"/>, <paramref name="dec1Deg"/>) to (<paramref name="ra2Deg"/>, <paramref name="dec2Deg"/>),
     /// positive = counter-clockwise about the given end of the axis (RA increasing when that end
-    /// is the north one). The check stage compares this with the mount's own reported RA change:
-    /// a mismatch means a bad solve or a mount that turned by other than it says.
+    /// is the north one). The three-point fit compares this with the turn the RA motor was told:
+    /// a mismatch means a bad solve or a mount that did not turn as told.
     /// </summary>
     public static double TurnAboutAxisDeg(
             double axisRaDeg, double axisDecDeg, double ra1Deg, double dec1Deg, double ra2Deg, double dec2Deg) {
@@ -493,7 +493,7 @@ public static class PolarAlignGeometry {
             double seedAltDeg, double seedAzDeg, double dAltDeg, double dAzDeg, double latitudeDeg) {
         var psi = CameraAzimuthFromPoleRad(seedAzDeg, latitudeDeg);
         // shortcut: |cos ψ| is floored at ReadoutCosPsiFloor (keeping its sign), so a camera within ~6° of ψ = ±90°
-        // under-reads the altitude knob; the fine stage can leave the camera there. The routine warns in that band and
+        // under-reads the altitude knob; the align measurement can leave the camera there. The routine warns in that band and
         // near it (#2072, PolarAlignService.WeakReadoutCosPsi). Upgrade if that band needs a real reading.
         var cosPsi = Math.Cos(psi);
         if (Math.Abs(cosPsi) < ReadoutCosPsiFloor) {

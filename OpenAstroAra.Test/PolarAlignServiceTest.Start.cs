@@ -38,45 +38,25 @@ namespace OpenAstroAra.Test {
     /// <summary>
     /// Polar Align starts from the mount's Home position: a mount that can find Home by itself and is not there is refused,
     /// one that cannot is not asked; nothing else about the mount's pose refuses a start (a start at the pole is fine). A
-    /// run never sends Find Home or a GoTo and never unparks; its two turns go the way the profile's east_direction says.
+    /// run never sends a GoTo and never unparks; its turns go the way the profile's east_direction says.
     /// </summary>
     public partial class PolarAlignServiceTest {
 
-        /// <summary>NINA's 10° steps for the seed and the check.</summary>
+        /// <summary>NINA's 10° steps.</summary>
         private static InMemoryProfileStore TenDegreeStore() {
             var store = NewStore();
-            store.PutPolarAlignSettings(store.GetPolarAlignSettings() with { SeedRotationDeg = 10.0, CheckStepDeg = 10.0 });
+            store.PutPolarAlignSettings(store.GetPolarAlignSettings() with { SeedRotationDeg = 10.0 });
             return store;
         }
 
-        /// <summary>A fine start; waits for the adjust loop.</summary>
+        /// <summary>A start; waits for the adjust loop.</summary>
         private static async Task FineRunToAdjustingAsync(PolarAlignService svc) {
             var mark = Mark(svc);
-            await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            await svc.StartAsync(null, CancellationToken.None).ConfigureAwait(false);
             Assert.That((await PollStateAsync(svc, mark, "adjusting", "failed").ConfigureAwait(false)).State, Is.EqualTo("adjusting"));
         }
 
         private static double OffsetFrom(double originRaDeg, double raDeg) => ((raDeg - originRaDeg + 540.0) % 360.0) - 180.0;
-
-        // ── a run never homes, slews or unparks ──────────────────────────────────────────────
-
-        [Test]
-        public async Task A_run_on_the_fake_mount_never_sends_Find_Home_a_GoTo_or_an_unpark() {
-            // The fake mount can find Home and slew; a fine run and a check use its motors only.
-            var mount = new FakeStopMount(tracking: true, canFindHome: true);
-            var ws = new WsRecorder();
-            using var svc = NewService(NewFake(), new MountFollowingSolver(), mount.Mock, ws, store: TenDegreeStore());
-            mount.EventCount = () => ws.Events.Count;
-
-            await FineRunToAdjustingAsync(svc).ConfigureAwait(false);
-            await svc.StartAsync(PolarAlignStages.Check, null, CancellationToken.None).ConfigureAwait(false);
-            Assert.That((await PollStateAsync(svc, "checked", "failed").ConfigureAwait(false)).State, Is.EqualTo("checked"));
-
-            var log = mount.Log;
-            Assert.That(log.Where(c => c.StartsWith("move primary", StringComparison.Ordinal) && !c.EndsWith(" 0", StringComparison.Ordinal)),
-                Is.Not.Empty, "the turns ran on the RA motor");
-            Assert.That(log, Does.Not.Contain("findhome").And.Not.Contain("goto").And.Not.Contain("unpark"), string.Join(", ", log));
-        }
 
         // ── Home ─────────────────────────────────────────────────────────────────────────────
 
@@ -87,12 +67,10 @@ namespace OpenAstroAra.Test {
             var ws = new WsRecorder();
             using var svc = NewStopService(mount, ws, guider: fake);
 
-            var fine = await Assert.ThrowsAsync<RefusalException>(() => svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None));
-            var check = await Assert.ThrowsAsync<RefusalException>(() => svc.StartAsync(PolarAlignStages.Check, null, CancellationToken.None));
+            var refusal = await Assert.ThrowsAsync<RefusalException>(() => svc.StartAsync(null, CancellationToken.None));
 
-            Assert.That(fine!.Cause, Is.EqualTo(RefusalCatalog.PolarAlignNotHome));
-            Assert.That(fine.Message, Is.EqualTo(PolarAlignService.NotHomeMessage));
-            Assert.That(check!.Cause, Is.EqualTo(RefusalCatalog.PolarAlignNotHome));
+            Assert.That(refusal!.Cause, Is.EqualTo(RefusalCatalog.PolarAlignNotHome));
+            Assert.That(refusal.Message, Is.EqualTo(PolarAlignService.NotHomeMessage));
             Assert.That(mount.Log, Is.Empty, "no command reached the mount: " + string.Join(", ", mount.Log));
             Assert.That(fake.LeaseCalls, Is.Empty, "refused before the camera is taken");
             Assert.That(ws.Count(WsEventCatalog.PolarAlignStarted), Is.Zero);
@@ -137,8 +115,7 @@ namespace OpenAstroAra.Test {
             SimulateMotors(mount, () => position, c => position = c);
             using var svc = NewService(NewFake(), new MountFollowingSolver { DecDeg = 89.8 }, mount, store: TenDegreeStore());
 
-            await svc.StartAsync(PolarAlignStages.Check, null, CancellationToken.None).ConfigureAwait(false);
-            var status = await PollStateAsync(svc, "checked", "failed").ConfigureAwait(false);
+            var status = await RunThroughDoneAsync(svc).ConfigureAwait(false);
 
             Assert.That(status.State, Is.EqualTo("checked"));
             Assert.That(status.CheckResult!.ConeHalfAngleDeg, Is.EqualTo(0.2).Within(0.001));
@@ -157,7 +134,7 @@ namespace OpenAstroAra.Test {
             var ws = new WsRecorder();
             using var svc = NewService(fake, new ScriptedSolver(), mount, ws);
 
-            var refusal = await Assert.ThrowsAsync<RefusalException>(() => svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None));
+            var refusal = await Assert.ThrowsAsync<RefusalException>(() => svc.StartAsync(null, CancellationToken.None));
 
             Assert.That(refusal!.Cause, Is.EqualTo(RefusalCatalog.PolarAlignMountParked));
             Assert.That(refusal.Message, Is.EqualTo("Mount is parked — unpark it and send it Home first"));
@@ -188,7 +165,7 @@ namespace OpenAstroAra.Test {
             var ws = new WsRecorder();
             using var svc = NewService(fake, new ScriptedSolver(), mount, ws);
 
-            await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            await svc.StartAsync(null, CancellationToken.None).ConfigureAwait(false);
             var error = await WaitForEventAsync(ws, WsEventCatalog.PolarAlignError).ConfigureAwait(false);
 
             Assert.That(error.GetProperty("reason").GetString(), Is.EqualTo("mount_parked"));
@@ -225,76 +202,20 @@ namespace OpenAstroAra.Test {
             NoHomeNoGoTo(mount);
         }
 
-        // ── Check from the adjust loop ───────────────────────────────────────────────────────
-
-        [Test]
-        public async Task A_Check_from_the_adjust_loop_away_from_Home_is_refused_and_the_loop_runs_on() {
-            // After its two turns a mount that can find Home is no longer there: the Check is refused, and the loop it was
-            // asked from is left running, the mount untouched.
-            var mount = new FakeStopMount(tracking: true, canFindHome: true);
-            var ws = new WsRecorder();
-            using var svc = NewStopService(mount, ws);
-            await AdjustingAsync(svc, mount).ConfigureAwait(false);
-            mount.AtHome = false;
-            var at = mount.Count;
-
-            var refusal = await Assert.ThrowsAsync<RefusalException>(() => svc.StartAsync(PolarAlignStages.Check, null, CancellationToken.None));
-
-            Assert.That(refusal!.Cause, Is.EqualTo(RefusalCatalog.PolarAlignNotHome));
-            Assert.That((await svc.GetStatusAsync(CancellationToken.None).ConfigureAwait(false)).State, Is.EqualTo("adjusting").Or.EqualTo("paused"));
-            Assert.That(mount.Since(at), Is.Empty, "nothing was sent to the mount: " + string.Join(", ", mount.Since(at)));
-            await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
-        }
-
-        [Test]
-        public async Task Two_Checks_at_once_from_the_adjust_loop_run_one_check_and_move_nothing_more() {
-            // A double tap on Check: the second Start arrives while the first ends the adjust loop. The first's end is held at
-            // its mount stop, the loop still adjusting. One Check runs and the other is a no-op accept; both used to end the
-            // loop, and each then saw the other's end and failed, so no check ran.
-            var mount = new FakeStopMount(tracking: true);
-            var ws = new WsRecorder();
-            mount.EventCount = () => ws.Events.Count;
-            using var svc = NewService(NewFake(), new MountFollowingSolver(), mount.Mock, ws, store: TenDegreeStore());
-            await FineRunToAdjustingAsync(svc).ConfigureAwait(false);
-            var stopEntered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-            var stopGate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-            mount.StopGate = () => {
-                stopEntered.TrySetResult();
-                return stopGate.Task;
-            };
-            var raBefore = mount.RaDeg;
-            var mark = Mark(svc);
-
-            var first = svc.StartAsync(PolarAlignStages.Check, null, CancellationToken.None);
-            await stopEntered.Task.WaitAsync(SignalTimeout).ConfigureAwait(false);
-            var second = svc.StartAsync(PolarAlignStages.Check, null, CancellationToken.None);
-            await Task.WhenAny(second, Task.Delay(TimeSpan.FromMilliseconds(300))).ConfigureAwait(false);
-            stopGate.SetResult();
-            await Task.WhenAll(first, second).ConfigureAwait(false); // neither tap fails
-            var status = await PollStateAsync(svc, mark, "checked", "failed").ConfigureAwait(false);
-
-            Assert.That(status.State, Is.EqualTo("checked"));
-            var events = ws.Events.Skip(mark).ToArray();
-            Assert.That(events.Where(e => e.Type == WsEventCatalog.PolarAlignStarted).Select(e => e.Payload.GetProperty("stage").GetString()),
-                Is.EqualTo(OnlyTheCheckStarted), "exactly one check started");
-            Assert.That(events.Count(e => e.Type == WsEventCatalog.PolarAlignChecked), Is.EqualTo(1));
-            Assert.That(events.Count(e => e.Type == WsEventCatalog.PolarAlignError), Is.Zero);
-            Assert.That(Math.Abs(OffsetFrom(raBefore, mount.RaDeg)), Is.EqualTo(2 * 10.0).Within(1.5),
-                "the one check's two 10° turns and nothing more: " + string.Join(", ", mount.Log));
-        }
-
         // ── settings an older profile still carries ──────────────────────────────────────────
 
         [TestCase("\"use_home\": false, ")]
         [TestCase("\"mount_clearance\": {\"mount-1\": {\"confirmed_reach_deg\": 20.5}}, ")]
+        [TestCase("\"check_step_deg\": 14.0, ")]
+        [TestCase("\"stop_tracking_when_done\": false, ")]
         public void A_profile_saved_with_a_removed_polar_align_setting_still_loads_and_keeps_its_other_settings(string removed) {
-            // A profile.json written by an older daemon still carries use_home or the per-mount clearance: it must load as
-            // before, and the key is simply ignored.
+            // A profile.json written by an older daemon still carries use_home, the per-mount clearance, the check's own
+            // step or stop_tracking_when_done: it must load as before, and the key is simply ignored.
             var dir = Path.Combine(Path.GetTempPath(), "ara-use-home-" + Path.GetRandomFileName());
             Directory.CreateDirectory(dir);
             try {
                 var first = new FileProfileStore(dir);
-                first.PutPolarAlignSettings(first.GetPolarAlignSettings() with { SeedRotationDeg = 12.0, CheckStepDeg = 14.0 });
+                first.PutPolarAlignSettings(first.GetPolarAlignSettings() with { SeedRotationDeg = 12.0, ExposureSeconds = 2.5 });
                 var path = Directory.GetFiles(dir, "*.json", SearchOption.AllDirectories).Single(f => File.ReadAllText(f).Contains("\"polar_align\"", StringComparison.Ordinal));
                 var json = File.ReadAllText(path);
                 var withRemoved = Regex.Replace(json, "\"polar_align\"\\s*:\\s*\\{", m => m.Value + removed, RegexOptions.None, TimeSpan.FromSeconds(1));
@@ -303,7 +224,7 @@ namespace OpenAstroAra.Test {
 
                 var reloaded = new FileProfileStore(dir).GetPolarAlignSettings();
 
-                Assert.That((reloaded.SeedRotationDeg, reloaded.CheckStepDeg), Is.EqualTo((12.0, 14.0)), "the section loaded, not reset to defaults");
+                Assert.That((reloaded.SeedRotationDeg, reloaded.ExposureSeconds), Is.EqualTo((12.0, 2.5)), "the section loaded, not reset to defaults");
             } finally {
                 Directory.Delete(dir, recursive: true);
             }

@@ -125,9 +125,9 @@ namespace OpenAstroAra.Test {
             mount.AssertCommon(LastEventIndex(ws, WsEventCatalog.PolarAlignStopped), CounterweightLimitDeg);
         }
 
-        // ── one measurement per Start ────────────────────────────────────────────────────────
+        // ── until Done, one measurement ──────────────────────────────────────────────────────
 
-        private static readonly string[] OnlyTheFineStage = { PolarAlignStages.Fine };
+        private static readonly string[] OnlyTheAlignStage = { PolarAlignStages.Align };
 
         [Test]
         public async Task One_Start_on_the_GEM_makes_two_RA_turns_and_no_Dec_move() {
@@ -144,7 +144,7 @@ namespace OpenAstroAra.Test {
             Assert.That(RaTurns(mount).Select(t => Math.Abs(t.TrueDeltaHaDeg)), Has.All.EqualTo(10.0).Within(TrueTurnToleranceDeg), "each of SeedRotationDeg");
             Assert.That(mount.Motions.Where(m => m.Kind == MotionKind.DecMotor), Is.Empty, "no secondary-axis move");
             Assert.That(ws.Events.Where(e => e.Type == WsEventCatalog.PolarAlignStage).Select(e => e.Payload.GetProperty("stage").GetString()),
-                Is.EqualTo(OnlyTheFineStage), "one measurement, never a second stage");
+                Is.EqualTo(OnlyTheAlignStage), "one measurement until Done, never the verify stage");
             mount.AssertEndedStopped(tracking: false);
             mount.AssertCommon(LastEventIndex(ws, WsEventCatalog.PolarAlignStopped), CounterweightLimitDeg);
         }
@@ -157,7 +157,7 @@ namespace OpenAstroAra.Test {
             var mount = GemAt(-4.0, 85.0, lstHours: 20.0);
             var ws = new WsRecorder();
             using var svc = NewGemService(mount, ws, NewStore(), benchMotors: false);
-            await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            await svc.StartAsync(null, CancellationToken.None).ConfigureAwait(false);
             await mount.FirstMove.Task.WaitAsync(SignalTimeout).ConfigureAwait(false);
 
             var at = mount.Now;
@@ -180,7 +180,7 @@ namespace OpenAstroAra.Test {
             mount.MoveAxisStopIgnored = int.MaxValue;
             var ws = new WsRecorder();
             using var svc = NewGemService(mount, ws, NewStore(), benchMotors: false);
-            await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            await svc.StartAsync(null, CancellationToken.None).ConfigureAwait(false);
             await mount.FirstMove.Task.WaitAsync(SignalTimeout).ConfigureAwait(false);
 
             var at = mount.Now;
@@ -203,15 +203,15 @@ namespace OpenAstroAra.Test {
             var mount = GemAt(-4.0, 85.0, lstHours: 20.0);
             mount.MoveAxisRefused = true;
             var ws = new WsRecorder();
-            using var svc = NewGemService(mount, ws, HandBackStore());
+            using var svc = NewGemService(mount, ws, NewStore());
 
-            await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            await svc.StartAsync(null, CancellationToken.None).ConfigureAwait(false);
             var error = await WaitForEventAsync(ws, WsEventCatalog.PolarAlignError).ConfigureAwait(false);
 
             Assert.That(error.GetProperty("reason").GetString(), Is.EqualTo("slew_failed"));
             Assert.That(mount.MotorTravelDeg, Is.Zero);
             Assert.That(mount.Motions, Has.All.Matches<MotionEntry>(m => m!.Refused), mount.Describe());
-            mount.AssertEndedStopped(tracking: false); // a failure never hands tracking back, whatever the setting
+            mount.AssertEndedStopped(tracking: false); // a failure never hands tracking back
             mount.AssertCommon(LastEventIndex(ws, WsEventCatalog.PolarAlignError), CounterweightLimitDeg);
         }
 

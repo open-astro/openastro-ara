@@ -171,7 +171,7 @@ namespace OpenAstroAra.Test {
                     Clock = clock,
                 };
 
-                await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+                await svc.StartAsync(null, CancellationToken.None).ConfigureAwait(false);
                 await ws.WhenAsync(events => Array.Exists(events, e => e.Type == WsEventCatalog.PolarAlignCorrection
                         && e.Payload.GetProperty("state").GetString() is PolarAlignCorrectionStates.Converged or PolarAlignCorrectionStates.Stopped)
                     || Array.Exists(events, e => e.Type == WsEventCatalog.PolarAlignError))

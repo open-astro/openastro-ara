@@ -22,7 +22,8 @@ namespace OpenAstroAra.Server.Services;
 /// <summary>
 /// #2066 (ARA-2), #2065 (ARA-7) — the mount's single motion owner. A routine that drives the motors itself (Polar Align)
 /// holds it for its whole run; meanwhile every mediator GoTo, park and Find Home (the sequencer's, Center's, the meridian
-/// flip's, an end-of-sequence park, a failed flip's safe rest) fails here, a sync is not sent (it shifts the readings the
+/// flip's, an end-of-sequence park, a failed flip's safe rest) fails here (Polar Align gives its hold back for the
+/// length of its own Find Home), a sync is not sent (it shifts the readings the
 /// routine steers and measures by), and the REST GoTo, sync, Center, Park and Home endpoints refuse with
 /// <c>polar-align-moving-mount</c> (<c>EquipmentEndpoints.ThrowIfPolarAlignMovesTheMount</c>). The owner check and the
 /// send are one step: a move is counted while it is being sent (<see cref="TryBeginMotionDispatch"/>), so a REST GoTo or

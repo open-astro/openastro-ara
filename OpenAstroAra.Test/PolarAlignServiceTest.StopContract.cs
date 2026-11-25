@@ -56,7 +56,7 @@ namespace OpenAstroAra.Test {
         private static async Task<PolarAlignService> InFirstGemTurnAsync(FakeGemMount mount, WsRecorder ws, Action<PolarAlignService>? setUp = null) {
             var svc = NewGemService(mount, ws, NewStore(), benchMotors: false);
             setUp?.Invoke(svc);
-            await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            await svc.StartAsync(null, CancellationToken.None).ConfigureAwait(false);
             await mount.FirstMove.Task.WaitAsync(SignalTimeout).ConfigureAwait(false);
             return svc;
         }
@@ -128,7 +128,7 @@ namespace OpenAstroAra.Test {
             svc.StopResendAfter = TimeSpan.FromSeconds(1); // the old exit resends after the next Start was called
             svc.StopVerifyNotBefore = TimeSpan.FromSeconds(3);
             svc.StopVerifyWindow = TimeSpan.FromSeconds(10);
-            await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            await svc.StartAsync(null, CancellationToken.None).ConfigureAwait(false);
             var watch = Stopwatch.StartNew();
             while ((await svc.GetStatusAsync(CancellationToken.None).ConfigureAwait(false)).State != "failed") {
                 Assert.That(watch.Elapsed, Is.LessThan(SignalTimeout), "the refused move never failed the run");
@@ -137,7 +137,7 @@ namespace OpenAstroAra.Test {
             mount.MoveAxisRefused = false;
 
             // The new run's stop count is read at this call; the race lands after it, while the Start drains the old run.
-            var start = svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None);
+            var start = svc.StartAsync(null, CancellationToken.None);
             var raced = 0;
             mount.RefuseAbort = reason => {
                 if (reason != PolarAlignService.AbortReason || Interlocked.Exchange(ref raced, 1) == 1) {
@@ -170,7 +170,7 @@ namespace OpenAstroAra.Test {
             svc.StopResendAfter = TimeSpan.FromSeconds(1); // the old exit resends after the next Start was called
             svc.StopVerifyNotBefore = TimeSpan.FromSeconds(3);
             svc.StopVerifyWindow = TimeSpan.FromSeconds(10);
-            await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            await svc.StartAsync(null, CancellationToken.None).ConfigureAwait(false);
             var watch = Stopwatch.StartNew();
             while ((await svc.GetStatusAsync(CancellationToken.None).ConfigureAwait(false)).State != "failed") {
                 Assert.That(watch.Elapsed, Is.LessThan(SignalTimeout), "the refused move never failed the run");
@@ -178,7 +178,7 @@ namespace OpenAstroAra.Test {
             }
             mount.MoveAxisRefused = false;
 
-            var start = svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None);
+            var start = svc.StartAsync(null, CancellationToken.None);
             var burst = 0;
             mount.RefuseAbort = reason => {
                 if (reason != PolarAlignService.AbortReason || Interlocked.Exchange(ref burst, 1) == 1) {
@@ -215,7 +215,7 @@ namespace OpenAstroAra.Test {
             using var svc = NewServiceOn(NewFake(), solver, mount, ws, TenDegreeStore());
             svc.RunUnwindGrace = TimeSpan.FromSeconds(2.5); // the Stop gives up on the stuck run, inside the park
             svc.TakeoverStopBound = TimeSpan.FromMilliseconds(200);
-            await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            await svc.StartAsync(null, CancellationToken.None).ConfigureAwait(false);
             await solver.Entered.Task.WaitAsync(SignalTimeout).ConfigureAwait(false);
 
             try {
@@ -253,7 +253,7 @@ namespace OpenAstroAra.Test {
             svc.TakeoverStopBound = TimeSpan.FromMilliseconds(500);
             var hang = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
             mount.HangRenewals = hang;
-            await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            await svc.StartAsync(null, CancellationToken.None).ConfigureAwait(false);
             await mount.RenewalHung.Task.WaitAsync(SignalTimeout).ConfigureAwait(false);
 
             try {
@@ -294,7 +294,7 @@ namespace OpenAstroAra.Test {
                     mount.HangReads = hang;
                 }
             };
-            await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            await svc.StartAsync(null, CancellationToken.None).ConfigureAwait(false);
             await mount.ReadHung.Task.WaitAsync(SignalTimeout).ConfigureAwait(false);
 
             try {
@@ -338,7 +338,7 @@ namespace OpenAstroAra.Test {
                     mount.HangReads = hang; // the exit's first confirmation read
                 }
             };
-            await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            await svc.StartAsync(null, CancellationToken.None).ConfigureAwait(false);
             await mount.ReadHung.Task.WaitAsync(SignalTimeout).ConfigureAwait(false);
 
             try {
@@ -368,7 +368,7 @@ namespace OpenAstroAra.Test {
             var solver = new StuckSolver();
             using var svc = NewServiceOn(NewFake(), solver, mount, ws, TenDegreeStore());
             svc.RunUnwindGrace = TimeSpan.FromSeconds(3); // well past 1 s: a stop held back for the run lands after it
-            await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            await svc.StartAsync(null, CancellationToken.None).ConfigureAwait(false);
             await solver.Entered.Task.WaitAsync(SignalTimeout).ConfigureAwait(false);
 
             try {
@@ -383,38 +383,6 @@ namespace OpenAstroAra.Test {
             }
         }
 
-        // stop_tracking_when_done off: Done hands back the tracking the run found (off here). A Done that abandons a run stuck
-        // past its grace left the hand-back to the run's own exit, and then fenced that exit: nobody handed tracking back, and
-        // the mount tracked on toward the pier. The end that fences the run does the hand-back itself.
-        [Test]
-        public async Task A_Done_that_abandons_a_stuck_run_hands_back_the_tracking_the_run_found() {
-            var mount = GemAt(-4.0, 85.0, lstHours: 20.0, tracking: false);
-            var ws = new WsRecorder();
-            mount.EventCount = () => ws.Events.Count;
-            var solver = new StuckSolver();
-            using var svc = NewServiceOn(NewFake(), solver, mount, ws, HandBackStoreTenDegrees());
-            svc.RunUnwindGrace = TimeSpan.FromMilliseconds(300);
-            await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
-            await solver.Entered.Task.WaitAsync(SignalTimeout).ConfigureAwait(false);
-
-            try {
-                Assert.That(mount.Tracking, Is.True, "Polar Align turned tracking on for its frames");
-                await svc.CompleteAsync(null, CancellationToken.None).ConfigureAwait(false);
-                Assert.That(mount.Tracking, Is.False, "the Done handed back the tracking the run found. " + mount.Describe());
-                solver.Release(); // the stuck run unwinds now; its fenced exit writes nothing
-                await Task.Delay(TimeSpan.FromMilliseconds(300)).ConfigureAwait(false);
-                Assert.That(mount.Tracking, Is.False, "still handed back after the run unwound");
-            } finally {
-                solver.Release();
-            }
-        }
-
-        private static InMemoryProfileStore HandBackStoreTenDegrees() {
-            var store = TenDegreeStore();
-            store.PutPolarAlignSettings(store.GetPolarAlignSettings() with { StopTrackingWhenDone = false });
-            return store;
-        }
-
         // The Stop gave up on a run stuck past its grace and stopped the mount itself. The run unwinds whenever its call
         // returns: its exit then stopped the mount again and turned tracking off in the middle of whatever came next (here
         // the user's park). The end that abandoned it fences its stops.
@@ -427,7 +395,7 @@ namespace OpenAstroAra.Test {
             var solver = new StuckSolver();
             using var svc = NewServiceOn(NewFake(), solver, mount, ws, TenDegreeStore());
             svc.RunUnwindGrace = TimeSpan.FromMilliseconds(300);
-            await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            await svc.StartAsync(null, CancellationToken.None).ConfigureAwait(false);
             await solver.Entered.Task.WaitAsync(SignalTimeout).ConfigureAwait(false);
 
             try {
@@ -457,6 +425,39 @@ namespace OpenAstroAra.Test {
         public Task A_placeholder_reading_never_confirms_the_stop() =>
             StopNotConfirmedOnAsync(m => m.FreshReadsSentinel = int.MaxValue);
 
+        // The rule is "sampled after the stop went out", not "young when it arrives": on a link whose replies stall for
+        // seconds, a reading of the stopped mount that arrives 4 s after the mount sampled it still confirms the stop.
+        [Test]
+        public async Task A_stop_is_confirmed_on_readings_that_arrive_4_s_late_but_were_sampled_after_it() {
+            var mount = new FakeStopMount(tracking: true) { ReadArrivesLate = TimeSpan.FromSeconds(4) };
+            var ws = new WsRecorder();
+            using var svc = NewStopService(mount, ws);
+            await InFirstTurnAsync(svc, mount).ConfigureAwait(false);
+
+            await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
+
+            Assert.That(ws.Count(WsEventCatalog.PolarAlignError), Is.Zero, "confirmed: no mount_did_not_stop");
+            Assert.That((await svc.GetStatusAsync(CancellationToken.None).ConfigureAwait(false)).State, Is.EqualTo("stopped"));
+            Assert.That(mount.AtRest, Is.True);
+        }
+
+        // A reading the mount sampled before the stop went out (a driver's cache, here 1 s old) says nothing about the
+        // stop, however promptly it arrives.
+        [Test]
+        public async Task A_stop_is_not_confirmed_on_readings_the_mount_sampled_before_it() {
+            var mount = new FakeStopMount(tracking: true) { ReadSampledBefore = TimeSpan.FromSeconds(1) };
+            var ws = new WsRecorder();
+            using var svc = NewStopService(mount, ws);
+            await InFirstTurnAsync(svc, mount).ConfigureAwait(false);
+
+            await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
+            var error = await WaitForEventAsync(ws, WsEventCatalog.PolarAlignError).ConfigureAwait(false);
+
+            Assert.That(error.GetProperty("reason").GetString(), Is.EqualTo(PolarAlignService.MountDidNotStop));
+            Assert.That((await svc.GetStatusAsync(CancellationToken.None).ConfigureAwait(false)).State, Is.EqualTo("failed"));
+            Assert.That(mount.AtRest, Is.True, "the mount did stop: only no reading could say so");
+        }
+
         /// <summary>A run stopped in its first turn whose readings from then on are all <paramref name="untrusted"/>: the
         /// mount stops, but the stop's confirmation has no reading it may count.</summary>
         private static async Task StopNotConfirmedOnAsync(Action<FakeGemMount> untrusted) {
@@ -466,7 +467,7 @@ namespace OpenAstroAra.Test {
             using var svc = NewGemService(mount, ws);
             clock.AutoAdvance = false; // the turn's time never runs out: the Stop finds its motor running
             var turning = clock.TimerSet.Task;
-            await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            await svc.StartAsync(null, CancellationToken.None).ConfigureAwait(false);
             await turning.WaitAsync(SignalTimeout).ConfigureAwait(false);
 
             untrusted(mount);

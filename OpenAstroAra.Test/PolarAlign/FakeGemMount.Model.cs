@@ -233,6 +233,15 @@ namespace OpenAstroAra.Test.PolarAlign {
         /// this clock (a turn's motor runs), and a test can act in the middle of that wait.</summary>
         public TaskCompletionSource TimerSet { get; private set; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
+        /// <summary>How many timers wait on the clock: the waits a test's next <see cref="Advance"/> can end.</summary>
+        public int PendingTimers {
+            get {
+                lock (_lock) {
+                    return _timers.Count;
+                }
+            }
+        }
+
         public override DateTimeOffset GetUtcNow() {
             lock (_lock) {
                 return _now;

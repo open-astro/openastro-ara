@@ -208,6 +208,8 @@ namespace OpenAstroAra.Test.PolarAlign {
         /// <summary>#2070 — why the daemon does not trust the reported pose (a routine's motor move is refused); null = trusted.</summary>
         public string? PositionUnverifiedReason { get; set; }
         public bool CanFindHome { get; set; } = true;
+        /// <summary>The mediator's Find Home is refused (<c>findhome_refused</c>): nothing moves and it answers false.</summary>
+        public bool FindHomeRefused { get; set; }
         /// <summary>Where a park takes the mount, as the mount believes it (Home by default).</summary>
         public GemPose? ParkPose { get; set; }
         /// <summary>Each fresh driver read (position, Slewing, <see cref="ReadNowAsync"/>) first waits this long in real
@@ -772,8 +774,9 @@ namespace OpenAstroAra.Test.PolarAlign {
         }
 
         /// <summary>#2066 (ARA-2) — opt-in: the mediator's <see cref="FindHome"/> and <see cref="ParkTelescope"/> refuse, as
-        /// TelescopeService's do, while a routine holds the motion owner (the shutdown ladder's). Off by default: other tests
-        /// call <see cref="ParkTelescope"/> as the safety park, which goes through the service's ParkAsync and is never refused.</summary>
+        /// TelescopeService's do, while a routine holds the motion owner (the shutdown ladder's, and Polar Align's own Find
+        /// Home when it has not lent its hold). Off by default: other tests call <see cref="ParkTelescope"/> as the safety
+        /// park, which goes through the service's ParkAsync and is never refused.</summary>
         public bool MediatorRefusesHomeAndParkWhileOwned { get; set; }
 
         private void ThrowIfMediatorMoveOwnedLocked(string what) {
@@ -787,7 +790,7 @@ namespace OpenAstroAra.Test.PolarAlign {
             int? entry;
             lock (_lock) {
                 ThrowIfMediatorMoveOwnedLocked("Find Home");
-                entry = CanFindHome ? BeginGoToLocked(MotionKind.FindHome, target: null, fixedTrueTarget: GemGeometry.Home(South)) : null;
+                entry = CanFindHome && !FindHomeRefused ? BeginGoToLocked(MotionKind.FindHome, target: null, fixedTrueTarget: GemGeometry.Home(South)) : null;
             }
             return entry is int e && await WaitForMotionAsync(e, token).ConfigureAwait(false);
         }
@@ -1147,7 +1150,9 @@ namespace OpenAstroAra.Test.PolarAlign {
             return entry;
         }
 
-        /// <summary>Waits until the GoTo entry ends (like the mediator, a cancelled wait does not abort it); true when it arrived.</summary>
+        /// <summary>Waits until the GoTo entry ends (like the mediator, a cancelled wait does not abort it); true when it
+        /// arrived. The wait is paced on the fake's own clock: on a <see cref="ManualMountClock"/> that advances by itself
+        /// the move takes no real time, like a routine's timed turn.</summary>
         private async Task<bool> WaitForMotionAsync(int entry, CancellationToken token) {
             while (true) {
                 lock (_lock) {
@@ -1160,7 +1165,7 @@ namespace OpenAstroAra.Test.PolarAlign {
                         return e.End == MotionEnd.Arrived;
                     }
                 }
-                await Task.Delay(WaitPoll, token).ConfigureAwait(false);
+                await Task.Delay(WaitPoll, _clock, token).ConfigureAwait(false);
             }
         }
 

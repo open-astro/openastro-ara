@@ -30,8 +30,8 @@ using System.Threading.Tasks;
 
 namespace OpenAstroAra.Test {
 
-    /// <summary>The polar-align routes over HTTP: a start body carries its stage and nothing else, a field an older app
-    /// still sends is read like any unknown name (ignored), and the routes this daemon no longer has answer 404.</summary>
+    /// <summary>The polar-align routes over HTTP: a start takes no body, so whatever an older app or a script still sends
+    /// is ignored, and the routes this daemon no longer has answer 404.</summary>
     [TestFixture]
     public class EquipmentEndpointsPolarAlignHttpTest {
 
@@ -41,7 +41,7 @@ namespace OpenAstroAra.Test {
             private HttpClient _http = null!;
 
             public async Task StartAsync() {
-                Svc.Setup(s => s.StartAsync(It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+                Svc.Setup(s => s.StartAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>()))
                     .ReturnsAsync(new OperationAcceptedDto(Guid.NewGuid(), "polar-align.start", DateTimeOffset.UtcNow, null));
                 var builder = WebApplication.CreateSlimBuilder();
                 builder.WebHost.UseUrls("http://127.0.0.1:0");
@@ -75,25 +75,19 @@ namespace OpenAstroAra.Test {
             }
         }
 
-        [Test]
-        public async Task A_start_body_with_fields_an_older_app_still_sends_is_a_plain_start_of_its_stage() {
+        [TestCase("""{"stage":"check","confirmed":true,"direction":"east","new_origin":true,"direction_test":true,"hand_turn":true}""")]
+        [TestCase("""{"stage":"coarse"}""")]
+        [TestCase("{}")]
+        [TestCase("")]
+        [TestCase("not json")]
+        public async Task A_start_has_no_stage_and_whatever_body_it_is_sent_is_ignored(string body) {
             await using var host = new Host();
             await host.StartAsync();
 
-            var status = await host.PostJsonAsync("/start",
-                """{"stage":"check","confirmed":true,"direction":"east","new_origin":true,"direction_test":true,"hand_turn":true}""");
+            var status = await host.PostJsonAsync("/start", body);
 
             Assert.That(status, Is.EqualTo(202));
-            host.Svc.Verify(s => s.StartAsync(PolarAlignStages.Check, null, It.IsAny<CancellationToken>()), Times.Once);
-        }
-
-        [Test]
-        public async Task A_start_with_an_unknown_stage_is_400_and_the_service_is_not_asked() {
-            await using var host = new Host();
-            await host.StartAsync();
-
-            Assert.That(await host.PostJsonAsync("/start", """{"stage":"coarse"}"""), Is.EqualTo(400));
-            host.Svc.Verify(s => s.StartAsync(It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Never);
+            host.Svc.Verify(s => s.StartAsync(null, It.IsAny<CancellationToken>()), Times.Once);
         }
 
         [TestCase("/preflight")]

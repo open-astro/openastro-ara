@@ -22,9 +22,11 @@ namespace OpenAstroAra.Server.Services {
     /// One motion owner. Polar Align holds the mount's motion owner (<see cref="IMountMotionControl.AcquireMotion"/>) for
     /// its whole run, the adjust loop included, and gives it back once the run's exit has stopped the mount: meanwhile the
     /// REST GoTo, Center, Park and Home and every mediator GoTo (the sequencer's) are refused. Nothing that stops the mount
-    /// is (Emergency Stop, Stop Mount, AbortSlew, a pad stop, tracking off, the safety, fault and shutdown parks). A start
-    /// while another owner holds the mount, or while the guider guides or calibrates, is refused with
-    /// <c>polar-align-mount-busy</c>.
+    /// is (Emergency Stop, Stop Mount, AbortSlew, a pad stop, tracking off, the safety, fault and shutdown parks). The run
+    /// lends the owner to its own Find Home after Done (<see cref="GoHomeAsync"/>): the telescope service refuses a Find
+    /// Home while a routine holds the mount, and the REST endpoints refuse other moves meanwhile
+    /// (<see cref="IsMovingMount"/>). A start while another owner holds the mount, or while the guider guides or
+    /// calibrates, is refused with <c>polar-align-mount-busy</c>.
     /// </summary>
     public sealed partial class PolarAlignService {
 

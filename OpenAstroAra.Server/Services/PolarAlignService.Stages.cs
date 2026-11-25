@@ -27,23 +27,29 @@ using System.Threading.Tasks;
 namespace OpenAstroAra.Server.Services {
 
     /// <summary>
-    /// The two measurements of the polar-align routine; each Start runs ONE of them. Both start from the mount's Home
+    /// The two measurements of a polar-align run (<see cref="PolarAlignStages"/>). Both start from the mount's Home
     /// position (tube at the pole, counterweights down) and make NINA's Three Point Polar Alignment: three points with two
-    /// timed RA-motor turns between them (<see cref="TurnRaAsync"/>), each point the average of
-    /// <c>polar_align.frames_per_point</c> frames (<see cref="SolveSeedFrameAsync"/>), and the axis fitted as the circle
-    /// through the three solved pointings (<see cref="FitThreePointOrFail"/>). The turns go the profile's
-    /// <c>polar_align.east_direction</c>; no measurement sends the mount Home, slews it or moves its Dec axis.
-    /// <b>Fine</b>: the measurement with turns of <c>SeedRotationDeg</c>, then the live loop that reads the user's knob
-    /// moves until Stop or Done. <b>Check</b>: the measurement with turns of <c>CheckStepDeg</c> and a verdict beside the
-    /// last run's readout; nothing is adjusted. Both measure with the profile's <c>polar_align.camera</c>: the guide
-    /// camera, which solves a frame a second, or the main camera.
+    /// timed RA-motor turns of <c>polar_align.seed_rotation_deg</c> between them (<see cref="TurnRaAsync"/>), each point
+    /// the average of <c>polar_align.frames_per_point</c> frames (<see cref="SolveSeedFrameAsync"/>), and the axis fitted
+    /// as the circle through the three solved pointings (<see cref="FitThreePointOrFail"/>). The turns go the profile's
+    /// <c>polar_align.east_direction</c>; no measurement slews the mount or moves its Dec axis.
+    /// <b>Align</b>: the measurement, then the live loop that reads the user's knob moves until Done or Stop.
+    /// <b>Verify</b>: the measurement again once Done sent the mount Home, with a verdict beside the adjust loop's last
+    /// readout; nothing is adjusted. Both measure with the profile's <c>polar_align.camera</c>: the guide camera, which
+    /// solves a frame a second, or the main camera.
     /// </summary>
     public sealed partial class PolarAlignService {
 
         private const int CheckSolves = 3;
 
-        /// <summary>The fit is refused when a solved turn differs from the turn the motor was told by more than this.</summary>
-        internal const double MaxCheckTurnMismatchDeg = 5.0;
+        /// <summary>The fit is refused when a solved turn is smaller than this many times the turn the motor was told: the
+        /// mount barely turned (a slipping clutch, a stalled motor).</summary>
+        internal const double MinSolvedTurnRatio = 0.3;
+
+        /// <summary>The fit is refused when a solved turn is larger than this many times the turn the motor was told. A
+        /// timed turn overruns when its stop command stalls on a slow link (4 s at 2°/s adds 8° to a 10° turn), and three
+        /// distinct points still fit the axis: only a turn far outside what a late stop explains is refused.</summary>
+        internal const double MaxSolvedTurnRatio = 3.0;
 
         /// <summary>The fit is refused when two of the three solved points are closer than this on the sky: the frames
         /// show the same field.</summary>
@@ -53,10 +59,10 @@ namespace OpenAstroAra.Server.Services {
         /// which the tube points at in the Home position. Each later frame is looked for at the solve before it.</summary>
         private static (double RaDeg, double DecDeg) PoleHint(bool north) => (0.0, north ? 90.0 : -90.0);
 
-        /// <summary>The signed size of each of a measurement's two RA turns of <paramref name="stepDeg"/>: the way the
-        /// profile's <c>polar_align.east_direction</c> says (east by default in the north, west in the south).</summary>
-        private static double SignedTurnDeg(PolarAlignSettingsDto settings, SiteSettingsDto site, double stepDeg) =>
-            PolarAlignEastDirection.Sign(settings.EastDirection, site.LatitudeDeg) * stepDeg;
+        /// <summary>The signed size of each of a measurement's two RA turns (<c>polar_align.seed_rotation_deg</c>): the way
+        /// the profile's <c>polar_align.east_direction</c> says (east by default in the north, west in the south).</summary>
+        private static double SignedTurnDeg(PolarAlignSettingsDto settings, SiteSettingsDto site) =>
+            PolarAlignEastDirection.Sign(settings.EastDirection, site.LatitudeDeg) * settings.SeedRotationDeg;
 
         /// <summary>The camera a measurement shoots: the main camera (<paramref name="mainCamera"/>, when the profile's
         /// <c>polar_align.camera</c> is <c>main</c>) or the guide camera through the guider.</summary>
@@ -108,22 +114,24 @@ namespace OpenAstroAra.Server.Services {
             }
         }
 
-        // ── fine ─────────────────────────────────────────────────────────────────────────────
+        // ── align ────────────────────────────────────────────────────────────────────────────
 
-        /// <summary>The fine measurement and its live adjust loop, until Stop or Done.</summary>
+        /// <summary>The align measurement and its live adjust loop. Returns when Done ends the loop
+        /// (<see cref="RunEnd.Done"/>): the frame in flight is abandoned and the run goes on (PolarAlignService.Chain.cs).
+        /// A Stop cancels <paramref name="ct"/>, as everywhere.</summary>
         /// <param name="mainCamera">The main camera when the profile's <c>polar_align.camera</c> is <c>main</c>; null = the
         /// guide camera.</param>
-        private async Task RunFineStageAsync(
+        private async Task RunAlignStageAsync(
                 IGuideCaptureLink guiderClient, IPolarAlignMainCameraSolver? mainCamera, SiteSettingsDto site,
-                PolarAlignSettingsDto settings, string workDir, Func<Task> renewLeaseIfDue, int gen, CancellationToken ct) {
+                PolarAlignSettingsDto settings, string workDir, Func<Task> renewLeaseIfDue, RunEnd end, int gen, CancellationToken ct) {
             var north = site.LatitudeDeg > 0;
-            await SetStageAsync(gen, PolarAlignStages.Fine, "seeding").ConfigureAwait(false);
+            await BeginMeasurementAsync(gen, PolarAlignStages.Align, "seeding").ConfigureAwait(false);
             await ReadGuideFrameAsync(guiderClient, mainCamera, settings, ct).ConfigureAwait(false);
             await EnsureTrackingOnAsync(gen, ct).ConfigureAwait(false);
 
             // The seed: three points with two RA turns of SeedRotationDeg between them (NINA's 10° steps, 20° in all).
             // The axis is the circle through the three solved pointings; the turns the motor was told only cross-check it.
-            var turn = SignedTurnDeg(settings, site, settings.SeedRotationDeg);
+            var turn = SignedTurnDeg(settings, site);
             var capture = CaptureWith(guiderClient, mainCamera, workDir, blindFailover: true, gen);
             var (a, aTime) = await SolveSeedFrameAsync(capture, "seed-a", PoleHint(north), settings, gen, ct).ConfigureAwait(false);
             LogSeedSolve("seed-a", a.RaDegJnow, a.DecDegJnow);
@@ -136,8 +144,18 @@ namespace OpenAstroAra.Server.Services {
 
             var (axis, mismatch) = FitThreePointOrFail((a, aTime), (b, bTime), (c, cTime), turn, turn, north);
             var sigma = FitUncertaintyFor((a, aTime), (b, bTime), (c, cTime), north, site);
-            await AdjustFromSeedAsync(axis, sigma, mismatch, c, cTime,
-                CaptureWith(guiderClient, mainCamera, workDir, blindFailover: false, gen), renewLeaseIfDue, site, gen, ct).ConfigureAwait(false);
+            // The loop runs on its own token, which Done cancels: the run's token stays for the chain that follows.
+            using var adjusting = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            var loop = AdjustFromSeedAsync(axis, sigma, mismatch, c, cTime,
+                CaptureWith(guiderClient, mainCamera, workDir, blindFailover: false, gen), renewLeaseIfDue, site, gen, adjusting.Token);
+            if (await Task.WhenAny(loop, end.Done).ConfigureAwait(false) != loop) {
+                await adjusting.CancelAsync().ConfigureAwait(false);
+            }
+            try {
+                await loop.ConfigureAwait(false);
+            } catch (OperationCanceledException) when (end.Done.IsCompleted && !ct.IsCancellationRequested) {
+                // Done ended the loop where it was.
+            }
         }
 
         /// <summary>§45.4 — for a guide-camera measurement, ask the guider for the guide camera's frame size once per run
@@ -154,7 +172,8 @@ namespace OpenAstroAra.Server.Services {
             LogBinningChosen(chosenBinning, binningSource, _runFrameSize?.Width ?? 0, _runFrameSize?.Height ?? 0);
         }
 
-        /// <summary>The seed's axis error, then the live adjust loop until Stop or Done. <paramref name="c"/> is the seed's
+        /// <summary>The seed's axis error, then the live adjust loop until <paramref name="ct"/> is cancelled (Done, or a
+        /// Stop). <paramref name="c"/> is the seed's
         /// last solve, taken at <paramref name="cTime"/>; <paramref name="sigma"/> is the fit's uncertainty, the live
         /// readout's; <paramref name="mismatchDeg"/> (how far the solved turns were from the told ones) is logged.</summary>
         private async Task AdjustFromSeedAsync(
@@ -200,62 +219,65 @@ namespace OpenAstroAra.Server.Services {
                 initialHint: (c.RaDegJnow, c.DecDegJnow), renewLeaseIfDue, gen, ct).ConfigureAwait(false);
         }
 
-        // ── check ────────────────────────────────────────────────────────────────────────────
+        // ── verify ───────────────────────────────────────────────────────────────────────────
 
-        /// <returns>The verdict. The caller stops the mount and confirms it before it reports the verdict
-        /// (<see cref="FinishCheckedAsync"/>).</returns>
+        /// <summary>The verify measurement: the three-point measurement again, with a verdict beside the adjust loop's
+        /// last readout (<paramref name="adjustReadout"/>).</summary>
         /// <param name="mainCamera">The main camera when the profile's <c>polar_align.camera</c> is <c>main</c>; null = the
         /// guide camera.</param>
-        private async Task<PolarAlignCheckResultDto> RunCheckStageAsync(
+        /// <param name="turnDeg">Each of its two RA turns, signed: the align measurement's own from Home, or the opposite
+        /// way on a mount that cannot find Home, which brings the tube back to where the run started.</param>
+        /// <returns>The verdict, also on the status from here on (<see cref="NoteVerdict"/>).</returns>
+        private async Task<PolarAlignCheckResultDto> RunVerifyStageAsync(
                 IGuideCaptureLink guiderClient, IPolarAlignMainCameraSolver? mainCamera, string workDir, SiteSettingsDto site,
-                PolarAlignSettingsDto settings, int gen, CancellationToken ct) {
+                PolarAlignSettingsDto settings, double turnDeg, (double AltArcmin, double AzArcmin)? adjustReadout, int gen, CancellationToken ct) {
             var north = site.LatitudeDeg > 0;
-            await SetStageAsync(gen, PolarAlignStages.Check, "checking").ConfigureAwait(false);
-            await ReadGuideFrameAsync(guiderClient, mainCamera, settings, ct).ConfigureAwait(false);
             await EnsureTrackingOnAsync(gen, ct).ConfigureAwait(false);
 
-            var turn = SignedTurnDeg(settings, site, settings.CheckStepDeg); // the step is in range: PolarAlignSettingsClamp on every read
             var capture = CaptureWith(guiderClient, mainCamera, workDir, blindFailover: true, gen);
             var (s1, t1) = await SolveSeedFrameAsync(capture, "check-1", PoleHint(north), settings, gen, ct).ConfigureAwait(false);
             LogSeedSolve("check-1", s1.RaDegJnow, s1.DecDegJnow);
             await NoteCheckSolveAsync(gen, 1).ConfigureAwait(false);
 
-            await TurnRaAsync(turn, gen, ct).ConfigureAwait(false);
+            await TurnRaAsync(turnDeg, gen, ct).ConfigureAwait(false);
             var (s2, t2) = await SolveSeedFrameAsync(capture, "check-2", (s1.RaDegJnow, s1.DecDegJnow), settings, gen, ct).ConfigureAwait(false);
             LogSeedSolve("check-2", s2.RaDegJnow, s2.DecDegJnow);
             await NoteCheckSolveAsync(gen, 2).ConfigureAwait(false);
 
-            await TurnRaAsync(turn, gen, ct).ConfigureAwait(false);
+            await TurnRaAsync(turnDeg, gen, ct).ConfigureAwait(false);
             // The point's mean time: the fit and the axis error are referred to it.
             var (s3, at) = await SolveSeedFrameAsync(capture, "check-3", (s2.RaDegJnow, s2.DecDegJnow), settings, gen, ct).ConfigureAwait(false);
             LogSeedSolve("check-3", s3.RaDegJnow, s3.DecDegJnow);
             await NoteCheckSolveAsync(gen, 3).ConfigureAwait(false);
 
-            var (axis, mismatch) = FitThreePointOrFail((s1, t1), (s2, t2), (s3, at), turn, turn, north);
-            return CheckResultFor(axis, FitUncertaintyFor((s1, t1), (s2, t2), (s3, at), north, site), mismatch, site, at);
+            var (axis, mismatch) = FitThreePointOrFail((s1, t1), (s2, t2), (s3, at), turnDeg, turnDeg, north);
+            var verdict = CheckResultFor(axis, FitUncertaintyFor((s1, t1), (s2, t2), (s3, at), north, site), mismatch, site, at, adjustReadout);
+            NoteVerdict(gen, verdict);
+            return verdict;
         }
 
-        /// <summary>The check's verdict from its fitted axis, measured at <paramref name="at"/>, beside the last run's
-        /// readout.</summary>
+        /// <summary>The verify measurement's verdict from its fitted axis, measured at <paramref name="at"/>, beside the
+        /// adjust loop's last readout.</summary>
         private PolarAlignCheckResultDto CheckResultFor(
-                (double RaDeg, double DecDeg, double ConeDeg) axis, FitUncertainty sigma, double mismatch, SiteSettingsDto site, DateTimeOffset at) {
+                (double RaDeg, double DecDeg, double ConeDeg) axis, FitUncertainty sigma, double mismatch, SiteSettingsDto site, DateTimeOffset at,
+                (double AltArcmin, double AzArcmin)? adjustReadout) {
             var (altErr, azErr) = PolarAlignGeometry.AxisError(axis.RaDeg, axis.DecDeg, site.LatitudeDeg, site.LongitudeDeg, at);
             // Rounded first: the verdict and the total the client colours by must sit in the same band
             // (1.004′ is "excellent" at 1.00′, not "very_good" beside a 1.0′ readout).
             var total = Math.Round(Math.Sqrt(altErr * altErr + azErr * azErr), 2);
-            // Compared with the last run's readout, both components, so a readout of the same size on the other side of
+            // Compared with the adjust readout, both components, so a readout of the same size on the other side of
             // the pole still shows as a disagreement.
             double? fine = null;
             double? fineDelta = null;
+            if (adjustReadout is var (fAlt, fAz)) {
+                fine = Math.Sqrt(fAlt * fAlt + fAz * fAz);
+                // The distance between the two measured axes, not the difference of their sizes: a
+                // readout the same size on the other side of the pole is a 2′ disagreement, not 0.
+                fineDelta = Math.Sqrt((altErr - fAlt) * (altErr - fAlt) + (azErr - fAz) * (azErr - fAz));
+            }
             bool noisy;
             lock (_gate) {
                 noisy = _measurementNoisy;
-                if (_previousRunAltArcmin is double fAlt && _previousRunAzArcmin is double fAz) {
-                    fine = Math.Sqrt(fAlt * fAlt + fAz * fAz);
-                    // The distance between the two measured axes, not the difference of their sizes: a
-                    // readout the same size on the other side of the pole is a 2′ disagreement, not 0.
-                    fineDelta = Math.Sqrt((altErr - fAlt) * (altErr - fAlt) + (azErr - fAz) * (azErr - fAz));
-                }
             }
             var result = new PolarAlignCheckResultDto(
                 AltitudeErrorArcmin: Math.Round(altErr, 2),
@@ -276,6 +298,20 @@ namespace OpenAstroAra.Server.Services {
             return result;
         }
 
+        /// <summary>The verdict is known: it is on the status at once, with its errors and their σ, while the run still
+        /// brings the mount Home.</summary>
+        private void NoteVerdict(int gen, PolarAlignCheckResultDto result) {
+            lock (_gate) {
+                if (_generation != gen) {
+                    return;
+                }
+                _checkResult = result;
+                _altErrorArcmin = result.AltitudeErrorArcmin;
+                _azErrorArcmin = result.AzimuthErrorArcmin;
+                _fitSigma = CheckSigma(result); // the verdict's own σ, on the status and the session row
+            }
+        }
+
         /// <summary>Sidereal rate, degrees of RA per second of time.</summary>
         internal const double SiderealDegPerSecond = 360.98564736629 / 86400.0;
 
@@ -284,8 +320,8 @@ namespace OpenAstroAra.Server.Services {
         /// the ground, so the three pointings lie on one circle about it in the ground frame (NINA's TPPA works in
         /// alt/az for the same reason). The solves are the truth about what the mount did; the turns the motor was told
         /// only cross-check them. The fit is refused (<c>axis_fit_failed</c>) when two of the three points are closer than
-        /// <see cref="MinPointSeparationArcsec"/> on the sky (the frames show the same field), or when a solved turn
-        /// differs from the told one by more than <see cref="MaxCheckTurnMismatchDeg"/>.</summary>
+        /// <see cref="MinPointSeparationArcsec"/> on the sky (the frames show the same field), or when a solved turn is
+        /// under <see cref="MinSolvedTurnRatio"/> or over <see cref="MaxSolvedTurnRatio"/> times the told one.</summary>
         /// <param name="toldTurn1Deg">The turn the RA motor was told between the first two points (degrees). Only its
         /// size is compared: which way a positive motor rate turns is the driver's own convention, and from Home either
         /// way is safe, so a mount that turns the other way still fits.</param>
@@ -324,17 +360,20 @@ namespace OpenAstroAra.Server.Services {
                 PolarAlignGeometry.TurnAboutAxisDeg(axis.RaDeg, axis.DecDeg, ra1, p1.S.DecDegJnow, ra2, p2.S.DecDegJnow), p1.At, p2.At);
             var solved2 = MotorTurnDeg(
                 PolarAlignGeometry.TurnAboutAxisDeg(axis.RaDeg, axis.DecDeg, ra2, p2.S.DecDegJnow, ra3, p3.S.DecDegJnow), p2.At, p3.At);
+            static bool AsTold(double solvedDeg, double toldDeg) =>
+                Math.Abs(solvedDeg) >= MinSolvedTurnRatio * Math.Abs(toldDeg) && Math.Abs(solvedDeg) <= MaxSolvedTurnRatio * Math.Abs(toldDeg);
             var mismatch = Math.Max(
                 Math.Abs(Math.Abs(solved1) - Math.Abs(toldTurn1Deg)), Math.Abs(Math.Abs(solved2) - Math.Abs(toldTurn2Deg)));
-            if (mismatch > MaxCheckTurnMismatchDeg) {
+            if (!AsTold(solved1, toldTurn1Deg) || !AsTold(solved2, toldTurn2Deg)) {
                 throw new RoutineFailedException("axis_fit_failed", string.Create(CultureInfo.InvariantCulture,
-                    $"the mount did not turn as told: the frames show turns of {Math.Abs(solved1):F1}° and {Math.Abs(solved2):F1}° where the motor was told {Math.Abs(toldTurn1Deg):F1}° and {Math.Abs(toldTurn2Deg):F1}° (a slipping clutch, a stalled motor) — check the mount and start again"));
+                    $"the mount did not turn as told: the frames show turns of {Math.Abs(solved1):F1}° and {Math.Abs(solved2):F1}° where the motor was told {Math.Abs(toldTurn1Deg):F1}° and {Math.Abs(toldTurn2Deg):F1}° (a slipping clutch, a stalled motor, a stop that landed far too late) — check the mount and start again"));
             }
             return (axis, mismatch);
         }
 
-        /// <summary>The check's end: state <c>checked</c>, the result on the status, its event, the
-        /// §45.13 row (outcome <c>checked</c>) and the lease released — the run is over.</summary>
+        /// <summary>The run's end: state <c>checked</c>, its event, the §45.13 row (outcome <c>checked</c>) and the lease
+        /// released. The verdict is on the status already (<see cref="NoteVerdict"/>); the caller has brought the mount
+        /// Home and confirmed it stopped.</summary>
         private async Task FinishCheckedAsync(int gen, PolarAlignCheckResultDto result) {
             lock (_gate) {
                 if (_generation != gen) {
@@ -342,31 +381,30 @@ namespace OpenAstroAra.Server.Services {
                 }
                 _state = "checked";
                 _active = false;
-                _checkResult = result;
-                _altErrorArcmin = result.AltitudeErrorArcmin;
-                _azErrorArcmin = result.AzimuthErrorArcmin;
-                _fitSigma = CheckSigma(result); // the verdict's own σ, on the status and the session row
                 RecordLastResultLocked();
-                RememberRunReadoutLocked(); // the verdict is the readout a later check compares with
             }
-            await PublishAsync(WsEventCatalog.PolarAlignChecked, new JsonObject {
-                ["altitude_error_arcmin"] = result.AltitudeErrorArcmin,
-                ["azimuth_error_arcmin"] = result.AzimuthErrorArcmin,
-                ["total_error_arcmin"] = result.TotalErrorArcmin,
-                ["cone_half_angle_deg"] = result.ConeHalfAngleDeg,
-                ["turn_mismatch_deg"] = result.TurnMismatchDeg,
-                ["fine_error_arcmin"] = result.FineErrorArcmin,
-                ["fine_delta_arcmin"] = result.FineDeltaArcmin,
-                ["verdict"] = result.Verdict,
-                ["noisy"] = result.Noisy,
-                ["altitude_sigma_arcmin"] = result.AltitudeSigmaArcmin,
-                ["azimuth_sigma_arcmin"] = result.AzimuthSigmaArcmin,
-                ["total_sigma_arcmin"] = result.TotalSigmaArcmin,
-                ["measured_at"] = result.MeasuredAt.ToString("O", CultureInfo.InvariantCulture),
-            }).ConfigureAwait(false);
+            await PublishAsync(WsEventCatalog.PolarAlignChecked, CheckResultJson(result)).ConfigureAwait(false);
             await WriteSessionRowBestEffortAsync("checked", CancellationToken.None).ConfigureAwait(false);
             await ReleaseLeaseBestEffortAsync().ConfigureAwait(false);
         }
+
+        /// <summary>A verdict as the <c>polar_align.checked</c> event carries it, and each <c>polar_align.stage</c> event
+        /// once it is known (<c>check_result</c>): the status's <c>check_result</c> keys.</summary>
+        private static JsonObject CheckResultJson(PolarAlignCheckResultDto result) => new() {
+            ["altitude_error_arcmin"] = result.AltitudeErrorArcmin,
+            ["azimuth_error_arcmin"] = result.AzimuthErrorArcmin,
+            ["total_error_arcmin"] = result.TotalErrorArcmin,
+            ["cone_half_angle_deg"] = result.ConeHalfAngleDeg,
+            ["turn_mismatch_deg"] = result.TurnMismatchDeg,
+            ["fine_error_arcmin"] = result.FineErrorArcmin,
+            ["fine_delta_arcmin"] = result.FineDeltaArcmin,
+            ["verdict"] = result.Verdict,
+            ["noisy"] = result.Noisy,
+            ["altitude_sigma_arcmin"] = result.AltitudeSigmaArcmin,
+            ["azimuth_sigma_arcmin"] = result.AzimuthSigmaArcmin,
+            ["total_sigma_arcmin"] = result.TotalSigmaArcmin,
+            ["measured_at"] = result.MeasuredAt.ToString("O", CultureInfo.InvariantCulture),
+        };
 
         /// <summary>The verdict bands the client's rating uses (polar_error_rating.dart), applied to the error plus twice
         /// its 1σ (<see cref="RatedErrorArcmin"/>, #2072).</summary>
@@ -384,11 +422,11 @@ namespace OpenAstroAra.Server.Services {
                 }
                 _checkSolvesDone = done;
             }
-            return PublishStageAsync(gen, PolarAlignStages.Check, "checking", done);
+            return PublishStageAsync(gen);
         }
 
-        /// <summary>A measurement's deliberate switch-on before its turns — the last run's exit or live loop left tracking
-        /// off on purpose (NINA turns tracking on before its measurement too). Distinct from the turn's "tracking
+        /// <summary>A measurement's deliberate switch-on before its turns — the last run's exit or the live loop left
+        /// tracking off on purpose (NINA turns tracking on before its measurement too). Distinct from the turn's "tracking
         /// dropped" (<see cref="KeepTrackingOnForTurnAsync"/>), which is a mid-run fault.</summary>
         private async Task EnsureTrackingOnAsync(int gen, CancellationToken ct) {
             if (_mount.GetInfo().TrackingEnabled) {
@@ -400,38 +438,72 @@ namespace OpenAstroAra.Server.Services {
 
         // ── state + events ───────────────────────────────────────────────────────────────────
 
-        private Task SetStageAsync(int gen, string stage, string state) {
+        /// <summary>A measurement starts afresh (<see cref="BeginMeasurementLocked"/>), announced by its
+        /// <c>polar_align.stage</c> event.</summary>
+        private Task BeginMeasurementAsync(int gen, string stage, string state) {
             lock (_gate) {
                 if (_generation != gen) {
                     return Task.CompletedTask;
                 }
-                _stage = stage;
-                _state = state;
-                _checkSolvesDone = 0;
-                // A measurement starts afresh: no earlier readout stands for it on the status, in a session row written
-                // by a Stop before its first solve, or in the client's fold.
-                _altErrorArcmin = null;
-                _azErrorArcmin = null;
-                _lastFrame = null;
-                _measurementNoisy = false;
+                BeginMeasurementLocked(stage, state);
             }
             LogStage(stage, state);
-            return PublishStageAsync(gen, stage, state, solvesDone: 0);
+            return PublishStageAsync(gen);
         }
 
-        private Task PublishStageAsync(int gen, string stage, string state, int solvesDone) =>
-            !IsCurrent(gen) ? Task.CompletedTask :
-            PublishAsync(WsEventCatalog.PolarAlignStage, new JsonObject {
-                ["stage"] = stage,
-                ["state"] = state,
-                ["check_solves_done"] = solvesDone,
-                ["check_solves_total"] = CheckSolves,
-            });
+        /// <summary>Caller holds <c>_gate</c>. The run's next measurement, in <paramref name="state"/>: no earlier readout
+        /// stands for it on the status, in a session row written by a Stop before its first solve, or in the client's
+        /// fold.</summary>
+        private void BeginMeasurementLocked(string stage, string state) {
+            _stage = stage;
+            _state = state;
+            _checkSolvesDone = 0;
+            _altErrorArcmin = null;
+            _azErrorArcmin = null;
+            _lastFrame = null;
+            _measurementNoisy = false;
+        }
+
+        /// <summary>The next state of the chain after Done (<c>homing</c>, <c>checking</c>), announced by its
+        /// <c>polar_align.stage</c> event; the stage's readings stay.</summary>
+        private Task SetChainStateAsync(int gen, string state) {
+            string? stage;
+            lock (_gate) {
+                if (_generation != gen) {
+                    return Task.CompletedTask;
+                }
+                _state = state;
+                stage = _stage;
+            }
+            LogStage(stage, state);
+            return PublishStageAsync(gen);
+        }
+
+        /// <summary><c>polar_align.stage</c>: the run's stage and state, the verify measurement's solve count, and its
+        /// verdict (<c>check_result</c>) once it is known.</summary>
+        private Task PublishStageAsync(int gen) {
+            JsonObject payload;
+            lock (_gate) {
+                if (_generation != gen) {
+                    return Task.CompletedTask;
+                }
+                payload = new JsonObject {
+                    ["stage"] = _stage,
+                    ["state"] = _state,
+                    ["check_solves_done"] = _checkSolvesDone,
+                    ["check_solves_total"] = CheckSolves,
+                };
+                if (_checkResult is { } verdict) {
+                    payload["check_result"] = CheckResultJson(verdict);
+                }
+            }
+            return PublishAsync(WsEventCatalog.PolarAlignStage, payload);
+        }
 
         [LoggerMessage(EventId = 4534, Level = LogLevel.Information, Message = "§45 polar-align stage {Stage} ({State})")]
-        private partial void LogStage(string stage, string state);
+        private partial void LogStage(string? stage, string state);
 
-        [LoggerMessage(EventId = 4539, Level = LogLevel.Information, Message = "§45 polar-align three-point check: axis RA {AxisRaDeg:F4}° Dec {AxisDecDeg:F4}°; error alt {AltArcmin:F2}′ az {AzArcmin:F2}′ total {TotalArcmin:F2}′ ± {TotalSigmaArcmin:F2}′ (1σ); cone {ConeDeg:F2}°; turn mismatch {MismatchDeg:F3}°; last run said {FineArcmin}′; solves {Solves}; σ floor {Floor}")]
+        [LoggerMessage(EventId = 4539, Level = LogLevel.Information, Message = "§45 polar-align verify measurement: axis RA {AxisRaDeg:F4}° Dec {AxisDecDeg:F4}°; error alt {AltArcmin:F2}′ az {AzArcmin:F2}′ total {TotalArcmin:F2}′ ± {TotalSigmaArcmin:F2}′ (1σ); cone {ConeDeg:F2}°; turn mismatch {MismatchDeg:F3}°; the adjust readout was {FineArcmin}′; solves {Solves}; σ floor {Floor}")]
         private partial void LogCheckResult(double axisRaDeg, double axisDecDeg, double altArcmin, double azArcmin, double totalArcmin, double totalSigmaArcmin, double coneDeg, double mismatchDeg, double? fineArcmin, string solves, string floor);
     }
 }

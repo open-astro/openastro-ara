@@ -26,9 +26,6 @@ public static class PolarAlignSettingsClamp {
     public const double MinSeedRotationDeg = 5.0;
     public const double MaxSeedRotationDeg = 30.0;
     public const double DefaultSeedRotationDeg = 10.0;
-    public const double MinCheckStepDeg = 5.0;
-    public const double MaxCheckStepDeg = 30.0;
-    public const double DefaultCheckStepDeg = 10.0;
     public const double MaxCoarseExposureSeconds = 60.0;
     public const double DefaultCoarseExposureSeconds = 3.0;
     public const int MinFramesPerPoint = 1;
@@ -45,9 +42,6 @@ public static class PolarAlignSettingsClamp {
             SeedRotationDeg = double.IsFinite(settings.SeedRotationDeg)
                 ? Math.Clamp(settings.SeedRotationDeg, MinSeedRotationDeg, MaxSeedRotationDeg)
                 : DefaultSeedRotationDeg,
-            CheckStepDeg = double.IsFinite(settings.CheckStepDeg)
-                ? Math.Clamp(settings.CheckStepDeg, MinCheckStepDeg, MaxCheckStepDeg)
-                : DefaultCheckStepDeg,
             CoarseExposureSeconds = double.IsFinite(settings.CoarseExposureSeconds) && settings.CoarseExposureSeconds > 0
                 ? Math.Min(settings.CoarseExposureSeconds, MaxCoarseExposureSeconds)
                 : DefaultCoarseExposureSeconds,

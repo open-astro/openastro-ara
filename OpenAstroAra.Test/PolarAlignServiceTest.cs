@@ -422,7 +422,7 @@ namespace OpenAstroAra.Test {
             var fake = new FakeGuideCapture { Connected = false };
             using var svc = NewService(fake, new ScriptedSolver());
 
-            await Assert.ThrowsAsync<InvalidOperationException>(() => svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None));
+            await Assert.ThrowsAsync<InvalidOperationException>(() => svc.StartAsync(null, CancellationToken.None));
         }
 
         [Test]
@@ -430,7 +430,7 @@ namespace OpenAstroAra.Test {
             var fake = NewFake();
             using var svc = NewService(fake, new ScriptedSolver(), NewMount(connected: false));
 
-            await Assert.ThrowsAsync<InvalidOperationException>(() => svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None));
+            await Assert.ThrowsAsync<InvalidOperationException>(() => svc.StartAsync(null, CancellationToken.None));
             Assert.That(fake.LeaseCalls, Is.Empty, "a refused start must not acquire the lease");
         }
 
@@ -445,7 +445,7 @@ namespace OpenAstroAra.Test {
 
             // Refused before the camera is taken, with the mount layer's own refusal.
             var refusal = await Assert.ThrowsAsync<OpenAstroAra.Server.Contracts.Refusals.RefusalException>(
-                () => svc.StartAsync(PolarAlignStages.Check, null, CancellationToken.None));
+                () => svc.StartAsync(null, CancellationToken.None));
 
             Assert.That(refusal!.Cause, Is.EqualTo(OpenAstroAra.Server.Contracts.Refusals.RefusalCatalog.MountPositionUnverified));
             Assert.That(fake.LeaseCalls, Is.Empty, "a refused start must not acquire the lease");
@@ -460,7 +460,7 @@ namespace OpenAstroAra.Test {
             var ws = new WsRecorder();
             using var svc = NewService(fake, new ScriptedSolver(), ws: ws);
 
-            await svc.StartAsync(PolarAlignStages.Fine, idempotencyKey: null, CancellationToken.None).ConfigureAwait(false);
+            await svc.StartAsync(idempotencyKey: null, CancellationToken.None).ConfigureAwait(false);
 
             Assert.That(PaCalls(fake), Is.Not.Empty, "Start should take the lease");
             Assert.That(PaCalls(fake)[0], Is.True);
@@ -479,7 +479,7 @@ namespace OpenAstroAra.Test {
             await ((IGuideCapture)fake).TakeCameraAsync(CameraUse.GuideFocus, _ => { stops++; return Task.CompletedTask; }, CancellationToken.None).ConfigureAwait(false);
             using var svc = NewService(fake, new ScriptedSolver());
 
-            await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            await svc.StartAsync(null, CancellationToken.None).ConfigureAwait(false);
 
             Assert.That(stops, Is.EqualTo(1));
             Assert.That(fake.Custody.Holder, Is.EqualTo(CameraUse.PolarAlign));
@@ -492,8 +492,8 @@ namespace OpenAstroAra.Test {
             var fake = NewFake(answerCaptures: false);
             using var svc = NewService(fake, new ScriptedSolver());
 
-            await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
-            await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            await svc.StartAsync(null, CancellationToken.None).ConfigureAwait(false);
+            await svc.StartAsync(null, CancellationToken.None).ConfigureAwait(false);
 
             Assert.That(fake.LeaseCalls.Count, Is.EqualTo(1), "a second Start on an already-active routine is a no-op accept");
             await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
@@ -519,8 +519,8 @@ namespace OpenAstroAra.Test {
             using var svc = NewService(fake, new ScriptedSolver(), ws: ws);
 
             await Task.WhenAll(
-                svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None),
-                svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None)).ConfigureAwait(false);
+                svc.StartAsync(null, CancellationToken.None),
+                svc.StartAsync(null, CancellationToken.None)).ConfigureAwait(false);
 
             var acquisitions = PaCalls(fake).Count(active => active);
             Assert.That(acquisitions, Is.EqualTo(1), "concurrent Starts must acquire the lease exactly once");
@@ -546,7 +546,7 @@ namespace OpenAstroAra.Test {
             };
             using var svc = NewService(fake, new ScriptedSolver());
 
-            var startTask = svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None);
+            var startTask = svc.StartAsync(null, CancellationToken.None);
             await startEnteredLease.Task.WaitAsync(SignalTimeout).ConfigureAwait(false);
 
             // Start now holds _opLock inside the (blocked) lease call; a Stop must wait on the semaphore.
@@ -576,7 +576,7 @@ namespace OpenAstroAra.Test {
             var ws = new WsRecorder();
             using var svc = NewService(fake, solver, mount, ws);
 
-            await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            await svc.StartAsync(null, CancellationToken.None).ConfigureAwait(false);
             var status = await PollStateAsync(svc, "adjusting", "failed").ConfigureAwait(false);
 
             Assert.That(status.State, Is.EqualTo("adjusting"));
@@ -600,7 +600,7 @@ namespace OpenAstroAra.Test {
             Assert.That(progress.GetProperty("zone").GetString(), Is.EqualTo("green"));
 
             await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
-            // #2048: stop_tracking_when_done is on by default, as NINA's, and a Stop never turns tracking back on.
+            // Every end of a run turns tracking off, and a Stop never turns it back on.
             mount.Verify(m => m.SetTrackingEnabled(false), Times.Exactly(2), "off for the adjust loop, and off again at the exit");
             mount.Verify(m => m.SetTrackingEnabled(true), Times.Never, "Stop does not turn tracking back on");
             Assert.That(PaCalls(fake).Last(), Is.False, "Stop releases the lease");
@@ -615,7 +615,7 @@ namespace OpenAstroAra.Test {
             var ws = new WsRecorder();
             using var svc = NewService(fake, solver, ws: ws);
 
-            await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            await svc.StartAsync(null, CancellationToken.None).ConfigureAwait(false);
             // The paused state lasts one PausedRetryDelay (20 ms here) before the scripted fallback solve
             // resumes the loop, so a 50 ms status poll misses it about half the time and timed out at 20 s.
             // The WS event is the durable witness of the pause; the state poll only has to see the resume.
@@ -644,7 +644,7 @@ namespace OpenAstroAra.Test {
             var ws = new WsRecorder();
             using var svc = NewService(fake, new ScriptedSolver { Fallback = Unsolved }, ws: ws);
 
-            await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            await svc.StartAsync(null, CancellationToken.None).ConfigureAwait(false);
             var error = await WaitForEventAsync(ws, WsEventCatalog.PolarAlignError).ConfigureAwait(false);
 
             Assert.That(error.GetProperty("reason").GetString(), Is.EqualTo("guider_out_of_step"));
@@ -658,7 +658,7 @@ namespace OpenAstroAra.Test {
             var ws = new WsRecorder();
             using var svc = NewService(fake, solver, ws: ws);
 
-            await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            await svc.StartAsync(null, CancellationToken.None).ConfigureAwait(false);
             var status = await PollStateAsync(svc, "failed").ConfigureAwait(false);
 
             Assert.That(status.State, Is.EqualTo("failed"));
@@ -678,7 +678,7 @@ namespace OpenAstroAra.Test {
             var ws = new WsRecorder();
             using var svc = NewService(fake, solver, ws: ws);
 
-            await svc.StartAsync(null, null, CancellationToken.None).ConfigureAwait(false);
+            await svc.StartAsync(null, CancellationToken.None).ConfigureAwait(false);
             var error = await WaitForEventAsync(ws, WsEventCatalog.PolarAlignError).ConfigureAwait(false);
 
             Assert.That(error.GetProperty("reason").GetString(), Is.EqualTo("seed_solve_failed"));
@@ -693,7 +693,7 @@ namespace OpenAstroAra.Test {
             var ws = new WsRecorder();
             using var svc = NewService(fake, solver, ws: ws);
 
-            await svc.StartAsync(null, null, CancellationToken.None).ConfigureAwait(false);
+            await svc.StartAsync(null, CancellationToken.None).ConfigureAwait(false);
             var error = await WaitForEventAsync(ws, WsEventCatalog.PolarAlignError).ConfigureAwait(false);
 
             Assert.That(error.GetProperty("message").GetString(), Does.Not.Contain(" mm"));
@@ -712,13 +712,13 @@ namespace OpenAstroAra.Test {
             var solver = new ScriptedSolver { Fallback = Unsolved }; // seed fails → FailRoutineAsync
             using var svc = NewService(fake, solver);
 
-            await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            await svc.StartAsync(null, CancellationToken.None).ConfigureAwait(false);
             await PollStateAsync(svc, "failed").ConfigureAwait(false);
 
             solver.Fallback = SolveB;
             solver.Enqueue(SolveA, SolveB, SolveC);
             var mark = Mark(svc);
-            var restart = svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None);
+            var restart = svc.StartAsync(null, CancellationToken.None);
             await Task.Delay(200).ConfigureAwait(false); // ADR 0016 rule 5 exception: the re-Start waiting behind the gated release is an absence nothing signals; the gate keeps it blocked, so the bound only gives a wrongly unblocked Start time to finish.
             Assert.That(restart.IsCompleted, Is.False,
                 "the re-Start must wait for the failed run's in-flight lease release");
@@ -742,7 +742,7 @@ namespace OpenAstroAra.Test {
             solver.Enqueue(SolveA, SolveB, SolveC);
             using var svc = NewService(fake, solver);
 
-            await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            await svc.StartAsync(null, CancellationToken.None).ConfigureAwait(false);
             var status = await PollStateAsync(svc, "adjusting", "failed").ConfigureAwait(false);
             Assert.That(status.State, Is.EqualTo("adjusting"),
                 "transient capture refusals must be absorbed by the seed retry loop");
@@ -761,7 +761,7 @@ namespace OpenAstroAra.Test {
             fake.RefusalMessage = "path must be in an existing directory";
             using var svc = NewService(fake, new ScriptedSolver { Fallback = SolveA }, ws: ws);
 
-            await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            await svc.StartAsync(null, CancellationToken.None).ConfigureAwait(false);
             var status = await PollStateAsync(svc, "failed").ConfigureAwait(false);
             Assert.That(status.State, Is.EqualTo("failed"));
             await ws.WhenCountAsync(WsEventCatalog.PolarAlignError, 1).WaitAsync(SignalTimeout).ConfigureAwait(false);
@@ -784,7 +784,7 @@ namespace OpenAstroAra.Test {
             solver.Enqueue(SolveA, SolveB, SolveC);
             using var svc = NewService(fake, solver, fetcher: fetcher);
 
-            await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            await svc.StartAsync(null, CancellationToken.None).ConfigureAwait(false);
             await PollStateAsync(svc, "adjusting", "failed").ConfigureAwait(false);
             await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
             Assert.That(fetcher.Fetched, Is.Not.Empty, "the engine must download the guider-saved frame");
@@ -804,7 +804,7 @@ namespace OpenAstroAra.Test {
             solver.Enqueue(SolveA, SolveB, SolveC);
             using var svc = NewService(fake, solver);
 
-            await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            await svc.StartAsync(null, CancellationToken.None).ConfigureAwait(false);
             await PollStateAsync(svc, "adjusting", "failed").ConfigureAwait(false);
             await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
             Assert.That(CaptureBinnings(fake), Is.Not.Empty.And.All.EqualTo(3),
@@ -823,7 +823,7 @@ namespace OpenAstroAra.Test {
             solver.Enqueue(SolveA, SolveB, SolveC);
             using var svc = NewService(fake, solver);
 
-            await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            await svc.StartAsync(null, CancellationToken.None).ConfigureAwait(false);
             var status = await PollStateAsync(svc, "adjusting", "failed").ConfigureAwait(false);
             await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
             Assert.That(status.State, Is.EqualTo("adjusting"), "a missing size never fails the routine");
@@ -841,7 +841,7 @@ namespace OpenAstroAra.Test {
             var logger = new CapturingLogger();
             using var svc = NewService(fake, solver, logger: logger);
 
-            await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            await svc.StartAsync(null, CancellationToken.None).ConfigureAwait(false);
             await PollStateAsync(svc, "adjusting", "failed").ConfigureAwait(false);
             await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
 
@@ -858,7 +858,7 @@ namespace OpenAstroAra.Test {
             solver.Enqueue(SolveA, SolveB, SolveC);
             using var svc = NewService(fake, solver, store: store);
 
-            await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            await svc.StartAsync(null, CancellationToken.None).ConfigureAwait(false);
             await PollStateAsync(svc, "adjusting", "failed").ConfigureAwait(false);
             await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
             Assert.That(CaptureBinnings(fake), Is.Not.Empty.And.All.EqualTo(2), "the user's 2×2 wins over the 3×3 tier");
@@ -886,7 +886,7 @@ namespace OpenAstroAra.Test {
             using var svc = NewService(fake, solver, fetcher: fetcher);
             svc.CaptureCompleteTimeout = TimeSpan.FromMilliseconds(300); // fast first-capture timeout
 
-            await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            await svc.StartAsync(null, CancellationToken.None).ConfigureAwait(false);
             var status = await PollStateAsync(svc, "adjusting", "failed").ConfigureAwait(false);
             await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
             Assert.That(status.State, Is.EqualTo("adjusting"),
@@ -908,7 +908,7 @@ namespace OpenAstroAra.Test {
             solver.Enqueue(SolveA, SolveB, SolveC);
             using var svc = NewService(fake, solver);
 
-            await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            await svc.StartAsync(null, CancellationToken.None).ConfigureAwait(false);
             var status = await PollStateAsync(svc, "adjusting", "failed").ConfigureAwait(false);
             await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
 
@@ -922,7 +922,7 @@ namespace OpenAstroAra.Test {
             fake.LoopStops = false;
             using var svc = NewService(fake, new ScriptedSolver());
 
-            var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None));
+            var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => svc.StartAsync(null, CancellationToken.None));
 
             Assert.That(ex!.Message, Does.Contain("Guide Camera loop"));
             // The custody module takes the lease before the loop stop (a new loop cannot start under it); a start
@@ -944,14 +944,14 @@ namespace OpenAstroAra.Test {
             solver.Enqueue(SolveA, SolveB, SolveC);
             using var svc = NewService(fake, solver, fetcher: fetcher);
 
-            await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            await svc.StartAsync(null, CancellationToken.None).ConfigureAwait(false);
             // Run 1 acks its first capture and parks on the completion wait.
             await fake.WhenCapturedAsync(1).WaitAsync(SignalTimeout).ConfigureAwait(false);
             await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
             Assert.That(fake.IdleWaits, Is.EqualTo(1), "run 1 asked once");
 
             var mark = Mark(svc);
-            await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            await svc.StartAsync(null, CancellationToken.None).ConfigureAwait(false);
             var status = await PollStateAsync(svc, mark, "adjusting", "failed").ConfigureAwait(false);
             await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
             Assert.That(fake.IdleWaits, Is.EqualTo(2), "run 2 asked before its first capture");
@@ -968,7 +968,7 @@ namespace OpenAstroAra.Test {
             fake.CaptureBusy = "the guide camera is still busy with an earlier capture — wait a few seconds and try again";
             using var svc = NewService(fake, new ScriptedSolver());
 
-            var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => svc.StartAsync(null, null, CancellationToken.None));
+            var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => svc.StartAsync(null, CancellationToken.None));
 
             Assert.That(ex!.Message, Does.Contain("guide camera is still busy"));
             Assert.That(PaCalls(fake).Last(), Is.False, "the lease is given back");
@@ -987,7 +987,7 @@ namespace OpenAstroAra.Test {
             fake.Script = n => n >= 3 ? FakeCaptureOutcome.Refused : FakeCaptureOutcome.Saved; // transient, LAST attempt only
             using var svc = NewService(fake, new ScriptedSolver { Fallback = Unsolved }, ws: ws);
 
-            await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            await svc.StartAsync(null, CancellationToken.None).ConfigureAwait(false);
             var status = await PollStateAsync(svc, "failed").ConfigureAwait(false);
             Assert.That(status.State, Is.EqualTo("failed"));
             await ws.WhenCountAsync(WsEventCatalog.PolarAlignError, 1).WaitAsync(SignalTimeout).ConfigureAwait(false);
@@ -1013,7 +1013,7 @@ namespace OpenAstroAra.Test {
             using var svc = NewService(fake, solver, fetcher: fetcher);
             svc.CaptureCompleteTimeout = TimeSpan.FromMilliseconds(300);
 
-            await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            await svc.StartAsync(null, CancellationToken.None).ConfigureAwait(false);
             var status = await PollStateAsync(svc, "adjusting", "failed").ConfigureAwait(false);
             await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
             Assert.That(status.State, Is.EqualTo("adjusting"),
@@ -1034,7 +1034,7 @@ namespace OpenAstroAra.Test {
             using var svc = NewService(fake, new ScriptedSolver { Fallback = SolveA },
                 ws: ws, fetcher: new FakeFrameFetcher { Fail = true });
 
-            await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            await svc.StartAsync(null, CancellationToken.None).ConfigureAwait(false);
             var status = await PollStateAsync(svc, "failed").ConfigureAwait(false);
             Assert.That(status.State, Is.EqualTo("failed"));
             await ws.WhenCountAsync(WsEventCatalog.PolarAlignError, 1).WaitAsync(SignalTimeout).ConfigureAwait(false);
@@ -1055,7 +1055,7 @@ namespace OpenAstroAra.Test {
             solver.Enqueue(SolveA, SolveB, SolveC);
             using var svc = NewService(fake, solver);
 
-            await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            await svc.StartAsync(null, CancellationToken.None).ConfigureAwait(false);
             await PollStateAsync(svc, "adjusting", "failed").ConfigureAwait(false);
             // Several renewals are refused while the loop keeps solving: the fake signals each one before it throws.
             await fake.WhenLeaseCallsAsync(fake.LeaseCalls.Count + 3).WaitAsync(SignalTimeout).ConfigureAwait(false);
@@ -1077,7 +1077,7 @@ namespace OpenAstroAra.Test {
             using var svc = NewService(fake, solver, ws: ws, logger: logger);
             svc.RunUnwindGrace = TimeSpan.FromMilliseconds(100);
 
-            await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            await svc.StartAsync(null, CancellationToken.None).ConfigureAwait(false);
             // Wait until the run is parked inside the cancellation-ignoring solve.
             await solver.Entered.Task.WaitAsync(SignalTimeout).ConfigureAwait(false);
             await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
@@ -1117,7 +1117,7 @@ namespace OpenAstroAra.Test {
             var ws = new WsRecorder();
             using var svc = NewService(fake, solver, ws: ws);
 
-            await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            await svc.StartAsync(null, CancellationToken.None).ConfigureAwait(false);
             await PollStateAsync(svc, "failed").ConfigureAwait(false);
             await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
 
@@ -1130,7 +1130,7 @@ namespace OpenAstroAra.Test {
             solver.Fallback = SolveB;
             solver.Enqueue(SolveA, SolveB, SolveC);
             var mark = Mark(svc);
-            await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            await svc.StartAsync(null, CancellationToken.None).ConfigureAwait(false);
             var resumed = await PollStateAsync(svc, mark, "adjusting", "failed").ConfigureAwait(false);
             Assert.That(resumed.State, Is.EqualTo("adjusting"));
             await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
@@ -1146,7 +1146,7 @@ namespace OpenAstroAra.Test {
             var ws = new WsRecorder();
             using var svc = NewService(fake, solver, ws: ws);
 
-            await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            await svc.StartAsync(null, CancellationToken.None).ConfigureAwait(false);
             var status = await PollStateAsync(svc, "failed").ConfigureAwait(false);
 
             Assert.That(status.State, Is.EqualTo("failed"));
@@ -1221,7 +1221,7 @@ namespace OpenAstroAra.Test {
             solver.Enqueue(seedA, seedB, seedC);
             using var svc = NewService(fake, solver, mount);
 
-            await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            await svc.StartAsync(null, CancellationToken.None).ConfigureAwait(false);
             var status = await PollStateAsync(svc, "adjusting", "failed").ConfigureAwait(false);
             await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
 
@@ -1277,7 +1277,7 @@ namespace OpenAstroAra.Test {
             solver.Enqueue(Solved(camera), Solved(Turn(camera, axis, 10.0)), seedC);
             using var svc = NewService(NewFake(), solver, mount, store: store);
 
-            await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            await svc.StartAsync(null, CancellationToken.None).ConfigureAwait(false);
             var status = await PollStateAsync(svc, "adjusting", "failed").ConfigureAwait(false);
             await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
 
@@ -1338,7 +1338,7 @@ namespace OpenAstroAra.Test {
             var ws = new WsRecorder();
             using var svc = NewService(NewFake(), new ScriptedSolver(), mount, ws);
 
-            await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            await svc.StartAsync(null, CancellationToken.None).ConfigureAwait(false);
             var status = await PollStateAsync(svc, "adjusting", "failed").ConfigureAwait(false);
 
             Assert.That(status.State, Is.EqualTo("failed"));
@@ -1369,7 +1369,7 @@ namespace OpenAstroAra.Test {
             solver.Enqueue(SolveA, SolveB, SolveC);
             using var svc = NewService(NewFake(), solver, mount);
 
-            await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            await svc.StartAsync(null, CancellationToken.None).ConfigureAwait(false);
             var status = await PollStateAsync(svc, "adjusting", "failed").ConfigureAwait(false);
             await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
 
@@ -1399,7 +1399,7 @@ namespace OpenAstroAra.Test {
             using var svc = NewService(NewFake(), solver, mount);
             BenchClockOf(mount).AutoAdvance = false; // the bench clock stands still: the turn's time never runs out
 
-            await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            await svc.StartAsync(null, CancellationToken.None).ConfigureAwait(false);
             await running.Task.WaitAsync(SignalTimeout).ConfigureAwait(false);
             await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
 
@@ -1461,7 +1461,7 @@ namespace OpenAstroAra.Test {
             var ws = new WsRecorder();
             using var svc = NewService(fake, new ScriptedSolver(), mount, ws: ws); // each solve reads where the mount points
 
-            await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            await svc.StartAsync(null, CancellationToken.None).ConfigureAwait(false);
             var status = await PollStateAsync(svc, "failed", "adjusting").ConfigureAwait(false);
             Assert.That(status.State, Is.EqualTo("failed"));
             await ws.WhenCountAsync(WsEventCatalog.PolarAlignError, 1).WaitAsync(SignalTimeout).ConfigureAwait(false);
@@ -1553,7 +1553,7 @@ namespace OpenAstroAra.Test {
             var fake = NewFake();
             using var svc = NewService(fake, new ScriptedSolver(), mount); // each solve reads where the mount points
 
-            await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            await svc.StartAsync(null, CancellationToken.None).ConfigureAwait(false);
             var status = await PollStateAsync(svc, "adjusting", "failed").ConfigureAwait(false);
             Assert.That(status.State, Is.EqualTo("adjusting"));
             await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
@@ -1570,61 +1570,13 @@ namespace OpenAstroAra.Test {
                 "on before the seed slew, off for the adjust loop, the user's off put back");
         }
 
-        /// <summary>The bench store with <c>stop_tracking_when_done</c> off: a finished run hands tracking back.</summary>
-        private static InMemoryProfileStore HandBackStore() {
-            var store = NewStore();
-            store.PutPolarAlignSettings(store.GetPolarAlignSettings() with { StopTrackingWhenDone = false });
-            return store;
-        }
-
-        [TestCase(true)]
-        [TestCase(false)]
-        public async Task Tracking_turned_on_by_another_caller_during_the_adjust_loop_is_left_as_set_at_Done_with_hand_back(bool sameValueAsRoutine) {
-            // A sequence's Set Tracking writes while the run is live; with stop_tracking_when_done off, Done hands
-            // tracking back, and that hand-back must not undo the other caller's write.
-            // sameValueAsRoutine: the other caller writes the value the routine itself last wrote (off).
-            var (mount, calls) = TrackingMount(tracking: false);
-            var fake = NewFake();
-            var solver = new ScriptedSolver();
-            solver.Enqueue(SolveA, SolveB, SolveC);
-            using var svc = NewService(fake, solver, mount, store: HandBackStore());
-            await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
-            await PollStateAsync(svc, "adjusting", "failed").ConfigureAwait(false);
-
-            mount.Object.SetTrackingEnabled(!sameValueAsRoutine);
-            await svc.CompleteAsync(null, CancellationToken.None).ConfigureAwait(false);
-
-            Assert.That(string.Join(", ", calls), Is.EqualTo(
-                $"tracking True, slew tracking=True, slew tracking=True, tracking False, tracking {!sameValueAsRoutine}"),
-                "the routine's own restore is not written after the other caller's write");
-        }
-
-        [Test]
-        public async Task Tracking_set_by_a_sequence_Set_Tracking_instruction_during_the_adjust_loop_is_left_on_at_Done_with_hand_back() {
-            // Drives the real instruction, so the test follows the mediator member the sequence uses.
-            var (mount, calls) = TrackingMount(tracking: false);
-            var fake = NewFake();
-            var solver = new ScriptedSolver();
-            solver.Enqueue(SolveA, SolveB, SolveC);
-            using var svc = NewService(fake, solver, mount, store: HandBackStore());
-            await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
-            await PollStateAsync(svc, "adjusting", "failed").ConfigureAwait(false);
-
-            await new SetTracking(mount.Object) { TrackingMode = TrackingMode.Sidereal }
-                .Execute(null!, CancellationToken.None).ConfigureAwait(false);
-            await svc.CompleteAsync(null, CancellationToken.None).ConfigureAwait(false);
-
-            Assert.That(string.Join(", ", calls), Is.EqualTo("tracking True, slew tracking=True, slew tracking=True, tracking False, tracking True"),
-                "the sequence's Sidereal stays on: no restore to off after it");
-        }
-
         private static async Task<(PolarAlignService Svc, RecordingLog Log)> AdjustingServiceAsync() {
             var fake = NewFake();
             var solver = new ScriptedSolver();
             solver.Enqueue(SolveA, SolveB, SolveC);
             var log = new RecordingLog();
             var svc = NewService(fake, solver, log: log);
-            await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            await svc.StartAsync(null, CancellationToken.None).ConfigureAwait(false);
             await PollStateAsync(svc, "adjusting", "failed").ConfigureAwait(false);
             return (svc, log);
         }
@@ -1701,7 +1653,7 @@ namespace OpenAstroAra.Test {
             var ws = new WsRecorder();
             using var svc = NewService(fake, solver, mount, ws);
 
-            await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            await svc.StartAsync(null, CancellationToken.None).ConfigureAwait(false);
             var status = await PollStateAsync(svc, "failed", "adjusting").ConfigureAwait(false);
 
             Assert.That(status.State, Is.EqualTo("failed"), "no live readout from a tracking mount");
@@ -1723,7 +1675,7 @@ namespace OpenAstroAra.Test {
             using var svc = NewService(NewFake(), solver, mount, ws);
             svc.TrackingConfirmTimeout = TimeSpan.FromMinutes(5); // a wait for the confirm would time the test out
 
-            await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            await svc.StartAsync(null, CancellationToken.None).ConfigureAwait(false);
             var status = await PollStateAsync(svc, "failed", "adjusting").ConfigureAwait(false);
 
             Assert.That(status.State, Is.EqualTo("failed"));
@@ -1741,7 +1693,7 @@ namespace OpenAstroAra.Test {
             using var svc = NewService(NewFake(), solver, ws: ws);
             svc.WeakReadoutCosPsi = 1.01;
 
-            await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            await svc.StartAsync(null, CancellationToken.None).ConfigureAwait(false);
             Assert.That((await PollStateAsync(svc, "adjusting", "failed").ConfigureAwait(false)).State, Is.EqualTo("adjusting"));
             await ws.WhenCountAsync(WsEventCatalog.PolarAlignProgress, 2).WaitAsync(SignalTimeout).ConfigureAwait(false);
 
@@ -1766,7 +1718,7 @@ namespace OpenAstroAra.Test {
             var ws = new WsRecorder();
             using var svc = NewService(fake, solver, mount, ws);
 
-            await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            await svc.StartAsync(null, CancellationToken.None).ConfigureAwait(false);
             Assert.That((await PollStateAsync(svc, "adjusting", "failed").ConfigureAwait(false)).State, Is.EqualTo("adjusting"));
             Assert.That(mount.Object.GetInfo().TrackingEnabled, Is.False, "confirmed off before the first live frame");
             mount.Object.SetTrackingEnabled(true); // not the routine's write
@@ -1795,7 +1747,7 @@ namespace OpenAstroAra.Test {
             using var svc = NewService(NewFake(), solver, mount, ws);
             svc.TrackingConfirmTimeout = TimeSpan.FromMinutes(5); // a wait for the confirm would time the test out
 
-            await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            await svc.StartAsync(null, CancellationToken.None).ConfigureAwait(false);
             var status = await PollStateAsync(svc, "failed", "adjusting").ConfigureAwait(false);
 
             Assert.That(status.State, Is.EqualTo("failed"), "no live readout without a mount to confirm tracking off");
@@ -1815,7 +1767,7 @@ namespace OpenAstroAra.Test {
             var ws = new WsRecorder();
             using var svc = NewService(NewFake(), solver, mount, ws);
 
-            await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            await svc.StartAsync(null, CancellationToken.None).ConfigureAwait(false);
             Assert.That((await PollStateAsync(svc, "adjusting", "failed").ConfigureAwait(false)).State, Is.EqualTo("adjusting"));
             Volatile.Write(ref moving, true); // not the routine's move; tracking still reads off
 
@@ -1876,7 +1828,7 @@ namespace OpenAstroAra.Test {
             solver.Enqueue(Solved(camera), Solved(Turn(camera, axis, 30.0)), seedC);
             using var svc = NewService(fake, solver);
 
-            await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            await svc.StartAsync(null, CancellationToken.None).ConfigureAwait(false);
             var status = await PollStateAsync(svc, "adjusting", "failed").ConfigureAwait(false);
             await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
 
@@ -1898,7 +1850,7 @@ namespace OpenAstroAra.Test {
             using var svc = NewService(fake, solver, ws: ws, store: store);
             svc.CaptureRequestPoll = TimeSpan.FromMilliseconds(10);
 
-            await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            await svc.StartAsync(null, CancellationToken.None).ConfigureAwait(false);
             // The seed's progress, then a renewal from inside the park (it comes after WaitingForCapture is set).
             await ws.WhenCountAsync(WsEventCatalog.PolarAlignProgress, 1).WaitAsync(SignalTimeout).ConfigureAwait(false);
             await fake.WhenLeaseCallsAsync(fake.LeaseCalls.Count + 1).WaitAsync(SignalTimeout).ConfigureAwait(false);
@@ -1949,7 +1901,7 @@ namespace OpenAstroAra.Test {
             var ws = new WsRecorder();
             using var svc = NewService(fake, solver, ws: ws);
 
-            await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            await svc.StartAsync(null, CancellationToken.None).ConfigureAwait(false);
             // The live loop publishes progress after it records its frame: the second progress event is its first frame.
             await ws.WhenCountAsync(WsEventCatalog.PolarAlignProgress, 2).WaitAsync(SignalTimeout).ConfigureAwait(false);
             var status = await svc.GetStatusAsync(CancellationToken.None).ConfigureAwait(false);
@@ -2004,7 +1956,7 @@ namespace OpenAstroAra.Test {
             var ws = new WsRecorder();
             using var svc = NewService(fake, new ScriptedSolver(), ws: ws);
 
-            await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            await svc.StartAsync(null, CancellationToken.None).ConfigureAwait(false);
             await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
 
             Assert.That(PaCalls(fake), Is.EqualTo(AcquireThenRelease),
@@ -2026,44 +1978,17 @@ namespace OpenAstroAra.Test {
             var ws = new WsRecorder();
             using var svc = NewService(fake, solver, NewMount(), ws, log: new RecordingLog(), logger: logger);
 
-            await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            await svc.StartAsync(null, CancellationToken.None).ConfigureAwait(false);
             await PollStateAsync(svc, "adjusting", "failed").ConfigureAwait(false);
             await ws.WhenCountAsync(WsEventCatalog.PolarAlignProgress, 2).WaitAsync(SignalTimeout).ConfigureAwait(false);
             await svc.CompleteAsync(null, CancellationToken.None).ConfigureAwait(false);
+            await WaitForChainStateAsync(ws, "checking").ConfigureAwait(false); // Done's row is written before the verify stage is announced
+            await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
 
             var ids = logger.Entries.Select(e => e.EventId).ToList();
             Assert.That(ids.Count(i => i == 4527), Is.EqualTo(3), "all three seed solves");
             Assert.That(ids, Does.Contain(4528).And.Contain(4529).And.Contain(4530));
             Assert.That(logger.Entries.Single(e => e.EventId == 4528).Message, Does.Contain("axis RA").And.Contain("seed error"));
-        }
-
-        [Test]
-        public async Task Complete_logs_the_achieved_error_and_unwinds_like_stop() {
-            var fake = NewFake();
-            var solver = new ScriptedSolver();
-            solver.Enqueue(SolveA, SolveB, SolveC);
-            var log = new RecordingLog();
-            var mount = NewMount();
-            var ws = new WsRecorder();
-            using var svc = NewService(fake, solver, mount, ws, log: log);
-
-            await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
-            await PollStateAsync(svc, "adjusting", "failed").ConfigureAwait(false);
-            // Wait for the first LIVE iteration (not just the seed) so the row's iteration count is
-            // real. The signal must be the second progress EVENT (seed publishes iteration 0, the
-            // live loop publishes after recording its count) — LastFrameId flips to "live-1" at
-            // capture time, BEFORE the solve bumps the counter, so polling it races Complete.
-            await ws.WhenCountAsync(WsEventCatalog.PolarAlignProgress, 2).WaitAsync(SignalTimeout).ConfigureAwait(false);
-            await svc.CompleteAsync(null, CancellationToken.None).ConfigureAwait(false);
-
-            Assert.That(log.Rows.TryDequeue(out var row), Is.True, "Complete writes exactly one session row");
-            Assert.That(row!.Outcome, Is.EqualTo("complete"));
-            Assert.That(row.FinalErrorArcmin, Is.Not.Null.And.EqualTo(1.0).Within(0.2));
-            Assert.That(row.Iterations, Is.GreaterThanOrEqualTo(1));
-            Assert.That(log.Rows, Is.Empty);
-            Assert.That(PaCalls(fake).Last(), Is.False, "Complete releases the lease");
-            var status = await svc.GetStatusAsync(CancellationToken.None).ConfigureAwait(false);
-            Assert.That(status.State, Is.EqualTo("stopped"));
         }
 
         [Test]
@@ -2074,7 +1999,7 @@ namespace OpenAstroAra.Test {
             var log = new RecordingLog();
             using var svc = NewService(fake, solver, log: log);
 
-            await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            await svc.StartAsync(null, CancellationToken.None).ConfigureAwait(false);
             await PollStateAsync(svc, "adjusting", "failed").ConfigureAwait(false);
             await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
             await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
@@ -2093,7 +2018,7 @@ namespace OpenAstroAra.Test {
             Assert.That((await svc.GetStatusAsync(CancellationToken.None).ConfigureAwait(false)).LastResult, Is.Null, "none by default");
 
             var before = DateTimeOffset.UtcNow;
-            await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            await svc.StartAsync(null, CancellationToken.None).ConfigureAwait(false);
             await PollStateAsync(svc, "adjusting", "failed").ConfigureAwait(false);
             await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
 
@@ -2110,7 +2035,7 @@ namespace OpenAstroAra.Test {
             var log = new RecordingLog();
             using var svc = NewService(fake, solver, log: log);
 
-            await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            await svc.StartAsync(null, CancellationToken.None).ConfigureAwait(false);
             await PollStateAsync(svc, "failed").ConfigureAwait(false);
             await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
 
@@ -2124,7 +2049,7 @@ namespace OpenAstroAra.Test {
             var log = new RecordingLog();
             using var svc = NewService(fake, solver, log: log);
 
-            await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            await svc.StartAsync(null, CancellationToken.None).ConfigureAwait(false);
             await PollStateAsync(svc, "failed").ConfigureAwait(false);
             await log.FirstRow.WaitAsync(SignalTimeout).ConfigureAwait(false);
             await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
@@ -2143,10 +2068,8 @@ namespace OpenAstroAra.Test {
             Assert.That(defaults.Binning, Is.EqualTo(PolarAlignBinning.Auto), "§45.12: binning is auto by default");
             Assert.That(defaults.TargetToleranceArcmin, Is.EqualTo(1.0));
             Assert.That(defaults.SeedRotationDeg, Is.EqualTo(10.0));
-            Assert.That(defaults.CheckStepDeg, Is.EqualTo(10.0));
             Assert.That(defaults.CoarseExposureSeconds, Is.EqualTo(3.0));
             Assert.That(defaults.PolarAlignerAuto, Is.True, "#1971: a rig with a Polar Aligner uses it unless told not to");
-            Assert.That(defaults.StopTrackingWhenDone, Is.True, "#2048: tracking off at the end of a run, as NINA's default");
             Assert.That(defaults.LoopCadenceMs, Is.EqualTo(1000));
             Assert.That(defaults.SettleSeconds, Is.EqualTo(2.0));
             Assert.That(defaults.Camera, Is.EqualTo(PolarAlignCameras.Guide), "#2082: the guide camera measures unless told otherwise");
@@ -2242,13 +2165,11 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
-        public async Task A_main_camera_start_is_refused_without_a_main_camera_solver_and_an_unknown_stage_is_an_argument_error() {
+        public async Task A_main_camera_start_is_refused_without_a_main_camera_solver() {
             var fake = NewFake();
             using var svc = NewService(fake, new ScriptedSolver(), store: MainCameraStore());
 
-            await AssertThrowsAsync<InvalidOperationException>(() => svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None)).ConfigureAwait(false);
-            await AssertThrowsAsync<ArgumentException>(() => svc.StartAsync("sideways", null, CancellationToken.None)).ConfigureAwait(false);
-            await AssertThrowsAsync<ArgumentException>(() => svc.StartAsync("coarse", null, CancellationToken.None)).ConfigureAwait(false);
+            await AssertThrowsAsync<InvalidOperationException>(() => svc.StartAsync(null, CancellationToken.None)).ConfigureAwait(false);
             Assert.That(fake.LeaseCalls, Is.Empty, "a refused start takes no lease");
         }
 
@@ -2263,12 +2184,12 @@ namespace OpenAstroAra.Test {
             var ws = new WsRecorder();
             using var svc = NewService(fake, new MountFollowingSolver(), mount, ws, store: MainCameraStore(), mainCamera: mainCamera);
 
-            await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            await svc.StartAsync(null, CancellationToken.None).ConfigureAwait(false);
             var started = await WaitForEventAsync(ws, WsEventCatalog.PolarAlignStarted).ConfigureAwait(false);
             Assert.That((started.GetProperty("state").GetString(), started.GetProperty("camera").GetString()), Is.EqualTo(("seeding", PolarAlignCameras.Main)));
             var status = await PollStateAsync(svc, "adjusting", "failed").ConfigureAwait(false);
 
-            Assert.That((status.State, status.Stage, status.Camera), Is.EqualTo(("adjusting", PolarAlignStages.Fine, PolarAlignCameras.Main)));
+            Assert.That((status.State, status.Stage, status.Camera), Is.EqualTo(("adjusting", PolarAlignStages.Align, PolarAlignCameras.Main)));
             Assert.That(mainCamera.Calls, Is.GreaterThanOrEqualTo(4), "three seed frames and at least one live frame");
             Assert.That(mainCamera.Exposures.TryPeek(out var exposure) && exposure == 3.0, Is.True, "the main-camera exposure, not the guide exposure");
             var blind = mainCamera.BlindFailovers.ToArray();
@@ -2295,292 +2216,19 @@ namespace OpenAstroAra.Test {
             using var svc = NewService(fake, new MountFollowingSolver(), mount, mainCamera: mainCamera, store: store);
 
             // Refused before the mount moves: no lease, no motor, no frame.
-            await AssertThrowsAsync<InvalidOperationException>(() => svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None)).ConfigureAwait(false);
+            await AssertThrowsAsync<InvalidOperationException>(() => svc.StartAsync(null, CancellationToken.None)).ConfigureAwait(false);
             Assert.That(fake.LeaseCalls, Is.Empty);
             mount.Verify(m => m.MoveAxis(It.IsAny<TelescopeAxes>(), It.Is<double>(r => r != 0)), Times.Never);
             Assert.That(mainCamera.Calls, Is.Zero);
 
             // A guide-camera measurement needs no main camera and still starts (the refused start gave the mount back).
             store.PutPolarAlignSettings(store.GetPolarAlignSettings() with { Camera = PolarAlignCameras.Guide });
-            await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            await svc.StartAsync(null, CancellationToken.None).ConfigureAwait(false);
             Assert.That((await PollStateAsync(svc, "adjusting", "failed").ConfigureAwait(false)).State, Is.EqualTo("adjusting"));
             await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
-        }
-
-        [Test]
-        public async Task A_start_that_names_no_stage_begins_at_the_fine_stage_when_the_main_camera_cannot_shoot() {
-            // Simple Mode and the Preflight pilot start without a stage: a guide-camera-only session (main
-            // camera off) must still polar-align, not be told to use a button it does not have.
-            var fake = NewFake();
-            var mainCamera = new FakeMainCamera { Unavailable = "the main camera is not connected" };
-            var ws = new WsRecorder();
-            using var svc = NewService(fake, new MountFollowingSolver(), NewPoleMount(), ws, store: NewStore(), mainCamera: mainCamera);
-
-            await svc.StartAsync(null, null, CancellationToken.None).ConfigureAwait(false);
-            var started = await WaitForEventAsync(ws, WsEventCatalog.PolarAlignStarted).ConfigureAwait(false);
-            Assert.That(started.GetProperty("stage").GetString(), Is.EqualTo(PolarAlignStages.Fine));
-            var status = await PollStateAsync(svc, "adjusting", "failed").ConfigureAwait(false);
-            Assert.That(status.State, Is.EqualTo("adjusting"));
-            Assert.That(status.Stage, Is.EqualTo(PolarAlignStages.Fine));
-            Assert.That(mainCamera.Calls, Is.Zero);
-            await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
-        }
-
-        [Test]
-        public async Task A_start_that_names_no_stage_is_the_fine_measurement_even_with_the_main_camera_ready() {
-            // The default Start is one guide-camera measurement.
-            var fake = NewFake();
-            var mainCamera = new FakeMainCamera();
-            var ws = new WsRecorder();
-            using var svc = NewService(fake, new MountFollowingSolver(), NewPoleMount(), ws, store: NewStore(), mainCamera: mainCamera);
-
-            await svc.StartAsync(null, null, CancellationToken.None).ConfigureAwait(false);
-            var status = await PollStateAsync(svc, "adjusting", "failed").ConfigureAwait(false);
-            await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
-
-            Assert.That((status.State, status.Stage), Is.EqualTo(("adjusting", PolarAlignStages.Fine)));
-            Assert.That(mainCamera.Calls, Is.Zero, "the main camera is never used");
-        }
-
-        [Test]
-        public async Task A_fine_start_seeds_from_where_the_mount_points_and_never_sends_it_Home() {
-            // #2048 — the mount that hit the pier went Home on every stage, and AlpacaBridge's fresh "at Home" was taken
-            // as proof of where it was. A fine start (also "Adjust again") starts from where the user pointed the mount,
-            // on a mount that can find Home as on any other, like NINA's Three Point Polar Alignment.
-            var fake = NewFake();
-            var stops = new ConcurrentQueue<Coordinates>();
-            var mount = NewPoleMount(stops);
-            var ws = new WsRecorder();
-            using var svc = NewService(fake, new MountFollowingSolver(), mount, ws, store: NewStore());
-
-            await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
-            var started = await WaitForEventAsync(ws, WsEventCatalog.PolarAlignStarted).ConfigureAwait(false);
-            Assert.That(started.GetProperty("state").GetString(), Is.EqualTo("seeding"));
-            Assert.That((await PollStateAsync(svc, "adjusting", "failed").ConfigureAwait(false)).State, Is.EqualTo("adjusting"));
-            await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
-
-            NoHomeNoGoTo(mount);
-            Assert.That(ws.Count("polar_align.needs_home"), Is.Zero, "nobody is asked to put the mount at Home");
-            var targets = stops.ToArray();
-            Assert.That(targets.Length, Is.EqualTo(2), "the two seed turns, no Dec move");
-            Assert.That(targets.Select(t => t.Dec), Is.All.EqualTo(PoleMountDecDeg).Within(1e-6));
-        }
-
-        [Test]
-        public async Task Done_after_the_check_ends_the_routine_and_publishes_stopped() {
-            var fake = NewFake();
-            var ws = new WsRecorder();
-            var log = new RecordingLog();
-            using var svc = NewService(fake, new MountFollowingSolver(), NewPoleMount(), ws, log: log, store: NewStore());
-
-            await svc.StartAsync(PolarAlignStages.Check, null, CancellationToken.None).ConfigureAwait(false);
-            Assert.That((await PollStateAsync(svc, "checked", "failed").ConfigureAwait(false)).State, Is.EqualTo("checked"));
-            Assert.That(log.Rows.Count, Is.EqualTo(1), "the check wrote its row");
-
-            // The user's Done on the verdict: the routine ends and the client hears so — no second row.
-            await svc.CompleteAsync(null, CancellationToken.None).ConfigureAwait(false);
-
-            Assert.That((await svc.GetStatusAsync(CancellationToken.None).ConfigureAwait(false)).State, Is.EqualTo("stopped"));
-            Assert.That(ws.Events.Any(e => e.Type == WsEventCatalog.PolarAlignStopped), Is.True);
-            Assert.That(log.Rows.Count, Is.EqualTo(1));
-        }
-
-        [Test]
-        public async Task The_check_refuses_a_verdict_when_the_three_solves_do_not_describe_a_turn() {
-            // The motor was told its turns but the sky never moved (a slipping clutch): three solves of one
-            // field, apart by noise. No fit from that may call the alignment excellent.
-            var fake = NewFake();
-            var solver = new ScriptedSolver();
-            solver.Enqueue(
-                new PolarAlignSolveOutcome(true, 10.0, 85.0),
-                new PolarAlignSolveOutcome(true, 10.0001, 85.0001),
-                new PolarAlignSolveOutcome(true, 9.9999, 85.0002));
-            var ws = new WsRecorder();
-            using var svc = NewService(fake, solver, NewPoleMount(), ws, store: NewStore());
-
-            await svc.StartAsync(PolarAlignStages.Check, null, CancellationToken.None).ConfigureAwait(false);
-            var error = await WaitForEventAsync(ws, WsEventCatalog.PolarAlignError).ConfigureAwait(false);
-
-            Assert.That(error.GetProperty("reason").GetString(), Is.EqualTo("axis_fit_failed"));
-            Assert.That(error.GetProperty("message").GetString(), Does.Contain("the three frames show the same field"));
-            Assert.That((await svc.GetStatusAsync(CancellationToken.None).ConfigureAwait(false)).CheckResult, Is.Null, "no verdict");
-        }
-
-        [Test]
-        public async Task A_check_only_run_reads_the_guide_frame_size_afresh() {
-            var fake = NewFake();
-            using var svc = NewService(fake, new MountFollowingSolver(), NewPoleMount(), store: NewStore());
-
-            await svc.StartAsync(PolarAlignStages.Check, null, CancellationToken.None).ConfigureAwait(false);
-            Assert.That((await PollStateAsync(svc, "checked", "failed").ConfigureAwait(false)).State, Is.EqualTo("checked"));
-            Assert.That(fake.FrameSizeReads, Is.EqualTo(1));
-
-            // The guide camera may have changed between runs: a second check-only run asks again instead
-            // of binning by the last run's frame size.
-            var mark = Mark(svc);
-            await svc.StartAsync(PolarAlignStages.Check, null, CancellationToken.None).ConfigureAwait(false);
-            Assert.That((await PollStateAsync(svc, mark, "checked", "failed").ConfigureAwait(false)).State, Is.EqualTo("checked"));
-            Assert.That(fake.FrameSizeReads, Is.EqualTo(2));
-        }
-
-        [Test]
-        public async Task A_check_only_start_opens_in_checking() {
-            var fake = NewFake();
-            var store = NewStore();
-            var ws = new WsRecorder();
-            using var svc = NewService(fake, new MountFollowingSolver(), NewMount(), ws, store: store);
-
-            await svc.StartAsync(PolarAlignStages.Check, null, CancellationToken.None).ConfigureAwait(false);
-            var started = await WaitForEventAsync(ws, WsEventCatalog.PolarAlignStarted).ConfigureAwait(false);
-
-            Assert.That(started.GetProperty("state").GetString(), Is.EqualTo("checking"), "the check never seeds");
-            Assert.That((await PollStateAsync(svc, "checked", "failed").ConfigureAwait(false)).State, Is.EqualTo("checked"));
-        }
-
-        [Test]
-        public async Task Check_stage_measures_the_axis_from_three_solves_and_ends_checked() {
-            var fake = NewFake();
-            var slews = new ConcurrentQueue<Coordinates>();
-            var mount = NewPoleMount(slews);
-            var solver = new MountFollowingSolver(); // every solve lands on the Dec-85 circle around the TRUE pole
-            var ws = new WsRecorder();
-            var log = new RecordingLog();
-            using var svc = NewService(fake, solver, mount, ws, log: log, store: NewStore());
-
-            await svc.StartAsync(PolarAlignStages.Check, null, CancellationToken.None).ConfigureAwait(false);
-            var status = await PollStateAsync(svc, "checked", "failed").ConfigureAwait(false);
-
-            Assert.That(status.State, Is.EqualTo("checked"));
-            Assert.That(status.Stage, Is.EqualTo(PolarAlignStages.Check));
-            Assert.That(status.CheckSolvesDone, Is.EqualTo(3));
-            Assert.That(status.CheckResult, Is.Not.Null);
-            // The axis IS the pole: the only error is the ~1′ refraction term (the apparent pole sits above it).
-            Assert.That(status.CheckResult!.TotalErrorArcmin, Is.EqualTo(0.98).Within(0.1));
-            Assert.That(status.CheckResult.AltitudeErrorArcmin, Is.LessThan(0));
-            // #2072: the band rates the error plus twice its 1σ; one frame per point (1″ floor) at 10° gives about 1.3′,
-            // so 0.98′ ± 1.3′ is "good", not "excellent".
-            Assert.That(status.CheckResult.Verdict, Is.EqualTo("good"));
-            Assert.That(status.CheckResult.ConeHalfAngleDeg, Is.EqualTo(5.0).Within(1e-6));
-            Assert.That(status.CheckResult.TurnMismatchDeg, Is.EqualTo(0.0).Within(0.005), "a timed turn waits whole milliseconds: 10.002°");
-            Assert.That(status.LastResult, Is.Not.Null, "#1565: a finished check is the last result");
-            Assert.That(status.LastResult!.ErrorArcmin, Is.EqualTo(status.CheckResult.TotalErrorArcmin).Within(1e-6));
-            Assert.That(status.CheckResult.FineErrorArcmin, Is.Null, "no run before it had a readout");
-            // From where the user pointed it: two 10° turns (the default check step) the same way, no Dec move.
-            var targets = slews.ToArray();
-            Assert.That(targets.Length, Is.EqualTo(2));
-            Assert.That(targets.Select(t => t.Dec), Is.All.EqualTo(PoleMountDecDeg).Within(1e-6));
-            Assert.That(Math.Abs(((targets[0].RADegrees + 540) % 360) - 180), Is.EqualTo(10.0).Within(0.005));
-            Assert.That(Math.Abs(((targets[1].RADegrees - targets[0].RADegrees + 540) % 360) - 180), Is.EqualTo(10.0).Within(0.005));
-            // The row, the event and the lease.
-            var checkedEvent = await WaitForEventAsync(ws, WsEventCatalog.PolarAlignChecked).ConfigureAwait(false);
-            Assert.That(checkedEvent.GetProperty("verdict").GetString(), Is.EqualTo("good"));
-            Assert.That(log.Rows.Single().Outcome, Is.EqualTo("checked"));
-            Assert.That(log.Rows.Single().FinalErrorArcmin, Is.EqualTo(status.CheckResult.TotalErrorArcmin).Within(1e-6));
-            Assert.That(PaCalls(fake), Is.EqualTo(AcquireThenRelease), "the check releases the lease itself");
-
-            // A stray Stop afterwards keeps the terminal result and writes no second row.
-            await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
-            var after = await svc.GetStatusAsync(CancellationToken.None).ConfigureAwait(false);
-            Assert.That(after.State, Is.EqualTo("checked"));
-            Assert.That(log.Rows.Count, Is.EqualTo(1));
-            NoHomeNoGoTo(mount);
         }
 
         private static readonly double[] SeedTurns = { 30.0, 60.0 };
-        private static readonly double[] LoopThenCheckTurns = { 10.0, 20.0, 30.0, 40.0 };
-        private static readonly string[] StoppedThenStarted = { WsEventCatalog.PolarAlignStopped, WsEventCatalog.PolarAlignStarted };
-        private static readonly string[] AbortedThenChecked = { "aborted", "checked" };
-
-        [Test]
-        public async Task A_Check_from_the_adjust_loop_ends_it_and_compares_with_its_readout() {
-            // Check on the adjust screen is a Start(check): it ends the live loop like Stop (the mount stopped and
-            // confirmed), then measures. Its verdict sits beside the last run's readout: the loop's. (The bench mount cannot
-            // find Home, so the check is not asked to start from there.)
-            var fake = NewFake();
-            var stops = new ConcurrentQueue<Coordinates>();
-            var mount = NewPoleMount(stops);
-            var ws = new WsRecorder();
-            var log = new RecordingLog();
-            var store = NewStore();
-            store.PutPolarAlignSettings(store.GetPolarAlignSettings() with { SeedRotationDeg = 10.0, CheckStepDeg = 10.0 });
-            using var svc = NewService(fake, new MountFollowingSolver(), mount, ws, log: log, store: store);
-
-            await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
-            var fine = await PollStateAsync(svc, "adjusting", "failed").ConfigureAwait(false);
-            Assert.That((fine.State, fine.Stage), Is.EqualTo(("adjusting", PolarAlignStages.Fine)));
-
-            var mark = Mark(svc);
-            await svc.StartAsync(PolarAlignStages.Check, null, CancellationToken.None).ConfigureAwait(false);
-            var status = await PollStateAsync(svc, mark, "checked", "failed").ConfigureAwait(false);
-
-            Assert.That(status.State, Is.EqualTo("checked"));
-            Assert.That(status.CheckResult!.FineErrorArcmin, Is.Not.Null, "the loop's readout travels into the check");
-            // Both measured the same axis (the pole): the distance between the two measured axes is ~0.
-            Assert.That(status.CheckResult.FineDeltaArcmin, Is.Not.Null.And.LessThan(0.1));
-            Assert.That(stops.Select(c => c.RADegrees).ToArray(), Is.EqualTo(LoopThenCheckTurns).Within(0.01),
-                "the loop's two turns east, then the check's two the same way");
-            Assert.That(ws.Events.Skip(mark).Select(e => e.Type).Where(StoppedThenStarted.Contains),
-                Is.EqualTo(StoppedThenStarted), "the loop ended, then the check started");
-            Assert.That(log.Rows.Select(r => r.Outcome), Is.EqualTo(AbortedThenChecked));
-            // The verdict ends the run: stop_tracking_when_done (on by default, #2048) leaves tracking off.
-            var trackingWrites = mount.Invocations.Where(i => i.Method.Name == nameof(ITelescopeMediator.SetTrackingEnabled)).ToArray();
-            Assert.That(trackingWrites.Last().Arguments[0], Is.False, "tracking off after the verdict");
-            NoHomeNoGoTo(mount);
-        }
-
-        [Test]
-        public async Task A_Stop_while_a_Check_ends_the_adjust_loop_starts_no_check() {
-            // #2082 review — the Check's own end of the loop counts as one end request. A Stop tapped while that end runs
-            // (the shutter still shows Stop) is a second one: the Check must start nothing, as for a Stop during any Start.
-            var fake = NewFake();
-            var stops = new ConcurrentQueue<Coordinates>();
-            var mount = NewPoleMount(stops);
-            var ws = new WsRecorder();
-            var log = new RecordingLog();
-            var store = NewStore();
-            store.PutPolarAlignSettings(store.GetPolarAlignSettings() with { SeedRotationDeg = 10.0, CheckStepDeg = 10.0 });
-            using var svc = NewService(fake, new MountFollowingSolver(), mount, ws, log: log, store: store);
-            await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
-            Assert.That((await PollStateAsync(svc, "adjusting", "failed").ConfigureAwait(false)).State, Is.EqualTo("adjusting"));
-            var turnsBefore = stops.Count;
-
-            Task? userStop = null;
-            log.OnInsert = row => {
-                if (row.Outcome == "aborted" && userStop is null) {
-                    userStop = svc.StopAsync(null, CancellationToken.None); // lands while the loop's end holds the lock
-                }
-            };
-            var refused = await Assert.ThrowsAsync<InvalidOperationException>(() => svc.StartAsync(
-                PolarAlignStages.Check, null, CancellationToken.None));
-            await userStop!.WaitAsync(SignalTimeout).ConfigureAwait(false);
-
-            Assert.That(refused!.Message, Does.Contain("stopped while it was starting"));
-            Assert.That(stops.Count, Is.EqualTo(turnsBefore), "no check turn after the Stop");
-            Assert.That(ws.Count(WsEventCatalog.PolarAlignChecked), Is.Zero);
-            Assert.That((await svc.GetStatusAsync(CancellationToken.None).ConfigureAwait(false)).State, Is.EqualTo("stopped"));
-        }
-
-        [Test]
-        public async Task A_second_Check_compares_with_the_first_Checks_verdict() {
-            // #2082 review — a check's verdict is the last run's readout too: Check, then Check again compares with it.
-            var fake = NewFake();
-            var ws = new WsRecorder();
-            using var svc = NewService(fake, new MountFollowingSolver(), NewPoleMount(), ws, store: NewStore());
-
-            await svc.StartAsync(PolarAlignStages.Check, null, CancellationToken.None).ConfigureAwait(false);
-            var first = await PollStateAsync(svc, "checked", "failed").ConfigureAwait(false);
-            Assert.That(first.State, Is.EqualTo("checked"));
-            Assert.That(first.CheckResult!.FineErrorArcmin, Is.Null, "no run before it");
-
-            var mark = Mark(svc);
-            await svc.StartAsync(PolarAlignStages.Check, null, CancellationToken.None).ConfigureAwait(false);
-            var second = await PollStateAsync(svc, mark, "checked", "failed").ConfigureAwait(false);
-
-            Assert.That(second.State, Is.EqualTo("checked"));
-            Assert.That(second.CheckResult!.FineErrorArcmin, Is.EqualTo(first.CheckResult.TotalErrorArcmin).Within(0.02),
-                "the first check's verdict is the last run's readout");
-            Assert.That(second.CheckResult.FineDeltaArcmin, Is.Not.Null.And.LessThan(0.1));
-        }
 
         private static async Task AssertThrowsAsync<T>(Func<Task> act) where T : Exception {
             try {

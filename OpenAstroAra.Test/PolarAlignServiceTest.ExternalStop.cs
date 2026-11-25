@@ -64,7 +64,7 @@ namespace OpenAstroAra.Test {
             };
             using var svc = NewService(NewFake(), solver, mount.Mock, ws, store: NewStore());
 
-            await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            await svc.StartAsync(null, CancellationToken.None).ConfigureAwait(false);
             var error = await WaitForEventAsync(ws, WsEventCatalog.PolarAlignError).ConfigureAwait(false);
 
             Assert.That(stoppedAt, Is.GreaterThan(0), "the run reached the seed-b solve");
@@ -92,7 +92,7 @@ namespace OpenAstroAra.Test {
             };
             using var svc = NewService(guider, new HookedSolver(), mount.Mock, ws, store: NewStore());
 
-            await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            await svc.StartAsync(null, CancellationToken.None).ConfigureAwait(false);
             var error = await WaitForEventAsync(ws, WsEventCatalog.PolarAlignError).ConfigureAwait(false);
 
             Assert.That(Volatile.Read(ref stoppedAt), Is.GreaterThanOrEqualTo(0), "the stop landed while the stage read the frame size");
@@ -102,12 +102,10 @@ namespace OpenAstroAra.Test {
             Assert.That(mount.Tracking, Is.False);
         }
 
-        private static readonly string[] OnlyTheCheckStarted = { PolarAlignStages.Check };
-
         // Emergency Stop latches the stop before its first rung. While a slow rung (here the sequence-run abort) still holds
-        // the ladder, the user's Check ends the adjust loop and starts the check (#2082): it must not turn tracking on or
-        // turn the mount. The loop is parked in single-frame mode, so it has not seen the latch: the check keeps the loop's
-        // reading of the stop count, taken at its Start, and fails before it moves.
+        // the ladder, the user taps Done: the run must not turn tracking on or turn the mount. The loop is parked in
+        // single-frame mode, so it has not seen the latch: the chain after Done keeps the run's reading of the stop count,
+        // taken at its Start, and fails before it moves.
         [Test]
         public async Task Emergency_Stop_during_PA_leaves_tracking_off() {
             var mount = new FakeStopMount(tracking: true);
@@ -117,7 +115,7 @@ namespace OpenAstroAra.Test {
             store.PutPolarAlignSettings(store.GetPolarAlignSettings() with { LoopMode = PolarAlignLoopModes.SingleFrame });
             using var svc = NewService(NewFake(), new MountFollowingSolver(), mount.Mock, ws, store: store);
             svc.CaptureRequestPoll = TimeSpan.FromMilliseconds(10);
-            await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            await svc.StartAsync(null, CancellationToken.None).ConfigureAwait(false);
             var deadline = DateTime.UtcNow + SignalTimeout;
             while (!(await svc.GetStatusAsync(CancellationToken.None).ConfigureAwait(false)).WaitingForCapture) {
                 Assert.That(DateTime.UtcNow, Is.LessThan(deadline), "the adjust loop parks for a frame request");
@@ -138,12 +136,8 @@ namespace OpenAstroAra.Test {
             var at = mount.Count;
             var stop = es.ExecuteAsync();
             await runAbortEntered.Task.WaitAsync(SignalTimeout).ConfigureAwait(false);
-            var mark = ws.Events.Count;
-            await svc.StartAsync(PolarAlignStages.Check, null, CancellationToken.None).ConfigureAwait(false);
+            await svc.CompleteAsync(null, CancellationToken.None).ConfigureAwait(false);
             await WaitForEventAsync(ws, WsEventCatalog.PolarAlignError).ConfigureAwait(false);
-            var started = ws.Events.Skip(mark).Where(e => e.Type == WsEventCatalog.PolarAlignStarted).ToArray();
-            Assert.That(started.Select(e => e.Payload.GetProperty("stage").GetString()), Is.EqualTo(OnlyTheCheckStarted),
-                "the Check got past its plan, ended the loop and started");
             runAbortGate.SetResult(0);
             var result = await stop.WaitAsync(SignalTimeout).ConfigureAwait(false);
 
@@ -218,7 +212,7 @@ namespace OpenAstroAra.Test {
             Assert.That(svc.IsMovingMount, Is.False, "no run");
 
             Volatile.Write(ref secondRun, 1);
-            await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            await svc.StartAsync(null, CancellationToken.None).ConfigureAwait(false);
 
             Assert.That(await movingDuringSolve.Task.WaitAsync(SignalTimeout).ConfigureAwait(false), Is.False,
                 "the new run's first solve: nothing turns");
@@ -250,7 +244,7 @@ namespace OpenAstroAra.Test {
             svc.StopResendAfter = TimeSpan.FromMilliseconds(300); // the resends land after the next Start was called
             svc.StopVerifyNotBefore = TimeSpan.FromSeconds(1.5);
             svc.StopVerifyWindow = TimeSpan.FromSeconds(10);
-            await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            await svc.StartAsync(null, CancellationToken.None).ConfigureAwait(false);
             var watch = Stopwatch.StartNew();
             while ((await svc.GetStatusAsync(CancellationToken.None).ConfigureAwait(false)).State != "failed") {
                 Assert.That(watch.Elapsed, Is.LessThan(SignalTimeout), "the refused move never failed the run");
@@ -259,7 +253,7 @@ namespace OpenAstroAra.Test {
             mount.RefusesMotor = false;
 
             var at = mount.Count;
-            await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            await svc.StartAsync(null, CancellationToken.None).ConfigureAwait(false);
             var mark = Mark(svc); // the Start waited for the old run, whose error event is out by now
             var status = await PollStateAsync(svc, mark, "adjusting", "failed").ConfigureAwait(false);
 
@@ -313,7 +307,7 @@ namespace OpenAstroAra.Test {
             using var svc = NewService(NewFake(), solver, mount.Mock, ws, store: NewStore(), aligner: aligner);
             svc.AlignerPoll = TimeSpan.FromMilliseconds(5);
 
-            await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            await svc.StartAsync(null, CancellationToken.None).ConfigureAwait(false);
             var error = await WaitForEventAsync(ws, WsEventCatalog.PolarAlignError).ConfigureAwait(false);
 
             Assert.That(Volatile.Read(ref stopped), Is.EqualTo(1), "the run reached its first live frame");

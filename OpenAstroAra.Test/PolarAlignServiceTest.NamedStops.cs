@@ -58,7 +58,7 @@ namespace OpenAstroAra.Test {
 
         private static async Task<RefusalException> StartRefusedAsync(PolarAlignService svc) {
             try {
-                await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+                await svc.StartAsync(null, CancellationToken.None).ConfigureAwait(false);
             } catch (RefusalException refusal) {
                 return refusal;
             }
@@ -175,7 +175,7 @@ namespace OpenAstroAra.Test {
             using var svc = NewServiceOn(NewFake(), solver, mount, ws, TenDegreeStore());
             svc.RunUnwindGrace = TimeSpan.FromMilliseconds(300);
             svc.StopVerifyWindow = TimeSpan.FromSeconds(1.5);
-            await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            await svc.StartAsync(null, CancellationToken.None).ConfigureAwait(false);
             await solver.Entered.Task.WaitAsync(SignalTimeout).ConfigureAwait(false);
             var session = mount.SessionEpoch;
 

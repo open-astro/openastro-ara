@@ -928,33 +928,27 @@ public sealed record GuiderAlpacaDiscoveryDto(IReadOnlyList<string> Servers);
 
 // ─── Polar Alignment (§10.6 row 12) ───────────────────────────────────────────
 
-/// <summary>The routine's measurements (<see cref="PolarAlignStateDto.Stage"/>), one per Start, each from the mount's
-/// Home position: <c>fine</c> — three points with two timed RA-motor turns, the three-point axis fit, then the live adjust
-/// loop; <c>check</c> — the same three-point measurement with a verdict, no adjusting. Both measure with the profile's
-/// <c>polar_align.camera</c>. No stage sends the mount Home, slews it or moves its Dec axis, and none leads into
-/// another.</summary>
+/// <summary>The two measurements of one run (<see cref="PolarAlignStateDto.Stage"/>). <c>align</c>: three points with two
+/// timed RA-motor turns, the three-point axis fit, then the live adjust loop, until Done. <c>verify</c>: from Done on —
+/// the mount goes Home, the three-point measurement is made again and gives its verdict, and the mount goes Home again
+/// (a mount that cannot find Home turns back the way it came instead). Both measure with the profile's
+/// <c>polar_align.camera</c>.</summary>
 public static class PolarAlignStages {
-    public const string Fine = "fine";
-    public const string Check = "check";
-
-    public static bool IsValid(string? stage) => stage is Fine or Check;
+    public const string Align = "align";
+    public const string Verify = "verify";
 }
 
-/// <summary><c>POST /polaralign/start</c> body: the measurement to make (null/absent = fine). The routine starts from the
-/// mount's Home position; a mount that can find Home and is not there is refused (<c>polar-align-not-home</c>).</summary>
-public sealed record PolarAlignStartRequestDto(string? Stage = null);
-
-/// <summary>The check stage's three-point result: the axis error against the apparent pole, the
+/// <summary>The verify measurement's three-point result: the axis error against the apparent pole, the
 /// cone half-angle the three pointings sat at (how far the camera looks off the RA axis), how far the solved turns
-/// disagreed with the turns the RA motor was told, the last run's readout for comparison (<c>FineErrorArcmin</c> is the
-/// readout of the last run that ended with one, null when none did since the daemon started. <c>FineDeltaArcmin</c> is the distance between the two measured axes — alt
+/// disagreed with the turns the RA motor was told, the run's adjust readout at Done for comparison
+/// (<c>FineErrorArcmin</c>; <c>FineDeltaArcmin</c> is the distance between the two measured axes — alt
 /// and az both — so a readout of the same size on the other side of the pole still reads as a disagreement), the verdict band
 /// (<c>excellent</c> ≤1′, <c>very_good</c> ≤3′, <c>good</c> ≤10′, <c>rough</c> ≤30′, else <c>far_off</c>), and whether a
 /// point stayed noisy after its retake (#2082, <c>Noisy</c>). The <c>*SigmaArcmin</c> fields (#2072) are the fit's 1σ on
 /// each error, from the scatter of each point's frames (a single-frame point counts a floor of 0.15 px at the solving
 /// camera's pixel scale, 1″ when that is unknown); the total's is the rms length of the error vector, √(alt² + az²) of
 /// the two. Null from an older daemon. With them, the verdict band rates the total plus twice its 1σ (#2072), so a
-/// noisy check does not read <c>excellent</c>.</summary>
+/// noisy measurement does not read <c>excellent</c>.</summary>
 public sealed record PolarAlignCheckResultDto(
     double AltitudeErrorArcmin,
     double AzimuthErrorArcmin,
@@ -965,7 +959,7 @@ public sealed record PolarAlignCheckResultDto(
     double? FineDeltaArcmin,
     string Verdict,
     DateTimeOffset MeasuredAt,
-    // #2082 — a point of the check stayed scattered over 3″ after its retake (polar_align.frames_per_point).
+    // #2082 — a point of the measurement stayed scattered over 3″ after its retake (polar_align.frames_per_point).
     bool Noisy = false,
     // #2072 — the fit's 1σ on each error (arcmin).
     double? AltitudeSigmaArcmin = null,
@@ -974,10 +968,11 @@ public sealed record PolarAlignCheckResultDto(
 
 public sealed record PolarAlignStateDto(
     // §45 engine states: seeding (3-point axis measurement: two RA-motor turns), adjusting (live loop, error
-    // fields populated — reached through seeding), paused (5 consecutive failed solves — still retrying),
-    // checking (the three check solves), checked (terminal: CheckResult populated), failed (fatal routine
-    // error; see the polar_align.error WS event).
-    string State,    // "idle" | "seeding" | "adjusting" | "paused" | "checking" | "checked" | "stopped" | "failed"
+    // fields populated — reached through seeding), paused (5 consecutive failed solves — still retrying), homing (from
+    // Done on: the mount is stopped and goes Home, before the verify measurement and again after it), checking (the
+    // verify measurement's three solves), checked (terminal: CheckResult populated; the mount is back Home, or back where
+    // the run started on a mount that cannot find Home), failed (fatal routine error; see the polar_align.error WS event).
+    string State,    // "idle" | "seeding" | "adjusting" | "paused" | "homing" | "checking" | "checked" | "stopped" | "failed"
     double? CurrentErrorArcmin,
     double? AzimuthAdjustmentArcmin,
     double? AltitudeAdjustmentArcmin,
@@ -986,10 +981,11 @@ public sealed record PolarAlignStateDto(
     // Single-frame mode: the adjust loop is parked until POST /polaralign/capture.
     bool WaitingForCapture = false,
     PolarAlignLastFrameDto? LastFrame = null,
-    // Which stage is running (PolarAlignStages); null when idle/stopped before any run.
+    // The run's measurement (PolarAlignStages): align until Done, verify from the first homing on; null before any run.
     string? Stage = null,
-    // Check stage: solves done so far (0–3).
+    // The verify measurement: solves done so far (0–3).
     int CheckSolvesDone = 0,
+    // The verify measurement's verdict, from the moment it is known (the last homing still runs then).
     PolarAlignCheckResultDto? CheckResult = null,
     // #1565 — the last routine to stop or finish with an error reading, kept in memory per
     // daemon boot (like the autofocus run tracker); null until one has. A new run does not clear it: it describes
@@ -1017,7 +1013,7 @@ public sealed record PolarAlignStateDto(
 public static class PolarAlignReadoutCautions {
     /// <summary>The camera sits nearly due east or west of the pole's azimuth (|cos ψ| under 0.2): the live readout
     /// amplifies solve noise in altitude five times or more, and near ψ = ±90° it under-reads the altitude knob. The
-    /// Check (a fresh three-point measurement) is the number to trust.</summary>
+    /// verify measurement (a fresh three-point measurement) is the number to trust.</summary>
     public const string AltitudeWeak = "altitude_weak";
 }
 
@@ -1035,8 +1031,8 @@ public sealed record PolarAlignCorrectionDto(
     string? DeviceText = null,
     int Moves = 0);
 
-/// <summary>#1565 the last polar-align routine's final error (total, arcmin) and when it ended; a Stop in the rough
-/// stage records none. Simple Mode's Night Setup counts polar alignment as done tonight when this is under the green
+/// <summary>#1565 the last polar-align routine's final error (total, arcmin) and when it ended (the adjust readout at Done, then the verdict); a Stop
+/// before the first solve records none. Simple Mode's Night Setup counts polar alignment as done tonight when this is under the green
 /// zone and ended in tonight's observing night.</summary>
 public sealed record PolarAlignLastResultDto(double ErrorArcmin, DateTimeOffset CompletedUtc);
 

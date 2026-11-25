@@ -98,8 +98,8 @@ public interface IMountMotionControl {
 /// with.</summary>
 public static class MotionOwners {
 
-    /// <summary>The Polar Align routine: it holds the owner for its whole run, the adjust loop included, and gives it back
-    /// once its exit has stopped the mount. The same token as its own stop's reason (<see cref="MountStopReasons.PolarAlign"/>).</summary>
+    /// <summary>The Polar Align routine: it holds the owner for its whole run, the adjust loop included, lends it to its
+    /// own Find Home, and gives it back once its exit has stopped the mount. The same token as its own stop's reason (<see cref="MountStopReasons.PolarAlign"/>).</summary>
     public const string PolarAlign = MountStopReasons.PolarAlign;
 }
 

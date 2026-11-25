@@ -213,7 +213,7 @@ namespace OpenAstroAra.Test {
             if (moveTimeout is { } t) {
                 svc.AlignerMoveTimeout = t;
             }
-            await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            await svc.StartAsync(null, CancellationToken.None).ConfigureAwait(false);
             return (svc, ws);
         }
 
@@ -503,7 +503,7 @@ namespace OpenAstroAra.Test {
             using var svc = NewService(NewFake(), new CorrectedSky(dead), ws: ws, aligner: source);
             svc.AlignerPoll = TimeSpan.FromMilliseconds(5);
             svc.AlignerStopWindow = TimeSpan.FromMilliseconds(60);
-            await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            await svc.StartAsync(null, CancellationToken.None).ConfigureAwait(false);
             await AlignerEventAsync(ws, PolarAlignCorrectionStates.Stopped).ConfigureAwait(false);
 
             var reconnected = new FakeAligner(azOffset: 0, altOffset: 0);
@@ -917,7 +917,7 @@ namespace OpenAstroAra.Test {
             using var svc = NewService(NewFake(), sky, ws: ws, aligner: aligner);
             svc.AlignerPoll = TimeSpan.FromMilliseconds(5);
             svc.AlignerStopWindow = TimeSpan.FromMilliseconds(60);
-            await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            await svc.StartAsync(null, CancellationToken.None).ConfigureAwait(false);
             await AlignerEventAsync(ws, e => IsStoppedWith(e, PolarAlignCorrectionCauses.StopNotConfirmed)).ConfigureAwait(false);
             sky.Hold();
             await sky.Held.WaitAsync(SignalTimeout).ConfigureAwait(false);
@@ -956,7 +956,7 @@ namespace OpenAstroAra.Test {
             using var svc = NewService(NewFake(), sky, ws: ws, aligner: source);
             svc.AlignerPoll = TimeSpan.FromMilliseconds(5);
             svc.AlignerStopWindow = TimeSpan.FromMilliseconds(60);
-            await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            await svc.StartAsync(null, CancellationToken.None).ConfigureAwait(false);
             await AlignerEventAsync(ws, e => IsStoppedWith(e, PolarAlignCorrectionCauses.LinkLost)).ConfigureAwait(false);
             sky.Hold();
             await sky.Held.WaitAsync(SignalTimeout).ConfigureAwait(false);
@@ -1066,7 +1066,7 @@ namespace OpenAstroAra.Test {
             svc.AlignerPoll = TimeSpan.FromMilliseconds(5);
             svc.AlignerStopWindow = TimeSpan.FromMilliseconds(60);
             svc.AlignerMoveTimeout = TimeSpan.FromMilliseconds(100);
-            await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            await svc.StartAsync(null, CancellationToken.None).ConfigureAwait(false);
             await AlignerEventAsync(ws, e => IsStoppedWith(e, PolarAlignCorrectionCauses.StopNotConfirmed)).ConfigureAwait(false);
             Assert.That(aligner.Moves, Is.Not.Empty, "the run moved the motors");
 
@@ -1092,7 +1092,7 @@ namespace OpenAstroAra.Test {
             using var svc = NewService(NewFake(), new CorrectedSky(aligner), mount.Mock, ws, aligner: aligner);
             svc.AlignerPoll = TimeSpan.FromMilliseconds(5);
             svc.AlignerStopWindow = TimeSpan.FromMilliseconds(60);
-            await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            await svc.StartAsync(null, CancellationToken.None).ConfigureAwait(false);
             await AlignerEventAsync(ws, PolarAlignCorrectionStates.Probing).ConfigureAwait(false);
             aligner.StopsIgnored = int.MaxValue;
             mount.IgnoresStops = true;
@@ -1120,9 +1120,7 @@ namespace OpenAstroAra.Test {
             svc.AlignerPoll = TimeSpan.FromMilliseconds(5);
             svc.AlignerStopWindow = TimeSpan.FromMilliseconds(60);
 
-            await svc.StartAsync(PolarAlignStages.Check, null, CancellationToken.None).ConfigureAwait(false);
-
-            Assert.That((await PollStateAsync(svc, "checked", "failed").ConfigureAwait(false)).State, Is.EqualTo("failed"));
+            Assert.That((await RunThroughDoneAsync(svc).ConfigureAwait(false)).State, Is.EqualTo("failed"));
             var error = await WaitForEventAsync(ws, WsEventCatalog.PolarAlignError).ConfigureAwait(false);
             Assert.That(error.GetProperty("reason").GetString(), Is.EqualTo(PolarAlignService.AlignerDidNotStop));
             Assert.That(error.GetProperty("message").GetString(), Does.Contain("Cut the Polar Aligner's power"));
@@ -1137,9 +1135,7 @@ namespace OpenAstroAra.Test {
             svc.AlignerPoll = TimeSpan.FromMilliseconds(5);
             svc.AlignerStopWindow = TimeSpan.FromMilliseconds(60);
 
-            await svc.StartAsync(PolarAlignStages.Check, null, CancellationToken.None).ConfigureAwait(false);
-
-            Assert.That((await PollStateAsync(svc, "checked", "failed").ConfigureAwait(false)).State, Is.EqualTo("checked"));
+            Assert.That((await RunThroughDoneAsync(svc).ConfigureAwait(false)).State, Is.EqualTo("checked"));
             Assert.That(aligner.Stops, Is.GreaterThanOrEqualTo(1), "the owed Stop went out at the check's end");
             Assert.That(aligner.SourceStopOwed, Is.False, "and was confirmed");
         }
@@ -1155,9 +1151,7 @@ namespace OpenAstroAra.Test {
             svc.AlignerPoll = TimeSpan.FromMilliseconds(5);
             svc.AlignerStopWindow = TimeSpan.FromMilliseconds(60);
 
-            await svc.StartAsync(PolarAlignStages.Check, null, CancellationToken.None).ConfigureAwait(false);
-
-            Assert.That((await PollStateAsync(svc, "checked", "failed").ConfigureAwait(false)).State, Is.EqualTo("checked"));
+            Assert.That((await RunThroughDoneAsync(svc).ConfigureAwait(false)).State, Is.EqualTo("checked"));
             Assert.That(ws.Count(WsEventCatalog.PolarAlignError), Is.Zero, "no aligner_did_not_stop");
             Assert.That(logger.Logged.IsCompleted, Is.False, "no Critical could-not-confirm line");
             Assert.That(aligner.SourceStopOwed, Is.True, "still owed by its device, for when it comes back");
@@ -1211,7 +1205,7 @@ namespace OpenAstroAra.Test {
             using var svc = NewService(NewFake(), sky, ws: ws, aligner: aligner);
             svc.AlignerPoll = TimeSpan.FromMilliseconds(5);
             svc.AlignerStopWindow = TimeSpan.FromMilliseconds(60);
-            await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            await svc.StartAsync(null, CancellationToken.None).ConfigureAwait(false);
             await AlignerEventAsync(ws, PolarAlignCorrectionStates.Probing).ConfigureAwait(false);
             var workDir = sky.WorkDir;
             Assert.That(workDir, Is.Not.Null.And.Not.Empty);

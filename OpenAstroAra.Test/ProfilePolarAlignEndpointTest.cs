@@ -127,27 +127,24 @@ namespace OpenAstroAra.Test {
 
         // §45.12 — the turn and rough-exposure knobs have no control in the app yet (#1736), so an
         // out-of-range or non-finite value is clamped, never a 400 that would fail the panel's own edits.
-        [TestCase(200.0, 90.0, 0.0, 30.0, 30.0, 3.0)]
-        [TestCase(1.0, 1.0, -2.0, 5.0, 5.0, 3.0)]
-        [TestCase(double.NaN, double.NaN, double.NaN, 10.0, 10.0, 3.0)]
-        [TestCase(double.PositiveInfinity, double.NegativeInfinity, 600.0, 10.0, 10.0, 60.0)]
-        [TestCase(25.0, 20.0, 2.5, 25.0, 20.0, 2.5)]
+        [TestCase(200.0, 0.0, 30.0, 3.0)]
+        [TestCase(1.0, -2.0, 5.0, 3.0)]
+        [TestCase(double.NaN, double.NaN, 10.0, 3.0)]
+        [TestCase(double.PositiveInfinity, 600.0, 10.0, 60.0)]
+        [TestCase(25.0, 2.5, 25.0, 2.5)]
         public void Turn_and_rough_exposure_knobs_are_clamped_on_PUT_and_the_clamped_values_are_stored(
-                double seedRotationDeg, double checkStepDeg, double coarseExposureSeconds,
-                double expectedSeed, double expectedCheck, double expectedExposure) {
+                double seedRotationDeg, double coarseExposureSeconds, double expectedSeed, double expectedExposure) {
             var store = new Mock<IProfileStore>();
-            var body = new PolarAlignSettingsDto(
-                SeedRotationDeg: seedRotationDeg, CheckStepDeg: checkStepDeg, CoarseExposureSeconds: coarseExposureSeconds);
+            var body = new PolarAlignSettingsDto(SeedRotationDeg: seedRotationDeg, CoarseExposureSeconds: coarseExposureSeconds);
 
             var result = ProfileEndpoints.PutPolarAlignSettings(body, store.Object);
 
             var echoed = (result as Ok<PolarAlignSettingsDto>)?.Value;
             Assert.That(echoed, Is.Not.Null);
             Assert.That(echoed!.SeedRotationDeg, Is.EqualTo(expectedSeed));
-            Assert.That(echoed.CheckStepDeg, Is.EqualTo(expectedCheck));
             Assert.That(echoed.CoarseExposureSeconds, Is.EqualTo(expectedExposure));
             store.Verify(s => s.PutPolarAlignSettings(It.Is<PolarAlignSettingsDto>(d =>
-                d.SeedRotationDeg == expectedSeed && d.CheckStepDeg == expectedCheck && d.CoarseExposureSeconds == expectedExposure)), Times.Once);
+                d.SeedRotationDeg == expectedSeed && d.CoarseExposureSeconds == expectedExposure)), Times.Once);
             store.Verify(s => s.PutPolarAlignSettings(It.IsAny<PolarAlignSettingsDto>()), Times.Once);
         }
 
@@ -156,7 +153,7 @@ namespace OpenAstroAra.Test {
             // An older build stored any value; the view is what the routine will run with.
             var store = new Mock<IProfileStore>();
             store.Setup(s => s.GetPolarAlignSettings()).Returns(new PolarAlignSettingsDto(
-                ExposureSeconds: 2.0, SeedRotationDeg: 200.0, CheckStepDeg: 90.0, CoarseExposureSeconds: 0.0));
+                ExposureSeconds: 2.0, SeedRotationDeg: 200.0, CoarseExposureSeconds: 0.0));
 
             var result = ProfileEndpoints.GetPolarAlignSettings(store.Object);
 
@@ -164,7 +161,6 @@ namespace OpenAstroAra.Test {
             Assert.That(view, Is.Not.Null);
             Assert.That(view!.ExposureSeconds, Is.EqualTo(2.0), "the clamp leaves the other fields alone");
             Assert.That(view.SeedRotationDeg, Is.EqualTo(PolarAlignSettingsClamp.MaxSeedRotationDeg));
-            Assert.That(view.CheckStepDeg, Is.EqualTo(PolarAlignSettingsClamp.MaxCheckStepDeg));
             Assert.That(view.CoarseExposureSeconds, Is.EqualTo(PolarAlignSettingsClamp.DefaultCoarseExposureSeconds));
             store.Verify(s => s.PutPolarAlignSettings(It.IsAny<PolarAlignSettingsDto>()), Times.Never, "a read writes nothing back");
         }

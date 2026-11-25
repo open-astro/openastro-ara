@@ -26,10 +26,11 @@ namespace OpenAstroAra.Test {
 
     /// <summary>
     /// A turn is timed, not read: the RA motor runs at the fastest rate the mount offers at or below 3°/s for the time the
-    /// turn takes at that rate, its lease renewed meanwhile, then stops. No mount reading plays a part, so a reading that
-    /// hangs, fails, is stale or makes no sense cannot end a measurement; the plate solves say what the mount did, and a
-    /// fit whose frames show the same field, or a turn far from the one the motor was told, is refused. Run on the fake
-    /// GEM mount, on a clock the routine's own timed turns move.
+    /// turn takes at that rate, its lease renewed meanwhile (until the lease covers the rest of the turn), then stops. No
+    /// mount reading plays a part, so a reading that hangs, fails, is stale or makes no sense cannot end a measurement;
+    /// the plate solves say what the mount did, and a fit whose frames show the same field, or a turn under 0.3 or over 3
+    /// times the one the motor was told, is refused. Run on the fake GEM mount, on a clock the routine's own timed turns
+    /// move.
     /// </summary>
     public partial class PolarAlignServiceTest {
 
@@ -40,6 +41,9 @@ namespace OpenAstroAra.Test {
         // The true hour angle falls as RA rises: two 10° turns east, and two west.
         private static readonly double[] TwoTurnsEast = { -10.0, -10.0 };
         private static readonly double[] TwoTurnsWest = { 10.0, 10.0 };
+        private static readonly string[] StartRenewalStopTwice = {
+            "move primary 3", "move primary 3", "move primary 0", "move primary 3", "move primary 3", "move primary 0",
+        };
 
         // ── the timed turn ───────────────────────────────────────────────────────────────────
 
@@ -85,6 +89,25 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task A_turn_sends_no_renewal_once_the_lease_it_holds_covers_its_end() {
+            // 10° at 3°/s runs the motor for 3.33 s on a 3 s lease renewed every second. The renewal at 1 s carries the lease
+            // to 4 s, past the turn's end: none goes out at 2 s or at 3 s, where one that stalls would hold the stop back.
+            var mount = new FakeStopMount(tracking: true);
+            var ws = new WsRecorder();
+            mount.EventCount = () => ws.Events.Count;
+            using var svc = NewService(NewFake(), new MountFollowingSolver(), mount.Mock, ws, store: TenDegreeStore());
+            Assert.That((svc.AxisRateDegPerSec, svc.AxisLeaseRenew), Is.EqualTo((3.0, TimeSpan.FromSeconds(1))));
+
+            await AdjustingAsync(svc, mount).ConfigureAwait(false);
+            await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
+
+            var motor = mount.Log.Where(c => c.StartsWith("move primary", StringComparison.Ordinal)).Take(6).ToArray();
+            Assert.That(motor, Is.EqualTo(StartRenewalStopTwice),
+                "each turn: its start, the one renewal it needs, its stop. " + string.Join(", ", mount.Log));
+            Assert.That(mount.RaDeg, Is.EqualTo(20.0).Within(0.01), "both turns ran their whole 10°: the lease never lapsed");
+        }
+
+        [Test]
         public async Task A_Stop_in_the_middle_of_a_turn_stops_the_motor_where_it_is() {
             // The clock stands still once the motor runs: the turn's time never runs out, and the Stop finds it mid-turn.
             var clock = new ManualMountClock { AutoAdvance = true };
@@ -93,7 +116,7 @@ namespace OpenAstroAra.Test {
             using var svc = NewDaemonRateGemService(mount, ws);
             clock.AutoAdvance = false;
             var turning = clock.TimerSet.Task;
-            await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            await svc.StartAsync(null, CancellationToken.None).ConfigureAwait(false);
             await turning.WaitAsync(SignalTimeout).ConfigureAwait(false);
             clock.Advance(TimeSpan.FromSeconds(0.5)); // half a second of motor: 1.5° of the 10°
             Assert.That(mount.IsMoving, Is.True, "the RA motor runs");
@@ -148,17 +171,17 @@ namespace OpenAstroAra.Test {
 
         [Test]
         public async Task A_solved_turn_far_from_the_told_one_fails_the_fit_as_the_mount_not_turning_as_told() {
-            // The mount takes 3°/s and turns at 1°/s (a slipping clutch): each 10° turn moves the sky 3.3°.
+            // The mount takes 3°/s and turns at 0.5°/s (a slipping clutch): each 10° turn moves the sky 1.7°.
             var mount = PolledGemAt(-4.0);
-            mount.MaxAxisRateDegPerSec = 1.0;
+            mount.MaxAxisRateDegPerSec = 0.5;
             var ws = new WsRecorder();
             using var svc = NewDaemonRateGemService(mount, ws);
 
-            await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            await svc.StartAsync(null, CancellationToken.None).ConfigureAwait(false);
             var error = await WaitForEventAsync(ws, WsEventCatalog.PolarAlignError).ConfigureAwait(false);
 
             Assert.That(error.GetProperty("reason").GetString(), Is.EqualTo("axis_fit_failed"));
-            Assert.That(error.GetProperty("message").GetString(), Does.Contain("the mount did not turn as told").And.Contain("3.3°").And.Contain("10.0°"));
+            Assert.That(error.GetProperty("message").GetString(), Does.Contain("the mount did not turn as told").And.Contain("1.7°").And.Contain("10.0°"));
             Assert.That(RaTurns(mount), Has.Length.EqualTo(2), "both turns ran before the fit judged them. " + mount.Describe());
             mount.AssertEndedStopped(tracking: false);
             mount.AssertCommon(LastEventIndex(ws, WsEventCatalog.PolarAlignError), CounterweightLimitDeg);
@@ -227,15 +250,21 @@ namespace OpenAstroAra.Test {
             Assert.That(axis.DecDeg, Is.EqualTo(90.0).Within(1e-6));
         }
 
-        [TestCase(5.1, false)]
-        [TestCase(14.9, false)]
-        [TestCase(4.9, true)]
-        [TestCase(15.1, true)]
-        public void A_solved_turn_more_than_5_degrees_from_the_told_10_is_refused(double turnedDeg, bool refused) {
+        // A motor stop that stalls for seconds on a slow link overruns a timed turn (4 s at 2°/s adds 8° to a 10° turn), and
+        // three distinct points still fit the axis: only a turn under 0.3 or over 3 times the told one is the mount not
+        // turning as told.
+        [TestCase(2.9, true)]
+        [TestCase(3.1, false)]
+        [TestCase(5.0, false)]
+        [TestCase(18.0, false)]
+        [TestCase(29.9, false)]
+        [TestCase(30.1, true)]
+        public void A_solved_turn_under_0_3_or_over_3_times_the_told_10_degrees_is_refused(double turnedDeg, bool refused) {
             var (a, b, c) = PointsOnACone(coneDeg: 0.2, turnedDeg);
 
             void Fit() => PolarAlignService.FitThreePointOrFail(a, b, c, 10.0, 10.0, north: true);
 
+            Assert.That((PolarAlignService.MinSolvedTurnRatio, PolarAlignService.MaxSolvedTurnRatio), Is.EqualTo((0.3, 3.0)));
             if (refused) {
                 Assert.That(Assert.Throws(Is.InstanceOf<Exception>(), Fit)!.Message, Does.Contain("the mount did not turn as told"));
             } else {

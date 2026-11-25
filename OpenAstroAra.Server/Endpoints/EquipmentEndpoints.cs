@@ -1021,21 +1021,20 @@ public static partial class EquipmentEndpoints {
     internal static void MapPolarAlign(IEndpointRouteBuilder polar) {
         polar.MapGet("/status", async (IPolarAlignService svc, CancellationToken ct) =>
             Results.Ok(await svc.GetStatusAsync(ct)));
-        // Body {stage: fine|check}; stage none = fine. One measurement per Start, from the mount's Home position: a mount
-        // that can find Home and is not there is the polar-align-not-home Refusal, a parked mount
-        // polar-align-mount-parked, a guider that guides or another routine moving the mount polar-align-mount-busy. A
-        // check while the routine adjusts ends the loop first (the adjust screen's Check).
-        polar.MapPost("/start", async ([FromHeader(Name = "Idempotency-Key")] string? key,
-                [FromBody(EmptyBodyBehavior = Microsoft.AspNetCore.Mvc.ModelBinding.EmptyBodyBehavior.Allow)] PolarAlignStartRequestDto? body,
-                IPolarAlignService svc, CancellationToken ct) =>
-            await PolarAlignStartAsync(svc, body, key, ct))
-            .WithSummary("Start one polar-align measurement from the mount's Home position; RA turns with the mount's motor.");
+        // No body: the handler binds none, so whatever a caller sends is ignored. The run starts from the mount's Home
+        // position: a mount that can find Home and is not there is the polar-align-not-home Refusal, a parked mount
+        // polar-align-mount-parked, a guider that guides or another routine moving the mount polar-align-mount-busy.
+        polar.MapPost("/start", async ([FromHeader(Name = "Idempotency-Key")] string? key, IPolarAlignService svc, CancellationToken ct) =>
+            await PolarAlignStartAsync(svc, key, ct))
+            .WithSummary("Start polar alignment from the mount's Home position: measure, adjust, then Done.");
         polar.MapPost("/stop", async ([FromHeader(Name = "Idempotency-Key")] string? key, IPolarAlignService svc, CancellationToken ct) =>
-            Results.Accepted(value: await svc.StopAsync(key, ct)));
-        // §45 step 9 — "Done": same unwind as stop, but the §45.13 session row records `complete`
-        // with the achieved error so the dashboard can surface PA quality.
+            Results.Accepted(value: await svc.StopAsync(key, ct)))
+            .WithSummary("Stop polar alignment and the mount where it is, a Find Home in flight included.");
+        // "Done": answers at once; the run itself then stops the mount, sends it Home, verifies the alignment with a
+        // second measurement and sends the mount Home again (state checked).
         polar.MapPost("/complete", async ([FromHeader(Name = "Idempotency-Key")] string? key, IPolarAlignService svc, CancellationToken ct) =>
-            Results.Accepted(value: await svc.CompleteAsync(key, ct)));
+            Results.Accepted(value: await svc.CompleteAsync(key, ct)))
+            .WithSummary("Done adjusting: the mount goes Home, the alignment is verified, and the mount goes Home again.");
         // Live view: the guide camera's latest frame as a JPEG (proxied from the guider daemon).
         polar.MapGet("/frame.jpg", async (IPolarAlignService svc, CancellationToken ct) =>
             await svc.GetLiveFrameJpegAsync(ct) is byte[] jpeg
@@ -1311,15 +1310,10 @@ public static partial class EquipmentEndpoints {
     // InvalidOperationException → 409 (typed, same as the guide ops), and a daemon-rejected lease (e.g.
     // "starting rejected while guiding") throws GuiderRpcException → 422 — rather than a raw 500. Stop is
     // best-effort about the lease (it never throws not-connected), so it needs no such mapping.
-    public static async Task<IResult> PolarAlignStartAsync(IPolarAlignService svc, PolarAlignStartRequestDto? body, string? idempotencyKey, CancellationToken ct) {
+    public static async Task<IResult> PolarAlignStartAsync(IPolarAlignService svc, string? idempotencyKey, CancellationToken ct) {
         ArgumentNullException.ThrowIfNull(svc);
-        var stage = body?.Stage;
-        // A typo in the stage is the caller's mistake (400), not a busy routine (409).
-        if (stage is not null && !PolarAlignStages.IsValid(stage)) {
-            return Results.Problem($"unknown polar-align stage '{stage}' — use fine or check", statusCode: StatusCodes.Status400BadRequest);
-        }
         try {
-            return Results.Accepted(value: await svc.StartAsync(stage, idempotencyKey, ct));
+            return Results.Accepted(value: await svc.StartAsync(idempotencyKey, ct));
         } catch (OpenAstroAra.Equipment.Equipment.MyGuider.PHD2.GuiderRpcException ex) {
             return Results.Problem(ex.Message, statusCode: StatusCodes.Status422UnprocessableEntity);
         } catch (System.InvalidOperationException ex) when (ex is not RefusalException) {

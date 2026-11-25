@@ -415,7 +415,7 @@ internal static class ProfileSections {
         st => st.GetPolarAlignSettings(),
         (st, v) => st.PutPolarAlignSettings(v!),
         new(),
-        kept: ["ExposureSeconds", "Binning", "TargetToleranceArcmin", "SeedRotationDeg", "LoopCadenceMs", "SettleSeconds", "LoopMode", "CheckStepDeg", "CoarseExposureSeconds", "PolarAlignerAuto", "StopTrackingWhenDone", "Camera", "FramesPerPoint", "EastDirection"],
+        kept: ["ExposureSeconds", "Binning", "TargetToleranceArcmin", "SeedRotationDeg", "LoopCadenceMs", "SettleSeconds", "LoopMode", "CoarseExposureSeconds", "PolarAlignerAuto", "Camera", "FramesPerPoint", "EastDirection"],
         stripped: []);
 
     /// <summary>Guard thresholds and probe ladder: tuning judgement.</summary>

@@ -2420,19 +2420,12 @@ paths:
     post:
       tags:
         - Equipment
-      summary: Start one polar-align measurement from the mount's Home position; RA turns with the mount's motor.
+      summary: 'Start polar alignment from the mount''s Home position: measure, adjust, then Done.'
       parameters:
         - name: Idempotency-Key
           in: header
           schema:
             type: string
-      requestBody:
-        content:
-          application/json:
-            schema:
-              oneOf:
-                - type: 'null'
-                - $ref: '#/components/schemas/PolarAlignStartRequestDto'
       responses:
         '200':
           description: OK
@@ -2440,6 +2433,7 @@ paths:
     post:
       tags:
         - Equipment
+      summary: 'Stop polar alignment and the mount where it is, a Find Home in flight included.'
       parameters:
         - name: Idempotency-Key
           in: header
@@ -2452,6 +2446,7 @@ paths:
     post:
       tags:
         - Equipment
+      summary: 'Done adjusting: the mount goes Home, the alignment is verified, and the mount goes Home again.'
       parameters:
         - name: Idempotency-Key
           in: header
@@ -14853,13 +14848,6 @@ components:
         loop_mode:
           type: string
           default: loop
-        check_step_deg:
-          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
-          type:
-            - number
-            - string
-          format: double
-          default: 10
         coarse_exposure_seconds:
           pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
           type:
@@ -14868,9 +14856,6 @@ components:
           format: double
           default: 3
         polar_aligner_auto:
-          type: boolean
-          default: true
-        stop_tracking_when_done:
           type: boolean
           default: true
         camera:
@@ -14887,13 +14872,6 @@ components:
           type:
             - 'null'
             - boolean
-    PolarAlignStartRequestDto:
-      type: object
-      properties:
-        stage:
-          type:
-            - 'null'
-            - string
     PoseSolveAvailabilityDto:
       required:
         - available

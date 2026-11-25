@@ -6280,14 +6280,16 @@ This gives ARA users iPolar-quality alignment WITHOUT requiring a dedicated PA c
      - Live frame preview in corner (small)
 8. User adjusts mount alt/az knobs while watching bullseye live
 9. When error is within user's target tolerance (default 1 arcmin),
-   user taps [Done] — server logs the achieved error to session DB
-   and the polar-alignment workflow ends
+   user taps [Done] — server logs the achieved error to session DB,
+   stops the mount, sends it Home, verifies the alignment with a second
+   three-point measurement, sends the mount Home again and reports the
+   verdict (§45.19)
 10. If user aborts or backs out: server kills the loop, mount stops
-    where it is (no slewing back to "home" or anything). Every end of a
-    run (Stop, Done, failure, the check's verdict, shutdown) sends
-    AbortSlew when a motor move may run, then MoveAxis 0
-    on both axes, confirms the stop on fresh reads, and leaves tracking off
-    (`stop_tracking_when_done`, #2048)
+    where it is (a Find Home in flight is aborted). Every end of a
+    run (Stop, failure, the verdict, shutdown), and Done before the
+    mount goes Home, sends AbortSlew when a motor move or the run's
+    Find Home may run, then MoveAxis 0 on both axes, confirms the stop on
+    reads the mount took after it, and leaves tracking off
 ```
 
 ### 45.4 Binning per camera
@@ -6467,11 +6469,11 @@ Polar Alignment section of profile (default values shown):
 - Exposure time: 1 s (the 0.5 s first planned was too little signal for a guide scope at the pole)
 - Binning: auto (`0`, per §45.4; 1–4 overrides)
 - Target tolerance: 1 arcmin (controls when [Done] enables)
-- Seed turns: 10° each (`seed_rotation_deg`; the two RA-motor turns between the seed's three solves, as NINA's Three Point Polar Alignment — §45.16 Revisited again 2026-11-19; clamped to 5–30°)
-- Check turns: 10° each (`check_step_deg`, 5–30°; the three-point check's two RA turns, so a Check turns the mount 2 × the step)
+- Measurement turns: 10° each (`seed_rotation_deg`; the two RA-motor turns between a measurement's three solves, the align measurement's and the verify measurement's alike, as NINA's Three Point Polar Alignment — §45.16 Revisited again 2026-11-19; clamped to 5–30°)
+- ~~Check turns~~ (`check_step_deg`): removed 2026-11-24 (§45.19). A stored value is ignored.
 - Rough-stage main-camera exposure: 3 s (`coarse_exposure_seconds`, up to 60 s)
-- ~~Use Home~~ (`use_home`): retired by #2048. Polar Align never sends the mount Home; every run starts from where the user pointed it, after the confirm step. A stored `use_home` is ignored.
-- Stop tracking when done: on (`stop_tracking_when_done`, NINA's StopTrackingWhenDone, #2048; every end of a run turns tracking off; off gives back the tracking the run found after Done or the check's verdict, never after a Stop or a failure)
+- ~~Use Home~~ (`use_home`): retired by #2048. Every run starts from the mount's Home position (§45.18) and goes Home by itself after Done (§45.19). A stored `use_home` is ignored.
+- ~~Stop tracking when done~~ (`stop_tracking_when_done`): removed 2026-11-24 (§45.19). Every end of a run turns tracking off. A stored value is ignored.
 - Loop cadence (target): 1000 ms (a 500 ms loop never fit a capture + fetch + solve on the Pi 4, §45.7)
 - Save PA dark to library: off
 
@@ -6698,11 +6700,11 @@ about what the mount did. The machinery that made a start from an arbitrary pose
 | What | Where |
 |---|---|
 | A start needs the mount at Home (`polar-align-not-home` when CanFindHome and not AtHome; a mount that cannot find Home is not asked), connected, not parked, a site latitude, the mount clock gate, a trusted position (the mount layer's refusal), a guider that neither guides nor calibrates, the motion owner, and the main camera's solver when the profile measures with it. No checklist, no plan, no confirmation; a start at the pole is accepted | `PolarAlignService.cs` (`ThrowIfStartRefusedAsync`, `ThrowIfNotAtHome`), `PolarAlignService.MotionOwner.cs` |
-| A turn is timed, not read: the fastest rate at or below 3°/s (never above), degrees / rate seconds on the monotonic clock, the lease renewed every second, `MoveAxis 0`, a 2.5 s settle. No mount reading during or after it. A stop from outside ends the run and gets no renewal; every exit stops the motor; a refused motor command is `slew_failed` | `PolarAlignService.Turn.cs` |
+| A turn is timed, not read: the fastest rate at or below 3°/s (never above), degrees / rate seconds on the monotonic clock, the lease renewed every second (until the lease granted covers the rest of the turn, §45.19), `MoveAxis 0`, a 2.5 s settle. No mount reading during or after it. A stop from outside ends the run and gets no renewal; every exit stops the motor; a refused motor command is `slew_failed` | `PolarAlignService.Turn.cs` |
 | The turns go the profile's `polar_align.east_direction`; the first frame is looked for at the pole, each later one at the solve before it | `PolarAlignService.Stages.cs` |
-| The fit is cross-checked against the told turns, sizes only (a driver that turns the other way still fits): `axis_fit_failed` when two points are closer than 20″ (the same field) or a solved turn is more than 5° from the told one | `PolarAlignService.Stages.cs` (`FitThreePointOrFail`) |
-| Two stages, `fine` and `check`, both on `polar_align.camera`; the `coarse` stage ("Rough first") is gone | `PolarAlignService.Stages.cs`, `Contracts/EquipmentDtos.cs` |
-| Unchanged: the capture and solve plumbing, frames per point, the fit's σ, the live adjust loop, the whole exit and stop contract, the Polar Aligner, the session log, the lease | `PolarAlignService.cs`, `PolarAlignService.MountStop.cs`, `PolarAlignService.Aligner.cs` |
+| The fit is cross-checked against the told turns, sizes only (a driver that turns the other way still fits): `axis_fit_failed` when two points are closer than 20″ (the same field) or a solved turn is under 0.3 or over 3 times the told one (§45.19; first cut: more than 5° from it) | `PolarAlignService.Stages.cs` (`FitThreePointOrFail`) |
+| Two measurements, both on `polar_align.camera`: `align`, and after Done `verify` (§45.19; first cut: two stages started by name, `fine` and `check`); the `coarse` stage ("Rough first") is gone | `PolarAlignService.Stages.cs`, `Contracts/EquipmentDtos.cs` |
+| Unchanged: the capture and solve plumbing, frames per point, the fit's σ, the live adjust loop, the Polar Aligner, the session log, the lease | `PolarAlignService.cs`, `PolarAlignService.MountStop.cs`, `PolarAlignService.Aligner.cs` |
 
 Removed with it: the pre-flight list and the per-mount clearance, the start plan and its confirmation, the
 session sweep origin and its 30° limit, the RA motor-direction test and its saved sign, the turn guards
@@ -6710,6 +6712,28 @@ session sweep origin and its 30° limit, the RA motor-direction test and its sav
 field-rotation check, the Dec-spread warning), the fresh-read rules for planning and turning, the two
 readings before each turn, the on-axis refusal and the 1° minimum cone, and `POST /polaralign/next`.
 The API side is the 2026-11-24 entry of `design/API_CONTRACT.md`.
+
+### 45.19 Done chains: Home, verify, Home (2026-11-24)
+
+Joey's flow: **Home → Start → three-point measure → live knob adjust → Done → the mount goes Home → verify
+(a second three-point measurement) → the mount goes Home → the user images.** One button starts it and one
+button (Done) finishes it. There is no Check to start by name and no stage on Start.
+
+| What | Where |
+|---|---|
+| Done (`POST /polaralign/complete`) answers at once and acts only while the run adjusts. The run task ends its loop, records the adjust readout (`last_result`, the `complete` row), stops the mount with the exit's own confirmed stop, ends the Polar Aligner's motors, and goes on by itself. At any other moment Done is an accept that does nothing | `PolarAlignService.Chain.cs` (`CompleteAsync`, `BeginVerifyAsync`), `PolarAlignService.cs` (`RunRoutineAsync`) |
+| States after Done: `homing` → `checking` → `homing` → `checked`; `stage` is `verify` from Done on. `polar_align.stage` announces each, with `check_result` once the verdict is known (the last `homing`); `polar_align.checked` only once the mount is back Home, stopped, tracking off | `PolarAlignService.Chain.cs` (`VerifyAfterDoneAsync`), `PolarAlignService.Stages.cs` (`PublishStageAsync`, `FinishCheckedAsync`) |
+| Home is the mount's own Find Home through `ITelescopeMediator.FindHome`, the seam the sequencer and End Night use. The run marks the motion (Stop sends AbortSlew; the REST endpoints refuse other moves), lends its hold of the motion owner to the Find Home and takes it again once the mount is Home. The run's token (Stop) and a stop from outside end the wait. A Find Home that is refused or does not finish: `home_failed` | `PolarAlignService.Chain.cs` (`GoHomeAsync`), `PolarAlignService.MountStop.cs` |
+| The verify measurement is the align measurement again (turns of `seed_rotation_deg`, tracking on for its turns), with the verdict beside the adjust readout at Done of the same run. A mount that cannot find Home makes no Home trip: its verify measurement turns the opposite way, back to where the run started | `PolarAlignService.Stages.cs` (`RunVerifyStageAsync`, `CheckResultFor`) |
+| After Done's stop the run's reading of the mount's stop count is taken again, so its own AbortSlew does not make the telescope service refuse the verify turns; a stop from outside still ends the run | `PolarAlignService.MountStop.cs` (`RebaselineAbortWatch`, `AbortBaselineSince`) |
+| A solved turn is refused only under 0.3 or over 3 times the told turn: a motor stop that stalls 1 to 4 s over Wi-Fi overruns a 10° turn at 2°/s by 2° to 8°, and three distinct points still fit the axis | `PolarAlignService.Stages.cs` (`MinSolvedTurnRatio`, `MaxSolvedTurnRatio`) |
+| The stop's confirmation counts a reading the mount sampled (`ReadAtUtc`) after the last stop round went out, whatever its age on arrival; the (0, 0) placeholder and a missing reading never count | `PolarAlignService.MountStop.cs` (`UntrustedForStillness`) |
+| A turn sends no lease renewal once the 3 s lease already granted outlasts the turn's end by 0.5 s, so the stop is never queued behind a renewal that stalls | `PolarAlignService.Turn.cs` (`TurnRaAsync`) |
+
+Removed with it: the `stage` of Start and its `check` value, the Check from the adjust loop and its hand-over,
+`check_step_deg`, `stop_tracking_when_done` and the hand-back of tracking after Done, and the readout kept
+across runs for the next check to compare with. The API side is the 2026-11-24 "Done chains" entry of
+`design/API_CONTRACT.md`.
 
 ---
 
