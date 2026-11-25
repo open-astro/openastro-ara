@@ -46,6 +46,10 @@ _Avoid_: tonight's darks (they are the camera's, not the night's)
 Which activity holds the Guide Camera at a given moment, and how it passes from one to the next.
 _Avoid_: lease (the guider program's own word), lock
 
+**Rig Occupancy**:
+What is running on the rig and what each routine holds (the mount, a camera, the focuser, the disk).
+_Avoid_: busy (a question asked of it), lock
+
 **Polar Align Routine**:
 The steps that measure the polar alignment error while the mount's polar axis is turned, by the person on the mount's bolts or by a Polar Aligner.
 _Avoid_: Polar Align session, Polar Align run
