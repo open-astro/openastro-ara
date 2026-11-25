@@ -41,7 +41,9 @@ public sealed class RigOccupancy {
     // Filled once in the composition root, then only read; Register replaces the array whole.
     private volatile (string Name, RigHolding Holds, Func<bool> IsRunning)[] _routines = [];
 
-    /// <summary>Adds a routine. <paramref name="name"/> reads in a reason: "{name} is running".</summary>
+    /// <summary>Adds a routine. <paramref name="name"/> reads in a reason: "{name} is running". The first running
+    /// routine in registration order names the refusal, so register the widest one (the Session) first: a centering
+    /// that a Session runs then reads as the Session.</summary>
     public RigOccupancy Register(string name, RigHolding holds, Func<bool> isRunning) {
         _routines = [.. _routines, (name, holds, isRunning)];
         return this;
