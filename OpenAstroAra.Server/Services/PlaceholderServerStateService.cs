@@ -47,8 +47,7 @@ public sealed class PlaceholderServerStateService : IServerStateService {
     private readonly INotificationService? _notifications;
     private readonly RigVersions _rig;
     private readonly IDaemonRestarter? _restarter;
-    private readonly ActiveRunSessionRegistry? _runs;
-    private readonly Func<ISequencerService?>? _sequencerResolver;
+    private readonly RigOccupancy? _occupancy;
     private readonly object _idleGate = new();
     private bool _restartOnIdlePending;
     private bool _queued; // true from a queued request until its 2 s notice starts: the only time it can be cancelled
@@ -64,11 +63,9 @@ public sealed class PlaceholderServerStateService : IServerStateService {
             IAlpacaManagementClient? alpaca = null,
             IProfileStore? profiles = null,
             IDaemonRestarter? restarter = null,
-            ActiveRunSessionRegistry? runs = null,
-            Func<ISequencerService?>? sequencerResolver = null) {
+            RigOccupancy? occupancy = null) {
         _restarter = restarter;
-        _runs = runs;
-        _sequencerResolver = sequencerResolver;
+        _occupancy = occupancy;
         _broadcaster = broadcaster;
         _diagnostics = diagnostics;
         _notifications = notifications;
@@ -207,13 +204,9 @@ public sealed class PlaceholderServerStateService : IServerStateService {
 
     private PendingRestartDto? PendingRestartNow() { lock (_idleGate) { return _pending; } }
 
-    // Same rule as ProfilesEndpoints.RunIsOnAsync: a run keeps imaging with no catalog session when the
-    // catalog fails, so the registry alone is not enough. Any run that is not terminal holds the restart:
-    // paused and aborting included (#1951), unlike ActiveRunIdsAsync, which leaves an aborting run out.
-    private async Task<bool> RunIsOnAsync() =>
-        (_runs?.HasAny ?? false)
-        || (_sequencerResolver?.Invoke() is { } sequencer
-            && (await sequencer.UnfinishedRunIdsAsync(CancellationToken.None).ConfigureAwait(false)).Count > 0);
+    // #1951 / #2141 — anything on the rig holds the restart: a Session that is not terminal (paused and aborting
+    // included), a Polar Align Routine, a Center.
+    private bool RunIsOn() => _occupancy?.Holder() is not null;
 
     public async Task<RestartOnIdleAcceptedDto> RestartOnIdleAsync(string reason, string? idempotencyKey, CancellationToken ct) {
         var accepted = PlaceholderEquipmentHelpers.Accepted("server.restart-on-idle", idempotencyKey);
@@ -222,7 +215,7 @@ public sealed class PlaceholderServerStateService : IServerStateService {
             _restartOnIdlePending = true;
         }
         reason ??= "";
-        var announce = await RunIsOnAsync().ConfigureAwait(false);
+        var announce = RunIsOn();
         var generation = 0;
         if (announce) {
             lock (_idleGate) {
@@ -257,7 +250,7 @@ public sealed class PlaceholderServerStateService : IServerStateService {
                 new { reason, requested_utc = DateTimeOffset.UtcNow.ToString("O") });
         }
         while (true) {
-            while (await RunIsOnAsync().ConfigureAwait(false)) {
+            while (RunIsOn()) {
                 await Task.Delay(TimeSpan.FromSeconds(1));
                 if (announce && IsCancelled(generation)) return;
             }
@@ -269,7 +262,7 @@ public sealed class PlaceholderServerStateService : IServerStateService {
             await EmitRestartImminentAsync(reason);
             await Task.Delay(TimeSpan.FromSeconds(2));
             // A run (auto flats) may start inside the notice window: keep waiting instead of killing it.
-            if (!await RunIsOnAsync().ConfigureAwait(false)) break;
+            if (!RunIsOn()) break;
         }
         _restarter?.Restart();
     }

@@ -68,7 +68,7 @@ namespace OpenAstroAra.Test {
             builder.Services.AddSingleton(recommender.Object);
             builder.Services.AddSingleton(guider.Object);
             builder.Services.AddSingleton<CaptureScanService>(_ => throw new InvalidOperationException("not used by this test"));
-            builder.Services.AddSingleton<ActiveRunSessionRegistry>(_ => throw new InvalidOperationException("not used by this test"));
+            builder.Services.AddSingleton<RigOccupancy>(_ => throw new InvalidOperationException("not used by this test"));
             builder.Services.AddProblemDetails();
             builder.Services.ConfigureHttpJsonOptions(opts => {
                 opts.SerializerOptions.TypeInfoResolverChain.Insert(0, AraJsonSerializerContext.Default);

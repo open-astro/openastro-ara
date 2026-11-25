@@ -52,7 +52,7 @@ namespace OpenAstroAra.Test {
         [Test]
         public async Task RestartOnIdleAsync_with_no_run_restarts_at_once_through_the_seam() {
             var fake = new FakeRestarter();
-            var svc = new PlaceholderServerStateService(restarter: fake, runs: new ActiveRunSessionRegistry());
+            var svc = new PlaceholderServerStateService(restarter: fake, occupancy: new RigOccupancy().RegisterSession(new ActiveRunSessionRegistry(), () => null));
 
             await svc.RestartOnIdleAsync("test", null, CancellationToken.None);
 
@@ -64,7 +64,7 @@ namespace OpenAstroAra.Test {
             var fake = new FakeRestarter();
             var ws = new RecordingBroadcaster();
             var runs = new ActiveRunSessionRegistry();
-            var svc = new PlaceholderServerStateService(broadcaster: ws, restarter: fake, runs: runs);
+            var svc = new PlaceholderServerStateService(broadcaster: ws, restarter: fake, occupancy: new RigOccupancy().RegisterSession(runs, () => null));
             var run = Guid.NewGuid();
             runs.Enter(run);
 
@@ -86,8 +86,7 @@ namespace OpenAstroAra.Test {
 
         private static Moq.Mock<ISequencerService> SequencerWith(Func<int> activeRuns) {
             var seq = new Moq.Mock<ISequencerService>();
-            seq.Setup(x => x.UnfinishedRunIdsAsync(Moq.It.IsAny<CancellationToken>()))
-                .Returns(() => Task.FromResult<IReadOnlyList<Guid>>(Enumerable.Range(0, activeRuns()).Select(_ => Guid.NewGuid()).ToList()));
+            seq.SetupGet(x => x.HasUnfinishedRun).Returns(() => activeRuns() > 0);
             return seq;
         }
 
@@ -96,7 +95,7 @@ namespace OpenAstroAra.Test {
             var fake = new FakeRestarter();
             var active = 1;
             var seq = SequencerWith(() => active);
-            var svc = new PlaceholderServerStateService(restarter: fake, runs: new ActiveRunSessionRegistry(), sequencerResolver: () => seq.Object);
+            var svc = new PlaceholderServerStateService(restarter: fake, occupancy: new RigOccupancy().RegisterSession(new ActiveRunSessionRegistry(), () => seq.Object));
 
             await svc.RestartOnIdleAsync("test", null, CancellationToken.None);
 
@@ -108,6 +107,23 @@ namespace OpenAstroAra.Test {
             Assert.That(fake.Calls, Is.EqualTo(1));
         }
 
+        // #2141 — restart when idle waits for any routine on the register, not only a Session.
+        [Test]
+        public async Task RestartOnIdleAsync_waits_for_a_polar_alignment() {
+            var fake = new FakeRestarter();
+            var aligning = 1;
+            var occupancy = new RigOccupancy().Register("polar alignment", RigHolding.Mount, () => Volatile.Read(ref aligning) == 1);
+            var svc = new PlaceholderServerStateService(restarter: fake, occupancy: occupancy);
+
+            var accepted = await svc.RestartOnIdleAsync("test", null, CancellationToken.None);
+
+            Assert.That(accepted.Status, Is.EqualTo("queued"), "a routine is on, so the restart is queued");
+            await Task.Delay(2500);
+            Assert.That(fake.Calls, Is.EqualTo(0), "polar alignment is running, so no restart");
+            Volatile.Write(ref aligning, 0);
+            Assert.That(await Task.WhenAny(fake.Called.Task, Task.Delay(TimeSpan.FromSeconds(10))), Is.SameAs(fake.Called.Task));
+        }
+
         [Test]
         public async Task RestartOnIdleAsync_does_not_restart_when_a_run_starts_inside_the_notice_window() {
             var fake = new FakeRestarter();
@@ -115,7 +131,7 @@ namespace OpenAstroAra.Test {
             var active = 0;
             var seq = SequencerWith(() => Volatile.Read(ref active));
             var runs = new ActiveRunSessionRegistry();
-            var svc = new PlaceholderServerStateService(broadcaster: ws, restarter: fake, runs: runs, sequencerResolver: () => seq.Object);
+            var svc = new PlaceholderServerStateService(broadcaster: ws, restarter: fake, occupancy: new RigOccupancy().RegisterSession(runs, () => seq.Object));
             var session = Guid.NewGuid();
             runs.Enter(session);
             await svc.RestartOnIdleAsync("test", null, CancellationToken.None);
@@ -138,11 +154,11 @@ namespace OpenAstroAra.Test {
         [Test]
         public async Task RestartOnIdleAsync_says_queued_with_a_run_and_restarting_without_one() {
             var runs = new ActiveRunSessionRegistry();
-            var idle = new PlaceholderServerStateService(restarter: new FakeRestarter(), runs: runs);
+            var idle = new PlaceholderServerStateService(restarter: new FakeRestarter(), occupancy: new RigOccupancy().RegisterSession(runs, () => null));
             Assert.That((await idle.RestartOnIdleAsync("t", null, CancellationToken.None)).Status, Is.EqualTo("restarting"));
 
             runs.Enter(Guid.NewGuid());
-            var busy = new PlaceholderServerStateService(restarter: new FakeRestarter(), runs: runs);
+            var busy = new PlaceholderServerStateService(restarter: new FakeRestarter(), occupancy: new RigOccupancy().RegisterSession(runs, () => null));
             Assert.That((await busy.RestartOnIdleAsync("t", null, CancellationToken.None)).Status, Is.EqualTo("queued"));
             await busy.CancelRestartOnIdleAsync(CancellationToken.None); // stop its waiter: the run never ends
         }
@@ -152,7 +168,7 @@ namespace OpenAstroAra.Test {
             var fake = new FakeRestarter();
             var ws = new RecordingBroadcaster();
             var runs = new ActiveRunSessionRegistry();
-            var svc = new PlaceholderServerStateService(broadcaster: ws, restarter: fake, runs: runs);
+            var svc = new PlaceholderServerStateService(broadcaster: ws, restarter: fake, occupancy: new RigOccupancy().RegisterSession(runs, () => null));
             var run = Guid.NewGuid();
             runs.Enter(run);
             await svc.RestartOnIdleAsync("because", null, CancellationToken.None);
@@ -176,7 +192,7 @@ namespace OpenAstroAra.Test {
         [Test]
         public async Task CancelRestartOnIdleAsync_with_nothing_queued_does_nothing() {
             var ws = new RecordingBroadcaster();
-            var svc = new PlaceholderServerStateService(broadcaster: ws, restarter: new FakeRestarter(), runs: new ActiveRunSessionRegistry());
+            var svc = new PlaceholderServerStateService(broadcaster: ws, restarter: new FakeRestarter(), occupancy: new RigOccupancy().RegisterSession(new ActiveRunSessionRegistry(), () => null));
             await svc.CancelRestartOnIdleAsync(CancellationToken.None);
             Assert.That(ws.Events, Is.Empty);
         }
@@ -187,9 +203,8 @@ namespace OpenAstroAra.Test {
             var states = new Moq.Mock<ISequencerService>();
             var held = new[] { Guid.NewGuid() }; // what a paused or an aborting run reports as unfinished
             var unfinished = (IReadOnlyList<Guid>)held;
-            states.Setup(x => x.UnfinishedRunIdsAsync(Moq.It.IsAny<CancellationToken>()))
-                .Returns(() => Task.FromResult(Volatile.Read(ref unfinished)));
-            var svc = new PlaceholderServerStateService(restarter: fake, runs: new ActiveRunSessionRegistry(), sequencerResolver: () => states.Object);
+            states.SetupGet(x => x.HasUnfinishedRun).Returns(() => Volatile.Read(ref unfinished).Count > 0);
+            var svc = new PlaceholderServerStateService(restarter: fake, occupancy: new RigOccupancy().RegisterSession(new ActiveRunSessionRegistry(), () => states.Object));
 
             var accepted = await svc.RestartOnIdleAsync("t", null, CancellationToken.None);
 

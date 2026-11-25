@@ -101,3 +101,4 @@ referred to by its slug until it is written, and numbered then.
 - [A Prompt is raised in one client state module](0021-a-prompt-is-raised-in-one-client-module.md)
 - [A Refusal is declared once](0022-a-refusal-is-declared-once.md)
 - [The Sequencer owns its equipment seam, and a missing capability refuses](0023-the-sequencer-owns-its-equipment-seam.md)
+- [Rig Occupancy is one register in the daemon](0025-rig-occupancy-is-one-register.md)

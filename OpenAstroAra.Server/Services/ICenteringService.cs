@@ -42,4 +42,7 @@ public interface ICenteringService {
     /// </summary>
     Task<PlateSolveResult> CenterOnTarget(Coordinates target, IProgress<PlateSolveProgress>? solveProgress,
         IProgress<ApplicationStatus>? progress, CancellationToken token);
+
+    /// <summary>A centering is under way (#2141): Center's reading in <see cref="RigOccupancy"/>.</summary>
+    bool IsCentering { get; }
 }

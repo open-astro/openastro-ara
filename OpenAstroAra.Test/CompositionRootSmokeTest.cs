@@ -142,6 +142,38 @@ namespace OpenAstroAra.Test {
             }
         }
 
+        // #2141 — Rig Occupancy as Program.cs composes it: a running Polar Align Routine holds the mount and the
+        // main camera, so the composed Bahtinov busy reason names it; a held centering gate is a Center under way.
+        // Drop either registration, or put the Bahtinov reason back on the run registry, and this fails.
+        [Test]
+        public async Task The_composed_rig_occupancy_names_polar_alignment_and_centering_and_the_bahtinov_readout_refuses() {
+            const System.Reflection.BindingFlags Private = System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic;
+            var occupancy = app.Services.GetRequiredService<RigOccupancy>();
+            Assert.That(occupancy.Holder(), Is.Null, "an idle rig is free");
+
+            var polar = app.Services.GetRequiredService<IPolarAlignService>();
+            var active = typeof(PolarAlignService).GetField("_active", Private)!;
+            active.SetValue(polar, true);
+            try {
+                Assert.That(occupancy.Holder(RigHolding.Mount), Is.EqualTo("polar alignment"));
+                var refused = await Assert.ThrowsAsync<InvalidOperationException>(() => app.Services.GetRequiredService<IBahtinovFocusService>()
+                    .StartAsync(new BahtinovFocusStartRequestDto(), CancellationToken.None));
+                Assert.That(refused!.Message, Does.Contain("polar alignment is running"));
+            } finally {
+                active.SetValue(polar, false);
+            }
+
+            var gate = (SemaphoreSlim)typeof(CenteringService).GetField("_centeringGate", Private)!
+                .GetValue(app.Services.GetRequiredService<ICenteringService>())!;
+            await gate.WaitAsync();
+            try {
+                Assert.That(occupancy.Holder(RigHolding.MainCamera), Is.EqualTo("centering"));
+            } finally {
+                gate.Release();
+            }
+            Assert.That(occupancy.Holder(), Is.Null);
+        }
+
         [Test]
         public void The_test_host_resolves_the_fake_guider_supervisor_not_systemctl() {
             // The real supervisor runs `systemctl start|restart openastro-guider`; on a Linux desktop with a

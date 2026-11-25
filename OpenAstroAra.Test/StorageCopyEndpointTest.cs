@@ -50,6 +50,7 @@ namespace OpenAstroAra.Test {
         private Mock<IStorageCopyService> copy = null!;
         private Mock<IStorageDeviceService> devices = null!;
         private ActiveRunSessionRegistry runs = null!;
+        private Mock<ISequencerService> sequencer = null!;
         private Mock<ICameraService> camera = null!;
         private string stateDir = null!;
         private StorageEraseLog erased = null!;
@@ -60,6 +61,7 @@ namespace OpenAstroAra.Test {
             copy = new Mock<IStorageCopyService>();
             devices = new Mock<IStorageDeviceService>(MockBehavior.Strict);
             runs = new ActiveRunSessionRegistry();
+            sequencer = new Mock<ISequencerService>();
             camera = new Mock<ICameraService>();
             browse = new Mock<IStorageBrowseService>();
             stateDir = Path.Combine(Path.GetTempPath(), "ara-erase-" + Path.GetRandomFileName());
@@ -69,6 +71,7 @@ namespace OpenAstroAra.Test {
             builder.Services.AddSingleton(copy.Object);
             builder.Services.AddSingleton(devices.Object);
             builder.Services.AddSingleton(runs);
+            builder.Services.AddSingleton(new RigOccupancy().RegisterSession(runs, () => sequencer.Object));
             builder.Services.AddSingleton(erased);
             // The rest of the system endpoints' services: registered so the route table builds.
             builder.Services.AddSingleton(Mock.Of<IDataManagerService>());
@@ -135,6 +138,32 @@ namespace OpenAstroAra.Test {
             Assert.That(resp.StatusCode, Is.EqualTo(HttpStatusCode.Conflict));
             using var doc = JsonDocument.Parse(await resp.Content.ReadAsStringAsync());
             Assert.That(doc.RootElement.GetProperty("title").GetString(), Is.EqualTo("copy_running"));
+        }
+
+        // #2141 — a run whose catalog session failed to open has no registry entry, and still writes frames.
+        [Test]
+        public async Task A_run_with_no_catalog_session_refuses_every_storage_change() {
+            sequencer.SetupGet(s => s.HasUnfinishedRun).Returns(true);
+            try {
+                var answers = new List<(string Route, HttpStatusCode Status, string Body)>();
+                foreach (var (route, body) in new (string, object?)[] {
+                    ("configure", new StorageConfigureRequestDto("6EF6-FD21")),
+                    ("check", new StorageCheckRequestDto("6EF6-FD21")),
+                    ("eject", new StorageCheckRequestDto("6EF6-FD21")),
+                    ("copy", new StorageCopyRequestDto("6EF6-FD21")),
+                    ("rescan", null),
+                }) {
+                    using var resp = body is null
+                        ? await http.PostAsync(new Uri($"/api/v1/storage/{route}", UriKind.Relative), null)
+                        : await http.PostAsJsonAsync($"/api/v1/storage/{route}", body, Json);
+                    answers.Add((route, resp.StatusCode, await resp.Content.ReadAsStringAsync()));
+                }
+                Assert.That(answers.Select(a => a.Status), Is.All.EqualTo(HttpStatusCode.Conflict), string.Join("\n", answers));
+                Assert.That(answers.Select(a => a.Body), Is.All.Contain("a sequence is running"));
+            } finally {
+                sequencer.Reset();
+            }
+            copy.Verify(c => c.Start(It.IsAny<string>(), It.IsAny<IReadOnlyList<string>?>()), Times.Never);
         }
 
         [Test]

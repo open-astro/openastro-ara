@@ -264,8 +264,7 @@ public partial class Program {
         builder.Services.AddSingleton<IServerStateService>(sp => new PlaceholderServerStateService(
             sp.GetService<IWsBroadcaster>(), sp.GetService<IDiagnosticsService>(), sp.GetService<INotificationService>(),
             sp.GetService<IGuiderService>(), sp.GetService<IEquipmentSelectionStore>(), sp.GetService<IAlpacaManagementClient>(),
-            sp.GetService<IProfileStore>(), sp.GetService<IDaemonRestarter>(), sp.GetService<ActiveRunSessionRegistry>(),
-            () => sp.GetService<ISequencerService>()));
+            sp.GetService<IProfileStore>(), sp.GetService<IDaemonRestarter>(), sp.GetService<RigOccupancy>()));
         // §27 single-client policy — owns the controlling session slot, the takeover
         // dance (connection.request/response over WS), and holder liveness.
         builder.Services.AddSingleton<ClientSessionService>();
@@ -347,6 +346,14 @@ public partial class Program {
         // reaction service stamps its outcome onto the same row. Constructor
         // activation injects both optional deps.
         builder.Services.AddSingleton<ActiveRunSessionRegistry>();
+        // #2141 — Rig Occupancy: each routine registers once with what it holds and a reading of its own running
+        // state; every busy question asks the register. Readings resolve at call time (no construction cycle).
+        builder.Services.AddSingleton(sp => new RigOccupancy()
+            .RegisterSession(sp.GetRequiredService<ActiveRunSessionRegistry>(), () => sp.GetService<ISequencerService>())
+            .Register("polar alignment", RigHolding.Mount | RigHolding.MainCamera | RigHolding.GuideCamera,
+                () => sp.GetService<IPolarAlignService>()?.IsActive == true)
+            .Register("centering", RigHolding.Mount | RigHolding.MainCamera,
+                () => sp.GetService<ICenteringService>()?.IsCentering == true));
         // Singleton on purpose: the service sweeps stale request/result files from the storage
         // exchange in its constructor (#1135), which is only safe because exactly one instance is
         // built — resolved eagerly after Build() below, so the sweep really runs at boot and
@@ -1350,7 +1357,7 @@ public partial class Program {
                     : sp.GetRequiredService<IAnalysisFrameSource>(),
                 () => BahtinovOpticsFor(sp.GetRequiredService<IProfileStore>()),
                 () => sp.GetRequiredService<AutofocusRunTracker>().IsRunning ? "an autofocus run is in progress"
-                    : sp.GetRequiredService<ActiveRunSessionRegistry>().HasAny ? "a sequence is running"
+                    : sp.GetRequiredService<RigOccupancy>().Holder(RigHolding.MainCamera) is { } holder ? $"{holder} is running"
                     : null,
                 sp.GetRequiredService<ILogger<BahtinovFocusService>>(),
                 // The AF exposure stands in when a start leaves its own out.

@@ -114,8 +114,8 @@ namespace OpenAstroAra.Test {
             builder.Services.AddSingleton<IProfileRepository>(repo);
             builder.Services.AddSingleton(guider.Object);
             builder.Services.AddSingleton(runs);
+            builder.Services.AddSingleton(new RigOccupancy().RegisterSession(runs, () => sequencer.Object));
             sequencer.Reset();
-            sequencer.Setup(s => s.ActiveRunIdsAsync(It.IsAny<CancellationToken>())).ReturnsAsync(Array.Empty<Guid>());
             builder.Services.AddSingleton(sequencer.Object);
             AddDevices(builder.Services);
             builder.Services.AddSingleton<IEquipmentSelectionStore>(selections);
@@ -291,7 +291,8 @@ namespace OpenAstroAra.Test {
         [Test]
         public async Task A_run_with_no_catalog_session_still_refuses_a_switch_create_and_delete() {
             await SimRigConnectedAsync();
-            sequencer.Setup(s => s.ActiveRunIdsAsync(It.IsAny<CancellationToken>())).ReturnsAsync(new[] { Guid.NewGuid() });
+            // #2141 — a run with no catalog session, or an aborting one: not terminal, so the devices are in use.
+            sequencer.SetupGet(s => s.HasUnfinishedRun).Returns(true);
 
             var (select, _) = await SelectAsync(real);
             var create = await CreateAsync();

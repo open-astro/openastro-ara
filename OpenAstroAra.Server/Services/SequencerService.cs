@@ -490,6 +490,8 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
     public Task<IReadOnlyList<Guid>> UnfinishedRunIdsAsync(CancellationToken ct) =>
         Task.FromResult<IReadOnlyList<Guid>>(_runs.Where(kv => !IsTerminal(kv.Value.State)).Select(kv => kv.Key).ToList());
 
+    public bool HasUnfinishedRun => _runs.Any(kv => !IsTerminal(kv.Value.State));
+
     public async Task<int> AbortActiveRunsAsync(CancellationToken ct) {
         var aborted = 0;
         // Snapshot the keys (ConcurrentDictionary.Keys copies) so a worker removing itself mid-iteration — while

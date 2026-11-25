@@ -37,6 +37,7 @@ namespace OpenAstroAra.Test {
         private HttpClient http = null!;
         private Mock<ICameraService> camera = null!;
         private Mock<IAraDatabase> db = null!;
+        private readonly Mock<ISequencerService> sequencer = new();
 
         [OneTimeSetUp]
         public async Task StartKestrel() {
@@ -46,7 +47,9 @@ namespace OpenAstroAra.Test {
             var builder = WebApplication.CreateSlimBuilder();
             builder.WebHost.UseUrls("http://127.0.0.1:0");
             builder.Services.AddSingleton(camera.Object);
-            builder.Services.AddSingleton(new ActiveRunSessionRegistry());
+            var runs = new ActiveRunSessionRegistry();
+            builder.Services.AddSingleton(runs);
+            builder.Services.AddSingleton(new RigOccupancy().RegisterSession(runs, () => sequencer.Object));
             builder.Services.AddSingleton(Mock.Of<IStatsService>());
             builder.Services.AddSingleton(Mock.Of<IProfileStore>());
             builder.Services.AddSingleton(db.Object);
@@ -63,6 +66,21 @@ namespace OpenAstroAra.Test {
             http.Dispose();
             await app.StopAsync();
             await app.DisposeAsync();
+        }
+
+        // #2141 — a run whose catalog session failed to open still writes frames into the store.
+        [Test]
+        public async Task The_catalog_is_not_rebuilt_under_a_run_with_no_catalog_session() {
+            camera.Setup(c => c.IsFreeToCapture(It.IsAny<object>())).Returns(true);
+            camera.Setup(c => c.HasPendingFrameSaves).Returns(false);
+            sequencer.SetupGet(s => s.HasUnfinishedRun).Returns(true);
+            try {
+                using var resp = await http.PostAsync(new Uri("/api/v1/stats/rebuild-catalog", UriKind.Relative), null);
+                Assert.That(resp.StatusCode, Is.EqualTo(HttpStatusCode.Conflict));
+                Assert.That(await resp.Content.ReadAsStringAsync(), Does.Contain("a sequence is running"));
+            } finally {
+                sequencer.Reset();
+            }
         }
 
         [Test]

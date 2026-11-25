@@ -44,7 +44,7 @@ namespace OpenAstroAra.Test {
                 opts.SerializerOptions.TypeInfoResolverChain.Insert(0, AraJsonSerializerContext.Default);
                 opts.SerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower;
             });
-            builder.Services.AddSingleton<IServerStateService>(new PlaceholderServerStateService(restarter: new NoRestart(), runs: runs));
+            builder.Services.AddSingleton<IServerStateService>(new PlaceholderServerStateService(restarter: new NoRestart(), occupancy: new RigOccupancy().RegisterSession(runs, () => null)));
             // MapServerStateEndpoints builds every route of the group, so each service it takes must resolve.
             builder.Services.AddSingleton(Moq.Mock.Of<ITimeSyncService>());
             builder.Services.AddSingleton(Moq.Mock.Of<ILogService>());

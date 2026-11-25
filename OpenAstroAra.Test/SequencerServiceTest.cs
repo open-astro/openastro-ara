@@ -312,10 +312,12 @@ namespace OpenAstroAra.Test {
             camera.Verify(c => c.FinishPendingSavesAsync(), Times.Once);
             Assert.That(await svc.ActiveRunIdsAsync(CancellationToken.None), Is.Empty, "the run is Aborting");
             Assert.That(await svc.UnfinishedRunIdsAsync(CancellationToken.None), Is.EqualTo(new[] { id }), "an aborting run holds a restart");
+            Assert.That(svc.HasUnfinishedRun, Is.True, "#2141 — the Session's reading on the register counts it too");
 
             saves.SetResult(0);
             await WaitForTerminalAsync(svc, id);
             Assert.That(await svc.UnfinishedRunIdsAsync(CancellationToken.None), Is.Empty);
+            Assert.That(svc.HasUnfinishedRun, Is.False);
         }
 
         [Test]
