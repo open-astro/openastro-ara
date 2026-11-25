@@ -357,7 +357,7 @@ public static class SystemEndpoints {
                 StorageConfigureRequestDto request,
                 IStorageDeviceService svc,
                 IProfileStore profiles,
-                ActiveRunSessionRegistry runs,
+                RigOccupancy occupancy,
                 ICameraService camera,
                 CaptureScanService scan,
                 IStorageCopyService copy,
@@ -376,12 +376,12 @@ public static class SystemEndpoints {
                         "a disk-to-disk copy is running — wait for it to finish or cancel it before changing the storage drive",
                         statusCode: StatusCodes.Status409Conflict);
                 }
-                if (runs.HasAny) {
+                if (occupancy.Holder(RigHolding.Disk) is { } writer) {
                     return Results.Problem(
-                        "a sequence run is active — stop it before changing the storage drive",
+                        $"{writer} is running — stop it before changing the storage drive",
                         statusCode: StatusCodes.Status409Conflict);
                 }
-                if (!camera.IsFreeToCapture(runs)) {
+                if (!camera.IsFreeToCapture(occupancy)) {
                     return Results.Problem(
                         "an exposure is in progress — wait for it to finish before changing the storage drive",
                         statusCode: StatusCodes.Status409Conflict);
@@ -447,7 +447,7 @@ public static class SystemEndpoints {
         storage.MapPost("/check", async (
                 StorageCheckRequestDto request,
                 IStorageDeviceService svc,
-                ActiveRunSessionRegistry runs,
+                RigOccupancy occupancy,
                 ICameraService camera,
                 CaptureScanService scan,
                 IStorageCopyService copy,
@@ -462,12 +462,12 @@ public static class SystemEndpoints {
                         "a disk-to-disk copy is running — wait for it to finish or cancel it before checking the storage drive",
                         statusCode: StatusCodes.Status409Conflict);
                 }
-                if (runs.HasAny) {
+                if (occupancy.Holder(RigHolding.Disk) is { } writer) {
                     return Results.Problem(
-                        "a sequence run is active — stop it before checking the storage drive",
+                        $"{writer} is running — stop it before checking the storage drive",
                         statusCode: StatusCodes.Status409Conflict);
                 }
-                if (!camera.IsFreeToCapture(runs)) {
+                if (!camera.IsFreeToCapture(occupancy)) {
                     return Results.Problem(
                         "an exposure is in progress — wait for it to finish before checking the storage drive",
                         statusCode: StatusCodes.Status409Conflict);
@@ -500,7 +500,7 @@ public static class SystemEndpoints {
         storage.MapPost("/eject", async (
                 StorageCheckRequestDto request,
                 IStorageDeviceService svc,
-                ActiveRunSessionRegistry runs,
+                RigOccupancy occupancy,
                 ICameraService camera,
                 CaptureScanService scan,
                 IStorageCopyService copy,
@@ -513,12 +513,12 @@ public static class SystemEndpoints {
                         "a disk-to-disk copy is running — wait for it to finish or cancel it before ejecting the storage drive",
                         statusCode: StatusCodes.Status409Conflict);
                 }
-                if (runs.HasAny) {
+                if (occupancy.Holder(RigHolding.Disk) is { } writer) {
                     return Results.Problem(
-                        "a sequence run is active — stop it before ejecting the storage drive",
+                        $"{writer} is running — stop it before ejecting the storage drive",
                         statusCode: StatusCodes.Status409Conflict);
                 }
-                if (!camera.IsFreeToCapture(runs)) {
+                if (!camera.IsFreeToCapture(occupancy)) {
                     return Results.Problem(
                         "an exposure is in progress — wait for it to finish before ejecting the storage drive",
                         statusCode: StatusCodes.Status409Conflict);
@@ -551,12 +551,12 @@ public static class SystemEndpoints {
         storage.MapPost("/copy", (
                 StorageCopyRequestDto request,
                 IStorageCopyService copy,
-                ActiveRunSessionRegistry runs) => {
+                RigOccupancy occupancy) => {
                 // The run's frames would land on the store mid-walk and be missed; copy in
                 // the morning, or re-run the copy afterwards (it only adds what is new).
-                if (runs.HasAny) {
+                if (occupancy.Holder(RigHolding.Disk) is { } writer) {
                     return Results.Problem(
-                        "a sequence run is active — stop it before copying the storage drive",
+                        $"{writer} is running — stop it before copying the storage drive",
                         statusCode: StatusCodes.Status409Conflict);
                 }
                 var refused = copy.Start(request.TargetUuid, request.Folders);
@@ -592,13 +592,13 @@ public static class SystemEndpoints {
         // there" button.
         storage.MapPost("/rescan", async (
                 CaptureScanService scan,
-                ActiveRunSessionRegistry runs,
+                RigOccupancy occupancy,
                 CancellationToken ct) => {
                 // Scanning walks the whole captures tree; not while a run is
                 // writing into it.
-                if (runs.HasAny) {
+                if (occupancy.Holder(RigHolding.Disk) is { } writer) {
                     return Results.Problem(
-                        "a sequence run is active — wait for it to finish before scanning the drive",
+                        $"{writer} is running — wait for it to finish before scanning the drive",
                         statusCode: StatusCodes.Status409Conflict);
                 }
                 var result = await scan.RunAsync(ct).ConfigureAwait(false);

@@ -33,6 +33,10 @@ public sealed partial class CenteringService : ICenteringService, IDisposable {
     // Serialize centering ops: each one slews/syncs the mount, so two concurrent calls (e.g. the §58.4 flip
     // recenter racing a REST caller) must not run at once. A second caller waits for the first to finish.
     private readonly SemaphoreSlim _centeringGate = new(1, 1);
+
+    /// <summary>A centering is under way (it holds the gate): Center's reading in <see cref="RigOccupancy"/>.</summary>
+    public bool IsCentering => _centeringGate.CurrentCount == 0;
+
     private readonly IProfileService profileService;
     private readonly IProfileStore? profileStore;
     private readonly IPlateSolverFactory plateSolverFactory;

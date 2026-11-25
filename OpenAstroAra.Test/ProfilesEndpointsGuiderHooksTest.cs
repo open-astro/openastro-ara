@@ -69,7 +69,7 @@ namespace OpenAstroAra.Test {
             builder.WebHost.UseUrls("http://127.0.0.1:0");
             builder.Services.AddSingleton<IProfileRepository>(repo);
             builder.Services.AddSingleton(guider.Object);
-            builder.Services.AddSingleton<ActiveRunSessionRegistry>();
+            builder.Services.AddSingleton(new RigOccupancy());
             selections = new EquipmentSelectionStore(dir, Microsoft.Extensions.Logging.Abstractions.NullLogger<EquipmentSelectionStore>.Instance);
             builder.Services.AddSingleton(sp => new ProfileDeviceSwitch(sp, selections, new Mock<IEquipmentReconnector>().Object, store,
                 Microsoft.Extensions.Logging.Abstractions.NullLogger<ProfileDeviceSwitch>.Instance));

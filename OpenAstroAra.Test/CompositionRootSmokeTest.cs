@@ -142,6 +142,14 @@ namespace OpenAstroAra.Test {
             }
         }
 
+        // #2141 — every routine Program.cs registers on Rig Occupancy resolves its reading, and Center's reading
+        // reads the class it casts to (a wrapped ICenteringService would make centering count as not running).
+        [Test]
+        public void Rig_occupancy_reads_every_registered_routine_and_an_idle_rig_is_free() {
+            Assert.That(app.Services.GetRequiredService<ICenteringService>(), Is.InstanceOf<CenteringService>());
+            Assert.That(app.Services.GetRequiredService<RigOccupancy>().Holder(), Is.Null);
+        }
+
         [Test]
         public void The_test_host_resolves_the_fake_guider_supervisor_not_systemctl() {
             // The real supervisor runs `systemctl start|restart openastro-guider`; on a Linux desktop with a

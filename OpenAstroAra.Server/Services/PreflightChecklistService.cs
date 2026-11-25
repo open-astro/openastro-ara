@@ -373,7 +373,7 @@ public sealed class PreflightChecklistService {
         try {
             var page = await _sequences.ListAsync(100, null, ct).ConfigureAwait(false);
             var list = new RunningList();
-            foreach (var s in page.Items.Where(IsLive)) {
+            foreach (var s in page.Items.Where(i => IsLive(i.CurrentRunState))) {
                 var run = _sequencer is null ? null : await _sequencer.GetRunStateAsync(s.Id, ct).ConfigureAwait(false);
                 list.Add(new RunningRun(s.Id, s.Name, run?.CurrentTargetName, s.TargetCount));
             }
@@ -383,8 +383,8 @@ public sealed class PreflightChecklistService {
         }
     }
 
-    private static bool IsLive(SequenceListItemDto s) => s.CurrentRunState is SequenceRunState.Running
-        or SequenceRunState.Starting or SequenceRunState.Paused or SequenceRunState.PausedAwaitingUser;
+    // #2141 — the one busy rule: a run that is not terminal is running, aborting included.
+    internal static bool IsLive(SequenceRunState? state) => state is { } s && FileSequenceService.IsActiveRun(s);
 
     private double MinutesAfterMeridian() =>
         ReadQuiet(() => _profileService?.ActiveProfile?.MeridianFlipSettings)?.MinutesAfterMeridian ?? 0.0;

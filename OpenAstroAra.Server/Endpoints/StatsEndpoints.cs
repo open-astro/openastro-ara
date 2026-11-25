@@ -43,15 +43,15 @@ public static class StatsEndpoints {
         // exposure, or a concurrent scan (the reset holds the scan lock).
         stats.MapPost("/rebuild-catalog", async (
                 Services.CaptureScanService scan,
-                Services.ActiveRunSessionRegistry runs,
+                Services.RigOccupancy occupancy,
                 Services.ICameraService camera,
                 CancellationToken ct) => {
-                if (runs.HasAny) {
+                if (occupancy.Holder(Services.RigHolding.Disk) is { } writer) {
                     return Results.Problem(
-                        "a sequence run is active — stop it before rebuilding the catalog",
+                        $"{writer} is running — stop it before rebuilding the catalog",
                         statusCode: StatusCodes.Status409Conflict);
                 }
-                if (!camera.IsFreeToCapture(runs)) {
+                if (!camera.IsFreeToCapture(occupancy)) {
                     return Results.Problem(
                         "an exposure is in progress — wait for it to finish before rebuilding the catalog",
                         statusCode: StatusCodes.Status409Conflict);

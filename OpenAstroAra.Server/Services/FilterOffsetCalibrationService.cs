@@ -50,7 +50,7 @@ public sealed class FilterOffsetCalibrationService {
     private readonly IFilterWheelMediator _wheelMediator;
     private readonly IProfileStore _profiles;
     private readonly IProfileService _profile;
-    private readonly ActiveRunSessionRegistry _runs;
+    private readonly RigOccupancy _occupancy;
     private readonly IBahtinovFocusService _bahtinov;
     private readonly IGuideFocusService _guideFocus;
 
@@ -68,7 +68,7 @@ public sealed class FilterOffsetCalibrationService {
             IFilterWheelMediator wheelMediator,
             IProfileStore profiles,
             IProfileService profile,
-            ActiveRunSessionRegistry runs,
+            RigOccupancy occupancy,
             IBahtinovFocusService bahtinov,
             IGuideFocusService guideFocus) {
         _autofocus = autofocus;
@@ -81,7 +81,7 @@ public sealed class FilterOffsetCalibrationService {
         _wheelMediator = wheelMediator;
         _profiles = profiles;
         _profile = profile;
-        _runs = runs;
+        _occupancy = occupancy;
         _bahtinov = bahtinov;
         _guideFocus = guideFocus;
     }
@@ -102,7 +102,7 @@ public sealed class FilterOffsetCalibrationService {
             : _tracker.IsRunning ? "an autofocus run is in progress"
             : _bahtinov.IsActive ? "the Bahtinov focus readout is running"
             : _guideFocus.IsActive ? "guide-camera focus is running"
-            : _runs.HasAny ? "a plan is running"
+            : _occupancy.Holder(RigHolding.MainCamera | RigHolding.Focuser) is { } holder ? $"{holder} is running"
             : null;
         if (busy is not null) {
             throw new InvalidOperationException($"Focus offsets can't be calibrated while {busy}.");

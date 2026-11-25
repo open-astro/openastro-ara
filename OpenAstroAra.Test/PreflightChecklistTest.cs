@@ -172,6 +172,20 @@ namespace OpenAstroAra.Test {
             Assert.That(PreflightChecklistService.SequenceItem(Array.Empty<string>(), readFailed: true).Status, Is.EqualTo("unknown"));
         }
 
+        // #2141 — one busy rule: a run that is not terminal is running, aborting included.
+        [TestCase(SequenceRunState.Idle, false)]
+        [TestCase(SequenceRunState.Starting, true)]
+        [TestCase(SequenceRunState.Running, true)]
+        [TestCase(SequenceRunState.Paused, true)]
+        [TestCase(SequenceRunState.PausedAwaitingUser, true)]
+        [TestCase(SequenceRunState.Aborting, true)]
+        [TestCase(SequenceRunState.Stopped, false)]
+        [TestCase(SequenceRunState.Completed, false)]
+        [TestCase(SequenceRunState.Failed, false)]
+        public void The_running_list_counts_every_run_that_is_not_terminal(SequenceRunState state, bool running) {
+            Assert.That(PreflightChecklistService.IsLive(state), Is.EqualTo(running));
+        }
+
         [Test]
         public void Flip_forecast_lands_on_the_meridian_crossing_and_grades_the_altitude() {
             // Site at lon 0: LST at 2026-07-18 00:00 UTC is about 19h40m. A target at RA 21h40m crosses in ~2 h.

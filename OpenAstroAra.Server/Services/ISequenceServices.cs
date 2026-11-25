@@ -156,6 +156,10 @@ public interface ISequencerService {
     /// aborting. For a caller that must wait until the run is over (restart when idle).</summary>
     Task<IReadOnlyList<Guid>> UnfinishedRunIdsAsync(CancellationToken ct);
 
+    /// <summary>Whether any run is not terminal (<see cref="UnfinishedRunIdsAsync"/> is not empty), read without
+    /// waiting: the Session's reading in <see cref="RigOccupancy"/>.</summary>
+    bool HasUnfinishedRun { get; }
+
     /// <summary>
     /// §35 — resume the given runs (the safety engine's auto-resume when conditions turn safe again). Same
     /// CAS + gate-release semantics as <see cref="ResumeAsync"/> but daemon-automated (no §58.12 user-activity

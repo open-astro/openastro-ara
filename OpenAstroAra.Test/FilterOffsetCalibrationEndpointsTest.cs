@@ -70,6 +70,7 @@ namespace OpenAstroAra.Test {
             public readonly List<(int Slot, string? Filter, string? Trigger)> AutofocusRuns = new();
             public readonly AutofocusRunTracker Tracker = new();
             public readonly ActiveRunSessionRegistry Runs = new();
+            public bool PolarAligning;
             public readonly InMemoryProfileStore Store = new();
             public readonly OpenAstroAra.Profile.Profile Profile = new();
             public readonly Mock<IBahtinovFocusService> Bahtinov = new();
@@ -131,6 +132,8 @@ namespace OpenAstroAra.Test {
                 builder.Services.AddSingleton<IProfileStore>(Store);
                 builder.Services.AddSingleton(profile.Object);
                 builder.Services.AddSingleton(Runs);
+                builder.Services.AddSingleton(new RigOccupancy().RegisterSession(Runs, () => null)
+                    .Register("polar alignment", RigHolding.Mount | RigHolding.MainCamera | RigHolding.GuideCamera, () => PolarAligning));
                 builder.Services.AddSingleton(Bahtinov.Object);
                 builder.Services.AddSingleton(GuideFocus.Object);
                 builder.Services.AddSingleton<FilterOffsetCalibrationService>();
@@ -349,7 +352,8 @@ namespace OpenAstroAra.Test {
             Assert.That(await rig.PostAsync("cancel"), Is.EqualTo(409), "nothing left to cancel");
         }
 
-        [TestCase("plan", "a plan is running")]
+        [TestCase("plan", "a sequence is running")]
+        [TestCase("polar_align", "polar alignment is running")]
         [TestCase("autofocus", "an autofocus run is in progress")]
         [TestCase("bahtinov", "the Bahtinov focus readout is running")]
         [TestCase("guide_focus", "guide-camera focus is running")]
@@ -370,6 +374,7 @@ namespace OpenAstroAra.Test {
             using var runCts = new CancellationTokenSource();
             switch (precondition) {
                 case "plan": rig.Runs.Enter(Guid.NewGuid()); break;
+                case "polar_align": rig.PolarAligning = true; break;
                 case "autofocus": rig.Tracker.Begin("classic", 0, 9, "L", null, runCts); break;
                 case "bahtinov": rig.Bahtinov.SetupGet(b => b.IsActive).Returns(true); break;
                 case "guide_focus": rig.GuideFocus.SetupGet(g => g.IsActive).Returns(true); break;
