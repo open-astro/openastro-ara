@@ -353,7 +353,7 @@ public partial class Program {
             .Register("polar alignment", RigHolding.Mount | RigHolding.MainCamera | RigHolding.GuideCamera,
                 () => sp.GetService<IPolarAlignService>()?.IsActive == true)
             .Register("centering", RigHolding.Mount | RigHolding.MainCamera,
-                () => (sp.GetService<ICenteringService>() as CenteringService)?.IsCentering == true));
+                () => sp.GetService<ICenteringService>()?.IsCentering == true));
         // Singleton on purpose: the service sweeps stale request/result files from the storage
         // exchange in its constructor (#1135), which is only safe because exactly one instance is
         // built — resolved eagerly after Build() below, so the sweep really runs at boot and

@@ -34,7 +34,8 @@ public sealed partial class CenteringService : ICenteringService, IDisposable {
     // recenter racing a REST caller) must not run at once. A second caller waits for the first to finish.
     private readonly SemaphoreSlim _centeringGate = new(1, 1);
 
-    /// <summary>A centering is under way (it holds the gate): Center's reading in <see cref="RigOccupancy"/>.</summary>
+    // Every centering path (CenterOnTarget, CenterAsync, CenterAndRotateAsync) holds this gate for its whole run,
+    // and nothing else takes it: a held gate is a centering under way.
     public bool IsCentering => _centeringGate.CurrentCount == 0;
 
     private readonly IProfileService profileService;

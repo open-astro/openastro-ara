@@ -381,7 +381,7 @@ public static class SystemEndpoints {
                         $"{writer} is running — stop it before changing the storage drive",
                         statusCode: StatusCodes.Status409Conflict);
                 }
-                if (!camera.IsFreeToCapture(occupancy)) {
+                if (!camera.IsFreeToCapture(scan)) {
                     return Results.Problem(
                         "an exposure is in progress — wait for it to finish before changing the storage drive",
                         statusCode: StatusCodes.Status409Conflict);
@@ -467,7 +467,7 @@ public static class SystemEndpoints {
                         $"{writer} is running — stop it before checking the storage drive",
                         statusCode: StatusCodes.Status409Conflict);
                 }
-                if (!camera.IsFreeToCapture(occupancy)) {
+                if (!camera.IsFreeToCapture(scan)) {
                     return Results.Problem(
                         "an exposure is in progress — wait for it to finish before checking the storage drive",
                         statusCode: StatusCodes.Status409Conflict);
@@ -518,7 +518,7 @@ public static class SystemEndpoints {
                         $"{writer} is running — stop it before ejecting the storage drive",
                         statusCode: StatusCodes.Status409Conflict);
                 }
-                if (!camera.IsFreeToCapture(occupancy)) {
+                if (!camera.IsFreeToCapture(scan)) {
                     return Results.Problem(
                         "an exposure is in progress — wait for it to finish before ejecting the storage drive",
                         statusCode: StatusCodes.Status409Conflict);

@@ -51,7 +51,7 @@ public static class StatsEndpoints {
                         $"{writer} is running — stop it before rebuilding the catalog",
                         statusCode: StatusCodes.Status409Conflict);
                 }
-                if (!camera.IsFreeToCapture(occupancy)) {
+                if (!camera.IsFreeToCapture(scan)) {
                     return Results.Problem(
                         "an exposure is in progress — wait for it to finish before rebuilding the catalog",
                         statusCode: StatusCodes.Status409Conflict);
