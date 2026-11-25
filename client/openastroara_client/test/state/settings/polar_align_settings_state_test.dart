@@ -30,10 +30,10 @@ void main() {
     final etag = c.read(polarAlignSettingsProvider).etag;
     await c
         .read(polarAlignSettingsProvider.notifier)
-        .saveKnob((s) => s.copyWith(checkStepDeg: 15));
+        .saveKnob((s) => s.copyWith(seedRotationDeg: 15));
     final put = rig.puts.single;
     expect(put.ifMatch, etag);
-    expect((put.body as Map)['check_step_deg'], 15.0);
+    expect((put.body as Map)['seed_rotation_deg'], 15.0);
     expect(
       (put.body as Map)['exposure_seconds'],
       4.0,
@@ -48,7 +48,7 @@ void main() {
     await expectLater(
       c
           .read(polarAlignSettingsProvider.notifier)
-          .saveKnob((s) => s.copyWith(checkStepDeg: 15)),
+          .saveKnob((s) => s.copyWith(seedRotationDeg: 15)),
       throwsA(isA<SectionNotLoadedException>()),
     );
     expect(rig.puts, isEmpty);

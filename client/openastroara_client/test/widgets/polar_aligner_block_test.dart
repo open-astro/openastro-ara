@@ -22,7 +22,7 @@ class _Api implements PolarAlignClient {
   @override
   Future<PolarAlignStatus?> getStatus() async => null;
   @override
-  Future<void> start({String? stage}) async {}
+  Future<void> start() async {}
   @override
   Future<void> stop() async {}
   @override
@@ -141,7 +141,7 @@ void main() {
     final c = await _pump(tester);
     expect(find.text('Polar Aligner'), findsOneWidget);
     expect(find.text('Polar base'), findsOneWidget);
-    expect(find.textContaining('Tap the shutter to start.'), findsOneWidget);
+    expect(find.textContaining('After Start, Ara measures'), findsOneWidget);
     expect(find.textContaining('inside your 2′ tolerance'), findsOneWidget);
     expect(find.text('From its zero: azimuth +12.4′ · altitude −3.0′'), findsOneWidget);
     expect(_key('polar-aligner-stop'), findsNothing);
@@ -212,7 +212,7 @@ void main() {
   testWidgets('converged: the tolerance and the moves, no buttons', (tester) async {
     await _pump(tester, live: _run(const PolarAlignerRun(state: 'converged', moves: 4)));
     expect(
-        find.text('Inside your 2′ tolerance after 4 moves. Finish with Check or Done. '
+        find.text('Inside your 2′ tolerance after 4 moves. Finish with Done. '
             'If the error drifts out, the motors correct again.'),
         findsOneWidget);
     expect(find.byType(ButtonStyleButton), findsNothing);
@@ -228,7 +228,7 @@ void main() {
     expect(
         find.text("The motors stopped inside your 2′ tolerance, but at ± 0.4′ this measurement can't confirm the "
             'alignment. More moves cannot help; larger turns do (20° in place of 10° cuts the uncertainty about four '
-            'times), so run Check with a larger Check step.'),
+            'times), so start again with a larger turn.'),
         findsOneWidget);
     expect(find.textContaining('Inside your 2′ tolerance after'), findsNothing, reason: 'no claim of alignment');
   });
@@ -238,7 +238,7 @@ void main() {
       (tester) async {
     await _pump(tester, loaded: false, live: _run(const PolarAlignerRun(state: 'converged', moves: 4)));
     expect(
-        find.text('Inside your tolerance after 4 moves. Check and Done wait for your polar-align settings to load. '
+        find.text('Inside your tolerance after 4 moves. Done waits for your polar-align settings to load. '
             'If the error drifts out, the motors correct again.'),
         findsOneWidget);
     expect(find.text('Motors off. Turn the bolts by hand.'), findsNothing);

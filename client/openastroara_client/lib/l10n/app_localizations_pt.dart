@@ -973,7 +973,7 @@ class AppLocalizationsPt extends AppLocalizations {
   String get polarSingle => 'Single';
 
   @override
-  String get polarStart => 'Start polar alignment';
+  String get polarStart => 'Start Polar Alignment';
 
   @override
   String get polarStop => 'Stop';
@@ -994,9 +994,6 @@ class AppLocalizationsPt extends AppLocalizations {
   String get polarActionComplete => 'complete polar alignment';
 
   @override
-  String get polarPhaseSeeding => 'Finding the pole…';
-
-  @override
   String get polarPhaseAdjusting => 'Adjusting';
 
   @override
@@ -1006,14 +1003,11 @@ class AppLocalizationsPt extends AppLocalizations {
   String get polarPhaseFailed => 'Polar alignment failed';
 
   @override
-  String get polarPhaseReady => 'Ready';
-
-  @override
   String get polarPhaseHoming => 'Going Home…';
 
   @override
-  String polarPhaseChecking(int done, int total) {
-    return 'Checking $done of $total';
+  String polarPhaseChecking(int point, int total) {
+    return 'Checking the alignment — $point of $total';
   }
 
   @override
@@ -1030,25 +1024,6 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get polarVerdictFarOff => 'Far off';
-
-  @override
-  String get polarPhaseChecked => 'Checked';
-
-  @override
-  String polarCheckedLine(String verdict) {
-    return 'Three-point check: $verdict';
-  }
-
-  @override
-  String polarCheckedVsFine(String verdict, String delta) {
-    return 'Three-point check: $verdict, $delta′ from the last run\'s readout';
-  }
-
-  @override
-  String get polarCheck => 'Check';
-
-  @override
-  String get polarActionCheck => 'start the check';
 
   @override
   String get polarAltitude => 'Altitude';
@@ -6022,17 +5997,6 @@ class AppLocalizationsPt extends AppLocalizations {
   }
 
   @override
-  String get polarSetup => 'Setup';
-
-  @override
-  String get polarErrorHeading => 'Error';
-
-  @override
-  String polarCheckCaption(String step) {
-    return 'Check turns the mount 2 × $step° and takes three frames to measure the alignment.';
-  }
-
-  @override
   String get polarNoisyMeasurement =>
       'Noisy measurement: the solves at one point scattered more than 3″, even after a retake. Check focus and seeing, or take more frames per point.';
 
@@ -6043,12 +6007,12 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String polarUnconfirmedBySigma(String tolerance, String sigma) {
-    return 'Inside your $tolerance′ tolerance, but at ± $sigma this measurement can\'t confirm the alignment. Larger turns help most: 20° in place of 10° cuts the uncertainty about four times (Polar align turn and Check step in Settings).';
+    return 'Inside your $tolerance′ tolerance, but at ± $sigma this measurement can\'t confirm the alignment. Larger turns help most: 20° in place of 10° cuts the uncertainty about four times (Polar align turn in Settings).';
   }
 
   @override
   String polarAlignerConvergedUnconfirmed(String tolerance, String sigma) {
-    return 'The motors stopped inside your $tolerance′ tolerance, but at ± $sigma this measurement can\'t confirm the alignment. More moves cannot help; larger turns do (20° in place of 10° cuts the uncertainty about four times), so run Check with a larger Check step.';
+    return 'The motors stopped inside your $tolerance′ tolerance, but at ± $sigma this measurement can\'t confirm the alignment. More moves cannot help; larger turns do (20° in place of 10° cuts the uncertainty about four times), so start again with a larger turn.';
   }
 
   @override
@@ -6087,9 +6051,6 @@ class AppLocalizationsPt extends AppLocalizations {
   String get polarKnobTurn => 'Turn (°, 5 to 30)';
 
   @override
-  String get polarKnobVerifyStep => 'Check step (°, 5 to 30)';
-
-  @override
   String get polarKnobMainExposure => 'Main camera exposure (s, 0.1 to 60)';
 
   @override
@@ -6100,14 +6061,11 @@ class AppLocalizationsPt extends AppLocalizations {
   String get polarKnobTurnHint => 'Kept between 5° and 30°';
 
   @override
-  String get polarKnobVerifyStepHint => 'Kept between 5° and 30°';
-
-  @override
   String get polarAligner => 'Polar Aligner';
 
   @override
   String polarAlignerIdle(String tolerance) {
-    return 'Tap the shutter to start. Ara measures, makes a small test move on each axis, then turns the motors until the error is inside your $tolerance′ tolerance.';
+    return 'After Start, Ara measures, makes a small test move on each axis, then turns the motors until the error is inside your $tolerance′ tolerance.';
   }
 
   @override
@@ -6142,7 +6100,7 @@ class AppLocalizationsPt extends AppLocalizations {
       other: 'Inside your $tolerance′ tolerance after $moves moves.',
       one: 'Inside your $tolerance′ tolerance after 1 move.',
     );
-    return '$_temp0 Finish with Check or Done. If the error drifts out, the motors correct again.';
+    return '$_temp0 Finish with Done. If the error drifts out, the motors correct again.';
   }
 
   @override
@@ -6153,7 +6111,7 @@ class AppLocalizationsPt extends AppLocalizations {
       other: 'Inside your tolerance after $moves moves.',
       one: 'Inside your tolerance after 1 move.',
     );
-    return '$_temp0 Check and Done wait for your polar-align settings to load. If the error drifts out, the motors correct again.';
+    return '$_temp0 Done waits for your polar-align settings to load. If the error drifts out, the motors correct again.';
   }
 
   @override
@@ -6347,21 +6305,11 @@ class AppLocalizationsPt extends AppLocalizations {
       'Off: Polar align shows the turns and you make them';
 
   @override
-  String get polarKnobStopTracking => 'Stop tracking when polar align ends';
-
-  @override
-  String get polarKnobStopTrackingOn => 'Every end of a run turns tracking off';
-
-  @override
-  String get polarKnobStopTrackingOff =>
-      'Off: a run that finishes gives back the tracking it found. A Stop always leaves tracking off';
-
-  @override
   String get polarAdvancedTitle => 'Advanced';
 
   @override
-  String polarAdvancedSummary(String turn, String step, String exposure) {
-    return '$turn° turn · $step° step · $exposure s';
+  String polarAdvancedSummary(String turn, String exposure) {
+    return '$turn° turn · $exposure s';
   }
 
   @override
@@ -7027,12 +6975,8 @@ class AppLocalizationsPt extends AppLocalizations {
       'Polar Align\'s figure: the RA axis against the refracted pole, from plate solves, live as you turn the bolts. Azimuth is the true arc on the sky (cos alt applied).';
 
   @override
-  String get polarCheckMeasures =>
-      'Verify\'s figure: a fresh three-point measurement of the RA axis against the refracted pole. Azimuth is the true arc on the sky (cos alt applied).';
-
-  @override
   String get polarReadoutCautionAltitudeWeak =>
-      'The camera points nearly due east or west of the pole, where this readout reads the altitude bolt poorly. Trust Verify, or start again with the scope nearer the pole.';
+      'The camera points nearly due east or west of the pole, where this readout reads the altitude bolt poorly. Trust the result after Done, or start again with the scope nearer the pole.';
 
   @override
   String versionMismatchWarning(String server, String app) {
@@ -7142,6 +7086,95 @@ class AppLocalizationsPt extends AppLocalizations {
   @override
   String get sequencerRunSaveFailed =>
       'Your changes couldn\'t be saved, so the run didn\'t start. Check the connection and try again.';
+
+  @override
+  String get polarHome => 'Home';
+
+  @override
+  String get polarHomeHint => 'Polar alignment starts with the mount at Home.';
+
+  @override
+  String polarStartHint(String step) {
+    return 'The mount turns $step° twice from Home and measures its axis.';
+  }
+
+  @override
+  String get polarMountMoving => 'The mount is moving. Wait for it to stop.';
+
+  @override
+  String get polarUnpark => 'Unpark';
+
+  @override
+  String get polarActionHome => 'send the mount Home';
+
+  @override
+  String get polarActionStopMount => 'stop the mount';
+
+  @override
+  String get polarActionUnpark => 'unpark the mount';
+
+  @override
+  String get polarActionReadMount => 'read the mount';
+
+  @override
+  String get polarMeasuring => 'Measuring the mount\'s axis…';
+
+  @override
+  String polarMeasuringPoint(int point, int total) {
+    return 'Measuring — point $point of $total';
+  }
+
+  @override
+  String get polarReturningHome => 'Returning Home…';
+
+  @override
+  String get polarStoppedLine => 'Polar alignment stopped.';
+
+  @override
+  String polarLastResult(String verdict, String error) {
+    return 'Last result: $verdict, $error from the pole.';
+  }
+
+  @override
+  String polarVerdictTotal(String error) {
+    return '$error from the pole';
+  }
+
+  @override
+  String polarVerdictAxes(String altitude, String azimuth) {
+    return 'Altitude $altitude · Azimuth $azimuth';
+  }
+
+  @override
+  String get polarVerdictExcellentMeaning =>
+      'Polar alignment won\'t limit your exposures.';
+
+  @override
+  String get polarVerdictVeryGoodMeaning => 'Plenty for guided imaging.';
+
+  @override
+  String get polarVerdictGoodMeaning =>
+      'Fine with guiding. Keep unguided exposures short.';
+
+  @override
+  String get polarVerdictRoughMeaning =>
+      'Stars will drift in longer exposures. Adjust again to get closer.';
+
+  @override
+  String get polarVerdictFarOffMeaning =>
+      'The mount is far from the pole. Adjust again.';
+
+  @override
+  String get polarAdjustAgain => 'Adjust again';
+
+  @override
+  String polarDoneWaits(String tolerance) {
+    return 'Done turns on once the total error is under $tolerance′.';
+  }
+
+  @override
+  String get polarAlignErrorHomeFailed =>
+      'The mount did not go Home. Check the mount, send it Home, then start again.';
 }
 
 /// The translations for Portuguese, as used in Brazil (`pt_BR`).
@@ -8153,9 +8186,6 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String get polarActionComplete => 'concluir o alinhamento polar';
 
   @override
-  String get polarPhaseSeeding => 'Encontrando o polo…';
-
-  @override
   String get polarPhaseAdjusting => 'Ajustando';
 
   @override
@@ -8165,14 +8195,11 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String get polarPhaseFailed => 'Falha no alinhamento polar';
 
   @override
-  String get polarPhaseReady => 'Pronto';
+  String get polarPhaseHoming => 'Indo para Home…';
 
   @override
-  String get polarPhaseHoming => 'Indo para a posição inicial…';
-
-  @override
-  String polarPhaseChecking(int done, int total) {
-    return 'Verificando $done de $total';
+  String polarPhaseChecking(int point, int total) {
+    return 'Verificando o alinhamento — $point de $total';
   }
 
   @override
@@ -8189,25 +8216,6 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get polarVerdictFarOff => 'Muito fora';
-
-  @override
-  String get polarPhaseChecked => 'Verificado';
-
-  @override
-  String polarCheckedLine(String verdict) {
-    return 'Verificação em três pontos: $verdict';
-  }
-
-  @override
-  String polarCheckedVsFine(String verdict, String delta) {
-    return 'Verificação em três pontos: $verdict, $delta′ da leitura anterior';
-  }
-
-  @override
-  String get polarCheck => 'Verificar';
-
-  @override
-  String get polarActionCheck => 'iniciar a verificação';
 
   @override
   String get polarAltitude => 'Altitude';
@@ -13208,17 +13216,6 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   }
 
   @override
-  String get polarSetup => 'Ajustes';
-
-  @override
-  String get polarErrorHeading => 'Erro';
-
-  @override
-  String polarCheckCaption(String step) {
-    return 'Verificar gira a montagem 2 × $step° e tira três quadros para medir o alinhamento.';
-  }
-
-  @override
   String get polarNoisyMeasurement =>
       'Medição ruidosa: os plate solves de um ponto se espalharam mais de 3″, mesmo depois de refeitos. Verifique o foco e o seeing, ou use mais quadros por ponto.';
 
@@ -13229,12 +13226,12 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String polarUnconfirmedBySigma(String tolerance, String sigma) {
-    return 'Dentro da sua tolerância de $tolerance′, mas com ± $sigma esta medição não consegue confirmar o alinhamento. Giros maiores ajudam mais: 20° no lugar de 10° cortam a incerteza cerca de quatro vezes (giro e passo do Verificar nas configurações do alinhamento polar).';
+    return 'Dentro da sua tolerância de $tolerance′, mas com ± $sigma esta medição não consegue confirmar o alinhamento. Giros maiores ajudam mais: 20° no lugar de 10° cortam a incerteza cerca de quatro vezes (giro nas configurações do alinhamento polar).';
   }
 
   @override
   String polarAlignerConvergedUnconfirmed(String tolerance, String sigma) {
-    return 'Os motores pararam dentro da sua tolerância de $tolerance′, mas com ± $sigma esta medição não consegue confirmar o alinhamento. Mais movimentos não ajudam; giros maiores sim (20° no lugar de 10° cortam a incerteza cerca de quatro vezes), então rode o Verificar com um passo maior.';
+    return 'Os motores pararam dentro da sua tolerância de $tolerance′, mas com ± $sigma esta medição não consegue confirmar o alinhamento. Mais movimentos não ajudam; giros maiores sim (20° no lugar de 10° cortam a incerteza cerca de quatro vezes), então comece de novo com um giro maior.';
   }
 
   @override
@@ -13273,9 +13270,6 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String get polarKnobTurn => 'Giro (°, 5 a 30)';
 
   @override
-  String get polarKnobVerifyStep => 'Passo do Verificar (°, 5 a 30)';
-
-  @override
   String get polarKnobMainExposure =>
       'Exposição da câmera principal (s, 0,1 a 60)';
 
@@ -13287,14 +13281,11 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String get polarKnobTurnHint => 'Mantido entre 5° e 30°';
 
   @override
-  String get polarKnobVerifyStepHint => 'Mantido entre 5° e 30°';
-
-  @override
   String get polarAligner => 'Alinhador polar';
 
   @override
   String polarAlignerIdle(String tolerance) {
-    return 'Toque no obturador para começar. O Ara mede, faz um pequeno movimento de teste em cada eixo e depois gira os motores até o erro ficar dentro da sua tolerância de $tolerance′.';
+    return 'Depois de Iniciar, o Ara mede, faz um pequeno movimento de teste em cada eixo e depois gira os motores até o erro ficar dentro da sua tolerância de $tolerance′.';
   }
 
   @override
@@ -13330,7 +13321,7 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
       other: 'Dentro da sua tolerância de $tolerance′ após $moves movimentos.',
       one: 'Dentro da sua tolerância de $tolerance′ após 1 movimento.',
     );
-    return '$_temp0 Termine com Verificar ou Concluir. Se o erro sair da tolerância, os motores corrigem de novo.';
+    return '$_temp0 Termine com Concluir. Se o erro sair da tolerância, os motores corrigem de novo.';
   }
 
   @override
@@ -13341,7 +13332,7 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
       other: 'Dentro da sua tolerância após $moves movimentos.',
       one: 'Dentro da sua tolerância após 1 movimento.',
     );
-    return '$_temp0 Verificar e Concluir aguardam o carregamento das suas configurações de alinhamento polar. Se o erro sair da tolerância, os motores corrigem de novo.';
+    return '$_temp0 O Concluir aguarda o carregamento das suas configurações de alinhamento polar. Se o erro sair da tolerância, os motores corrigem de novo.';
   }
 
   @override
@@ -13536,23 +13527,11 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
       'Desligado: o alinhamento polar mostra os giros e você os faz';
 
   @override
-  String get polarKnobStopTracking =>
-      'Parar o rastreamento quando o alinhamento polar terminar';
-
-  @override
-  String get polarKnobStopTrackingOn =>
-      'Todo fim de uma execução desliga o rastreamento';
-
-  @override
-  String get polarKnobStopTrackingOff =>
-      'Desligado: uma execução que termina devolve o rastreamento que encontrou. Parar sempre deixa o rastreamento desligado';
-
-  @override
   String get polarAdvancedTitle => 'Avançado';
 
   @override
-  String polarAdvancedSummary(String turn, String step, String exposure) {
-    return 'giro de $turn° · passo de $step° · $exposure s';
+  String polarAdvancedSummary(String turn, String exposure) {
+    return 'giro de $turn° · $exposure s';
   }
 
   @override
@@ -14220,12 +14199,8 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
       'Número do Polar Align: o eixo de AR contra o polo refratado, por plate solve, ao vivo enquanto você gira os parafusos. O azimute é o arco real no céu (cos alt aplicado).';
 
   @override
-  String get polarCheckMeasures =>
-      'Número da verificação: uma nova medição em três pontos do eixo de AR contra o polo refratado. O azimute é o arco real no céu (cos alt aplicado).';
-
-  @override
   String get polarReadoutCautionAltitudeWeak =>
-      'A câmera aponta quase a leste ou a oeste do polo, onde esta leitura mede mal o parafuso de altitude. Use o Verificar, ou comece de novo com o telescópio mais perto do polo.';
+      'A câmera aponta quase a leste ou a oeste do polo, onde esta leitura mede mal o parafuso de altitude. Confie no resultado depois de Concluir, ou comece de novo com o telescópio mais perto do polo.';
 
   @override
   String versionMismatchWarning(String server, String app) {
@@ -14337,4 +14312,96 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String get sequencerRunSaveFailed =>
       'Não foi possível salvar suas alterações, então a execução não começou. Verifique a conexão e tente de novo.';
+
+  @override
+  String get polarHome => 'Home';
+
+  @override
+  String get polarHomeHint =>
+      'O alinhamento polar começa com a montagem em Home.';
+
+  @override
+  String polarStartHint(String step) {
+    return 'A montagem gira $step° duas vezes a partir de Home e mede o seu eixo.';
+  }
+
+  @override
+  String get polarMountMoving =>
+      'A montagem está em movimento. Espere ela parar.';
+
+  @override
+  String get polarUnpark => 'Desestacionar';
+
+  @override
+  String get polarActionHome => 'enviar a montagem para Home';
+
+  @override
+  String get polarActionStopMount => 'parar a montagem';
+
+  @override
+  String get polarActionUnpark => 'desestacionar a montagem';
+
+  @override
+  String get polarActionReadMount => 'ler a montagem';
+
+  @override
+  String get polarMeasuring => 'Medindo o eixo da montagem…';
+
+  @override
+  String polarMeasuringPoint(int point, int total) {
+    return 'Medindo — ponto $point de $total';
+  }
+
+  @override
+  String get polarReturningHome => 'Voltando para Home…';
+
+  @override
+  String get polarStoppedLine => 'Alinhamento polar interrompido.';
+
+  @override
+  String polarLastResult(String verdict, String error) {
+    return 'Último resultado: $verdict, $error do polo.';
+  }
+
+  @override
+  String polarVerdictTotal(String error) {
+    return '$error do polo';
+  }
+
+  @override
+  String polarVerdictAxes(String altitude, String azimuth) {
+    return 'Altitude $altitude · Azimute $azimuth';
+  }
+
+  @override
+  String get polarVerdictExcellentMeaning =>
+      'O alinhamento polar não vai limitar suas exposições.';
+
+  @override
+  String get polarVerdictVeryGoodMeaning =>
+      'Mais que suficiente para fotografar com guiagem.';
+
+  @override
+  String get polarVerdictGoodMeaning =>
+      'Bom com guiagem. Mantenha curtas as exposições sem guiagem.';
+
+  @override
+  String get polarVerdictRoughMeaning =>
+      'As estrelas vão derivar em exposições longas. Ajuste de novo para chegar mais perto.';
+
+  @override
+  String get polarVerdictFarOffMeaning =>
+      'A montagem está longe do polo. Ajuste de novo.';
+
+  @override
+  String get polarAdjustAgain => 'Ajustar de novo';
+
+  @override
+  String polarDoneWaits(String tolerance) {
+    return 'O Concluir liga quando o erro total fica abaixo de $tolerance′.';
+  }
+
+  @override
+  String get polarAlignErrorHomeFailed =>
+      'A montagem não foi para Home. Verifique a montagem, envie-a para Home e comece de novo.';
 }

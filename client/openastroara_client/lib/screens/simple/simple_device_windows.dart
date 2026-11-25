@@ -45,6 +45,7 @@ import '../../state/settings/autofocus_settings_state.dart';
 import '../../state/imaging/exposure_state.dart';
 import '../../state/equipment/mount_state.dart';
 import '../../state/imaging/main_camera_state.dart';
+import '../../state/equipment/mount_home_state.dart';
 import '../../state/polar_align/polar_align_state.dart';
 import '../../state/sequencer/sequence_list_state.dart';
 import '../../state/settings/safety_policies_state.dart';
@@ -970,60 +971,6 @@ final simpleMountMotionProvider =
       SimpleMountMotionNotifier.new,
     );
 
-/// Home asked in the Mount window (#1649), from the tap until the mount stops
-/// moving, as the Dome window's asks: the window and the status pill read
-/// Finding home…. Nothing moving within a few seconds (already home, or a
-/// fast mount between two reads) clears it.
-class SimpleMountHomeNotifier extends Notifier<bool> {
-  bool _moved = false;
-  Timer? _still;
-
-  @override
-  bool build() {
-    ref.onDispose(() => _still?.cancel());
-    ref.listen(mountProvider.select((s) => s.value), (_, m) {
-      if (!state) return;
-      if (m == null || !m.isConnected) return clear();
-      if (m.isBusy) {
-        _moved = true;
-        _still?.cancel();
-        _still = null;
-      } else if (_moved) {
-        clear();
-      }
-    });
-    return false;
-  }
-
-  /// Sends the mount home; true when it took the ask (it throws why not).
-  Future<bool> home() async {
-    state = true;
-    _moved = false;
-    _still?.cancel();
-    _still = Timer(const Duration(seconds: 3), () {
-      if (!_moved) clear();
-    });
-    try {
-      final ok = await ref.read(mountProvider.notifier).findHome();
-      if (!ok) clear();
-      return ok;
-    } catch (_) {
-      clear();
-      rethrow;
-    }
-  }
-
-  void clear() {
-    _still?.cancel();
-    _still = null;
-    state = false;
-  }
-}
-
-final simpleMountHomeProvider = NotifierProvider<SimpleMountHomeNotifier, bool>(
-  SimpleMountHomeNotifier.new,
-);
-
 /// The mount's window: tracking (On / Off) and its speed, Parked / Unparked
 /// / Home, the automatic meridian flip (the profile's, so plans flip by it
 /// too), and beside them the direction pad, its bottom level with the
@@ -1152,7 +1099,7 @@ class _SimpleMountWindowState extends ConsumerState<SimpleMountWindow> {
           );
         }
       }
-      final homing = ref.watch(simpleMountHomeProvider);
+      final homing = ref.watch(mountHomeProvider);
       final canHome = caps?.canFindHome ?? false;
       final position = m.parked ? 'parked' : 'unparked';
       children.add(
@@ -1345,7 +1292,7 @@ class _SimpleMountWindowState extends ConsumerState<SimpleMountWindow> {
             // The centre: Home, and Stop while the mount moves on its own
             // (a Home, a GoTo, a park); a pad move stops on letting go.
             moving:
-                ref.watch(simpleMountHomeProvider) ||
+                ref.watch(mountHomeProvider) ||
                 (m.isBusy && !ref.watch(simplePadMovingProvider)),
             canHome: caps?.canFindHome ?? false,
             // #2173 — Home stays on while the position is unverified (NINA allows
@@ -1422,7 +1369,7 @@ class _SimpleMountWindowState extends ConsumerState<SimpleMountWindow> {
   );
 
   void _home(BuildContext context) =>
-      _run(context, () => ref.read(simpleMountHomeProvider.notifier).home());
+      _run(context, () => ref.read(mountHomeProvider.notifier).home());
 
   /// Set once: the profile keeps it. Applied to the rig's copy (loaded once
   /// more first when it isn't in) and saved whole; not loaded, refused or

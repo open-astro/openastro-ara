@@ -109,14 +109,6 @@ class _ImagingPolarPanelState extends ConsumerState<ImagingPolarPanel>
           onChanged: (v) => save((x) => x.copyWith(polarAlignerAuto: v)),
           hint: s.polarAlignerAuto ? l10n.polarKnobAlignerAutoOn : l10n.polarKnobAlignerAutoOff,
         ),
-        // #2048 NINA's StopTrackingWhenDone: on by default.
-        SettingsSwitchRow(
-          label: l10n.polarKnobStopTracking,
-          helpKey: 'img.polar.stop_tracking_when_done',
-          value: s.stopTrackingWhenDone,
-          onChanged: (v) => save((x) => x.copyWith(stopTrackingWhenDone: v)),
-          hint: s.stopTrackingWhenDone ? l10n.polarKnobStopTrackingOn : l10n.polarKnobStopTrackingOff,
-        ),
         number(
           l10n.polarKnobTurn,
           s.seedRotationDeg,
@@ -125,15 +117,6 @@ class _ImagingPolarPanelState extends ConsumerState<ImagingPolarPanel>
           helpKey: 'img.polar.seed_rotation_deg',
           range: polarSeedRotationRange,
           hint: l10n.polarKnobTurnHint,
-        ),
-        number(
-          l10n.polarKnobVerifyStep,
-          s.checkStepDeg,
-          (x) => x.checkStepDeg,
-          (x, v) => x.copyWith(checkStepDeg: v),
-          helpKey: 'img.polar.check_step_deg',
-          range: polarCheckStepRange,
-          hint: l10n.polarKnobVerifyStepHint,
         ),
         number(
           l10n.polarKnobMainExposure,

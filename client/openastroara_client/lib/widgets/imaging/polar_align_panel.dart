@@ -8,6 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../models/polar_align.dart';
 import '../../services/polar_align_api.dart' show PolarAlignClient;
 import '../../state/night_mode_state.dart';
+import '../../state/polar_align/polar_align_flow_state.dart';
 import '../../state/polar_align/polar_align_routine_state.dart';
 import '../../state/polar_align/polar_align_state.dart';
 import '../../state/polar_align/polar_aligner_state.dart';
@@ -18,14 +19,13 @@ import '../../state/settings/site_settings_state.dart';
 import '../../theme/ara_colors.dart';
 import '../../theme/ara_metrics.dart';
 import '../../util/friendly_error.dart';
-import '../../util/polar_align_error_text.dart';
 import '../../l10n/l10n.dart';
 import '../fit_pane.dart';
 import '../help_icon.dart';
 import 'polar_advanced_row.dart';
 import 'polar_align_readout.dart';
 import 'polar_aligner_block.dart';
-import '../adaptive_controls.dart';
+import 'polar_flow.dart';
 import '../settings/section_load_state.dart';
 
 export 'polar_align_readout.dart';
@@ -77,12 +77,12 @@ String formatDecDms(double decDeg) {
 /// Milliseconds as seconds with one decimal: `1.6 s`.
 String _secondsLabel(num ms) => '${(ms / 1000).toStringAsFixed(1)} s';
 
-/// §45 polar-alignment panel — collapsible Imaging-tab section driving the
-/// server routine, one measurement per Start (#2082): Start (3-point seed →
-/// live adjust) and Check (a three-point measurement), the zooming bullseye
-/// with decoupled Az/Alt readouts fed by `polar_align.progress` WS events,
-/// the §45.11 no-solve retry banner, and Done/Abort. [Done] enables inside the
-/// profile's target tolerance (§45.12).
+/// §45 polar-alignment panel: one screen with one next action at a time
+/// ([PolarFlowStep]). Home, then Start; the three-point measurement; the
+/// zooming bullseye with decoupled Az/Alt readouts fed by
+/// `polar_align.progress` WS events while the user turns the bolts; Done
+/// (inside the profile's target tolerance, §45.12), after which the rig sends
+/// the mount Home, verifies and shows the verdict. Stop in every running step.
 class PolarAlignPanel extends ConsumerStatefulWidget {
   const PolarAlignPanel({super.key});
 
@@ -109,7 +109,7 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
   Timer? _ticker;
 
   // Night mode (red filter) as of the last build: blue accents nearly vanish
-  // under it, so the in-routine Abort switches to full-brightness text.
+  // under it, so the in-routine Stop switches to full-brightness text.
   bool _night = false;
 
   // A short window as of the last build: the readout figures scale down.
@@ -161,7 +161,7 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
   }
 
   // [action] is a verb phrase completing "Couldn't <action>".
-  Future<void> _run(String action, Future<void> Function(PolarAlignClient api) op) {
+  Future<bool> _run(String action, Future<void> Function(PolarAlignClient api) op) {
     final l10n = context.l10n;
     return ref
         .read(polarAlignActionProvider.notifier)
@@ -266,9 +266,7 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
                 const SizedBox(width: 10),
                 Text('Polar Align', style: Theme.of(context).textTheme.titleLarge),
                 const SizedBox(width: 4),
-                const HelpIcon(helpKey: 'setup.polar_align.stages'),
-                const Spacer(),
-                _statusPill(live),
+                const HelpIcon(helpKey: 'setup.polar_align.flow'),
               ],
             ),
             const SizedBox(height: 12),
@@ -284,162 +282,101 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
     );
   }
 
-  String _headerSummary(PolarAlignLive live) {
-    switch (live.phase) {
-      case PolarAlignStates.homing:
-        return 'Going Home';
-      case PolarAlignStates.checking:
-        return 'Checking ${live.checkSolvesDone}/${live.checkSolvesTotal}';
-      case PolarAlignStates.checked:
-        return 'Checked';
-      case PolarAlignStates.seeding:
-        return 'Measuring axis';
-      // Adjusting: no pill — the alignment card already shows the total.
-      case PolarAlignStates.paused:
-        return 'Paused — no solve';
-      case PolarAlignStates.failed:
-        return 'Failed';
-      default:
-        return '';
-    }
-  }
-
-  /// Capsule in the header: a status dot + the routine's phase.
-  Widget _statusPill(PolarAlignLive live) {
-    final text = _headerSummary(live);
-    if (text.isEmpty) return const SizedBox.shrink();
-    final tint = switch (live.phase) {
-      PolarAlignStates.failed => AraColors.accentError,
-      PolarAlignStates.paused => AraColors.accentBusy,
-      PolarAlignStates.checked => AraColors.accentConnected,
-      _ => AraColors.accentInfo,
-    };
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: BoxDecoration(
-        color: tint.withValues(alpha: 0.14),
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 6,
-            height: 6,
-            decoration: BoxDecoration(color: tint, shape: BoxShape.circle),
-          ),
-          const SizedBox(width: 6),
-          Text(
-            text,
-            key: const Key('polar-align-header-summary'),
-            style: TextStyle(
-                fontSize: _smallFont, fontWeight: FontWeight.w600, color: tint, fontFeatures: _tabular),
-          ),
-        ],
-      ),
-    );
-  }
-
   Widget _body(PolarAlignLive live, bool noServer, Color color) {
     if (noServer) {
       return const Text('Connect to your rig first.', style: TextStyle(color: AraColors.textSecondary));
     }
-    switch (live.phase) {
-      case PolarAlignStates.homing:
-        return _homingBody();
-      case PolarAlignStates.seeding:
-        return _seedingBody(live);
-      case PolarAlignStates.adjusting:
-      case PolarAlignStates.paused:
-        return _adjustBody(live, color);
-      case PolarAlignStates.checking:
-        return _checkingBody(live);
-      case PolarAlignStates.checked:
-        return _checkedBody(live, color);
-      default:
-        return _idleBody(live);
-    }
+    return switch (polarFlowStep(live)) {
+      PolarFlowStep.ready => _readyBody(live),
+      PolarFlowStep.adjusting => _adjustBody(live, color),
+      PolarFlowStep.measuring || PolarFlowStep.goingHome || PolarFlowStep.checking => _workingBody(live),
+      PolarFlowStep.returningHome || PolarFlowStep.result => _verdictBody(live),
+    };
   }
 
-  /// One measurement at [stage] (null = fine), from the mount's Home position.
-  Future<void> _start({String? stage}) =>
-      _run('start polar alignment', (api) => api.start(stage: stage));
+  Future<void> _start() => _run(context.l10n.polarActionStart, (api) => api.start());
 
-  /// Check: a three-point measurement of its own. From the adjust loop the rig
-  /// ends the loop first (like Stop), then measures.
-  Future<void> _check() => _start(stage: PolarAlignStages.check);
+  void _stop() => _run(context.l10n.polarActionStop, (api) => api.stop());
 
-  /// The Check button's caption: how far it turns the mount before it moves.
-  /// Only the rig's own step: null until its settings are in (ADR 0015).
-  String? get _checkCaption => switch (_settings) {
-    final s? => context.l10n.polarCheckCaption(s.checkStepDeg.toStringAsFixed(0)),
-    null => null,
-  };
+  /// Stop, in every running step: secondary, and never waiting on another call.
+  Widget _stopButton() => TextButton(
+        key: const Key('polar-align-stop'),
+        style: _night ? TextButton.styleFrom(foregroundColor: AraColors.textPrimary) : null,
+        onPressed: _stop,
+        child: Text(context.l10n.polarStop),
+      );
 
-  /// The mount is going Home.
-  Widget _homingBody() {
-    final card = _card(
-      child: Column(
-        children: [
-          Align(alignment: Alignment.centerLeft, child: _sectionLabel('Home position')),
-          const SizedBox(height: 28),
-          const SizedBox.square(dimension: 28, child: AdaptiveProgressIndicator(strokeWidth: 2.5)),
-          const SizedBox(height: 20),
-          const Text(
-            'Sending the mount Home',
-            key: Key('polar-align-homing-title'),
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+  /// A step's content in one calm column, centred under the title.
+  Widget _centred(List<Widget> children, {double maxWidth = 520}) => Align(
+        alignment: Alignment.topCenter,
+        child: ConstrainedBox(
+          constraints: BoxConstraints(maxWidth: maxWidth),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: children,
           ),
-          const SizedBox(height: 6),
-          const Text(
-            'Counterweights down, tube along the RA axis. Leave the mount alone until it stops.',
-            textAlign: TextAlign.center,
-            style: TextStyle(fontSize: _textFont, color: AraColors.textSecondary, height: 1.4),
+        ),
+      );
+
+  /// No run: what the last one left to say, then Home or Start. The capture
+  /// settings and the knobs sit under them, out of the way.
+  Widget _readyBody(PolarAlignLive live) {
+    final note = polarReadyNote(context.l10n, live);
+    return _centred([
+      if (note != null) ...[
+        _callout(
+          note.text,
+          note.error ? AraColors.accentError : AraColors.textSecondary,
+          note.error ? Icons.error_outline : Icons.history,
+          key: const Key('polar-align-ready-note'),
+        ),
+        const SizedBox(height: 12),
+      ],
+      if (_status != null) ...[
+        _callout(_status!, AraColors.accentError, Icons.error_outline, key: const Key('polar-align-action-error')),
+        const SizedBox(height: 12),
+      ],
+      SizedBox(height: _short ? 8 : 24),
+      // One button of a hand's width, not a bar across the pane.
+      Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 360),
+          child: PolarReadyControl(
+            primaryStyle: FilledButton.styleFrom(minimumSize: const Size.fromHeight(48)),
           ),
-          if (_status != null) ...[
-            const SizedBox(height: 12),
-            _callout(_status!, AraColors.accentError, Icons.error_outline),
-          ],
-          const SizedBox(height: 20),
-          TextButton(
-            key: const Key('polar-align-abort-homing'),
-            onPressed: _busy ? null : _abort,
-            child: const Text('Abort'),
-          ),
-        ],
+        ),
       ),
-    );
-    return Align(alignment: Alignment.topCenter, child: ConstrainedBox(constraints: const BoxConstraints(maxWidth: 520), child: card));
+      SizedBox(height: _short ? 16 : 32),
+      Center(child: _captureSettings()),
+      const SizedBox(height: 8),
+      // #1736 the routine's knobs, collapsed.
+      const PolarAdvancedRow(),
+    ]);
   }
 
-  /// Check stage: three solves around two RA turns, no adjusting.
-  Widget _checkingBody(PolarAlignLive live) {
+  /// A step that only needs watching (the measurement, the mount going Home,
+  /// the verify solves): the camera, one calm line and Stop.
+  Widget _workingBody(PolarAlignLive live) {
+    // Centred in the height the camera gives the card beside it.
     final card = _card(
-      child: Column(
-        children: [
-          Align(alignment: Alignment.centerLeft, child: _sectionLabel('Three-point check')),
-          const SizedBox(height: 28),
-          const SizedBox.square(dimension: 28, child: AdaptiveProgressIndicator(strokeWidth: 2.5)),
-          const SizedBox(height: 20),
-          Text(
-            'Check solve ${live.checkSolvesDone} of ${live.checkSolvesTotal}',
-            key: const Key('polar-align-check-progress'),
-            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-          ),
-          const SizedBox(height: 6),
-          const Text(
-            'Three solved frames around two RA turns measure the axis exactly. '
-            'Leave the mount alone — this only measures.',
-            textAlign: TextAlign.center,
-            style: TextStyle(fontSize: _textFont, color: AraColors.textSecondary, height: 1.4),
-          ),
-          const SizedBox(height: 20),
-          TextButton(
-            key: const Key('polar-align-abort-checking'),
-            onPressed: _busy ? null : _abort,
-            child: const Text('Abort'),
-          ),
-        ],
+      child: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 24),
+            PolarWorkingLine(
+              polarFlowLine(context.l10n, live) ?? '',
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w500),
+            ),
+            if (_status != null) ...[
+              const SizedBox(height: 12),
+              _callout(_status!, AraColors.accentError, Icons.error_outline),
+            ],
+            const SizedBox(height: 24),
+            _stopButton(),
+          ],
+        ),
       ),
     );
     return FitBand(builder: (context, width, height) {
@@ -450,6 +387,8 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
           children: [_cameraCard(live, imageHeight: 240), const SizedBox(height: 12), card],
         );
       }
+      // Camera card left with ~55% of the width, the line beside it. The
+      // camera takes the height the window leaves, up to a 4:3 frame.
       final cameraWidth = (width - 12) * 11 / 20;
       return Align(
         alignment: Alignment.topCenter,
@@ -461,300 +400,50 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
     });
   }
 
-  /// The check's result: the verdict, the measured error, and how it compares
-  /// with the last run's readout (#2082).
-  Widget _checkedBody(PolarAlignLive live, Color color) {
-    final r = live.checkResult;
-    final total = r?.totalErrorArcmin ?? live.totalErrorArcmin;
-    final sigma = r?.totalSigmaArcmin ?? live.totalSigmaArcmin;
-    // #2072 the band rates the error plus twice its 1σ, so a noisy check never
-    // reads Excellent (Joey, 2026-11-21); without a σ, the daemon's verdict, and
-    // the local bands only for a token this build does not know.
-    final rated = total == null ? null : polarRatedArcmin(total, sigma);
-    final rating = (r == null ? null : polarRatingForVerdict(polarCheckVerdict(r))) ??
-        (rated == null ? null : polarErrorRating(rated));
-    final delta = r?.fineDeltaArcmin;
-    final alt = r?.altErrorArcmin ?? live.altErrorArcmin;
-    final az = r?.azErrorArcmin ?? live.azErrorArcmin;
+  /// The verdict: under a quiet Returning Home… while the mount is on its
+  /// way back, then with Done and Adjust again.
+  Widget _verdictBody(PolarAlignLive live) {
+    final l10n = context.l10n;
+    final returning = polarFlowStep(live) == PolarFlowStep.returningHome;
     return SingleChildScrollView(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          _card(
-            key: const Key('polar-align-check-result'),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _sectionLabel('Three-point check'),
-                const SizedBox(height: 12),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    Flexible(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          _sectionLabel('Measured error'),
-                          const SizedBox(height: 2),
-                          FittedBox(
-                            fit: BoxFit.scaleDown,
-                            child: Text(
-                              // #2072 the verdict's total with its 1σ: "+0.5′ ± 0.6′".
-                              polarErrorWithSigmaText(context.l10n, formatArcmin(total), sigma),
-                              key: const Key('polar-align-check-total'),
-                              style: TextStyle(
-                                fontSize: _short ? _heroFontShort : _heroFont,
-                                fontWeight: FontWeight.w300,
-                                height: 1.05,
-                                color: color,
-                                fontFeatures: _tabular,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    if (rating != null && rated != null) ...[
-                      const SizedBox(width: 16),
-                      Flexible(
-                        child: FittedBox(
-                          fit: BoxFit.scaleDown,
-                          alignment: Alignment.centerRight,
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
-                            decoration: BoxDecoration(
-                              color: color.withValues(alpha: 0.16),
-                              borderRadius: BorderRadius.circular(16),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(polarErrorRatingIcon(rated), size: 34, color: color),
-                                const SizedBox(width: 10),
-                                Text(rating.$1,
-                                    key: const Key('polar-align-check-verdict'),
-                                    style: TextStyle(fontSize: 30, fontWeight: FontWeight.w700, color: color)),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-                if (rating != null) ...[
-                  const SizedBox(height: 14),
-                  Text(rating.$2, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w500)),
-                ],
-                const SizedBox(height: 18),
-                const Divider(height: 1, color: AraColors.frameDivider),
-                const SizedBox(height: 16),
-                IntrinsicHeight(
-                  child: Row(
-                    children: [
-                      Expanded(child: _axisStat('Altitude', alt, polarAltHint(context.l10n, alt), color)),
-                      const VerticalDivider(width: 1, color: AraColors.frameDivider),
-                      Expanded(child: _axisStat('Azimuth', az, polarAzHint(context.l10n, az, southern: _southern), color, note: _azimuthNote(az))),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 16),
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(
-                      child: _fact(
-                        'Last run said',
-                        r?.fineErrorArcmin == null ? '—' : formatArcmin(r!.fineErrorArcmin),
-                      ),
-                    ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: _fact('Disagreement', delta == null ? '—' : formatArcmin(delta)),
-                    ),
-                  ],
-                ),
-                // #2082 a check point stayed scattered after its retake.
-                if (r != null && r.noisy) ...[
-                  const SizedBox(height: 12),
-                  _callout(context.l10n.polarNoisyMeasurement, AraColors.accentBusy, Icons.grain,
-                      key: const Key('polar-align-check-noisy')),
-                ],
-                if (delta != null && delta > 2.0) ...[
-                  const SizedBox(height: 12),
-                  _callout(
-                    "The check and the last run's readout disagree by ${formatArcmin(delta)}. Trust the check; "
-                    'adjust again if it says you are not where you want to be.',
-                    AraColors.accentBusy,
-                    Icons.warning_amber_outlined,
-                    key: const Key('polar-align-check-disagree'),
-                  ),
-                ],
-                if (r != null) ...[
-                  const SizedBox(height: 14),
-                  Text(
-                    'Pointings ${r.coneHalfAngleDeg.toStringAsFixed(1)}° off the axis · solved turns within '
-                    '${r.turnMismatchDeg.toStringAsFixed(2)}° of the turns the mount was told',
-                    style: const TextStyle(fontSize: 13, color: AraColors.textSecondary),
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    context.l10n.polarCheckMeasures,
-                    key: const Key('polar-align-check-measures'),
-                    style: const TextStyle(fontSize: 13, color: AraColors.textSecondary),
-                  ),
-                ],
-              ],
-            ),
-          ),
-          if (_status != null) ...[
-            const SizedBox(height: 12),
-            _callout(_status!, AraColors.accentError, Icons.error_outline),
-          ],
-          const SizedBox(height: 16),
-          Wrap(
-            spacing: 8,
-            runSpacing: 12,
-            alignment: WrapAlignment.end,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            children: [
-              TextButton.icon(
-                key: const Key('polar-align-adjust-again'),
-                onPressed: _busy ? null : () => _start(stage: PolarAlignStages.fine),
-                icon: const Icon(Icons.tune),
-                label: const Text('Adjust again'),
-              ),
-              FilledButton.icon(
-                key: const Key('polar-align-check-done'),
-                onPressed: _busy
-                    ? null
-                    : () => _run('complete polar alignment', (api) => api.complete()),
-                icon: const Icon(Icons.check),
-                label: const Text('Done'),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _idleBody(PolarAlignLive live) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          'Send the mount Home first (tube at the pole, counterweights down): each Start measures from there. '
-          'Start: three solves around two RA turns measure the axis, then the readout follows the knobs live until Done. '
-          'Check: three solves around two RA turns measure the result on their own. '
-          'Each is one measurement: nothing moves on to the next by itself.',
-          style: TextStyle(fontSize: _textFont, color: AraColors.textSecondary, height: 1.4),
+      child: _centred(maxWidth: 560, [
+        _card(
+          padding: EdgeInsets.symmetric(horizontal: 24, vertical: _short ? 20 : 36),
+          child: PolarVerdictView(result: live.checkResult!),
         ),
-        if (live.phase == PolarAlignStates.failed && live.errorReason != null) ...[
-          const SizedBox(height: 12),
-          _callout(
-            'Failed (${live.errorReason}): ${polarAlignErrorText(context.l10n, live) ?? 'see the server log'}',
-            AraColors.accentError,
-            Icons.error_outline,
-            key: const Key('polar-align-error-banner'),
-          ),
-        ],
-        if (live.phase == PolarAlignStates.stopped && live.totalErrorArcmin != null) ...[
-          const SizedBox(height: 12),
-          _callout(
-            'Last run ended at ${formatArcmin(live.totalErrorArcmin)} total error.',
-            AraColors.textSecondary,
-            Icons.history,
-          ),
-        ],
         if (_status != null) ...[
           const SizedBox(height: 12),
           _callout(_status!, AraColors.accentError, Icons.error_outline),
         ],
-        const SizedBox(height: 16),
-        Wrap(
-          spacing: 16,
-          runSpacing: 12,
-          crossAxisAlignment: WrapCrossAlignment.center,
-          children: [
-            _captureSettings(),
-            FilledButton.icon(
-              key: const Key('polar-align-start'),
-              onPressed: _busy ? null : () => _start(),
-              icon: const Icon(Icons.play_arrow),
-              label: const Text('Start Polar Alignment'),
-            ),
-            OutlinedButton.icon(
-              key: const Key('polar-align-start-check'),
-              onPressed: _busy ? null : _check,
-              icon: const Icon(Icons.fact_check_outlined),
-              label: Text(context.l10n.polarCheck),
-            ),
-          ],
-        ),
-        if (_checkCaption case final caption?) ...[
+        SizedBox(height: _short ? 12 : 24),
+        if (returning) ...[
+          PolarWorkingLine(
+            l10n.polarReturningHome,
+            style: const TextStyle(fontSize: _textFont, color: AraColors.textSecondary),
+          ),
           const SizedBox(height: 8),
-          Text(
-            caption,
-            key: const Key('polar-align-check-caption'),
-            style: const TextStyle(fontSize: _smallFont, color: AraColors.textSecondary),
+          Center(child: _stopButton()),
+        ] else
+          Wrap(
+            spacing: 12,
+            runSpacing: 12,
+            alignment: WrapAlignment.center,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              TextButton(
+                key: const Key('polar-align-adjust-again'),
+                onPressed: _busy ? null : _start,
+                child: Text(l10n.polarAdjustAgain),
+              ),
+              FilledButton(
+                key: const Key('polar-align-result-done'),
+                onPressed: () => ref.read(polarAlignLiveProvider.notifier).dismissResult(),
+                child: Text(l10n.polarDone),
+              ),
+            ],
           ),
-        ],
-        // #1736 the routine's four knobs, collapsed.
-        const PolarAdvancedRow(),
-      ],
+      ]),
     );
-  }
-
-
-  Widget _seedingBody(PolarAlignLive live) {
-    final measuring = _card(
-      child: Column(
-        children: [
-          Align(alignment: Alignment.centerLeft, child: _sectionLabel('RA axis')),
-          const SizedBox(height: 28),
-          const SizedBox.square(dimension: 28, child: AdaptiveProgressIndicator(strokeWidth: 2.5)),
-          const SizedBox(height: 20),
-          const Text(
-            'Measuring the RA axis',
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-          ),
-          const SizedBox(height: 6),
-          const Text(
-            'Three solved frames around two small RA turns. Leave the mount alone '
-            'until the bullseye appears.',
-            textAlign: TextAlign.center,
-            style: TextStyle(fontSize: _textFont, color: AraColors.textSecondary, height: 1.4),
-          ),
-          const SizedBox(height: 20),
-          TextButton(
-            key: const Key('polar-align-abort-seeding'),
-            onPressed: _busy ? null : _abort,
-            child: const Text('Abort'),
-          ),
-        ],
-      ),
-    );
-    return FitBand(builder: (context, width, height) {
-      if (width < (_short ? _shortWideBreakpoint : _wideBreakpoint)) {
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          mainAxisSize: MainAxisSize.min,
-          children: [_cameraCard(live, imageHeight: 240), const SizedBox(height: 12), measuring],
-        );
-      }
-      // Camera card left with ~55% of the width, the measuring card beside it.
-      // The camera takes the height the window leaves, up to a 4:3 frame.
-      final cameraWidth = (width - 12) * 11 / 20;
-      return Align(
-        alignment: Alignment.topCenter,
-        child: ConstrainedBox(
-          constraints: BoxConstraints(minHeight: math.min(height, cameraWidth * 0.75 + _cameraChrome)),
-          child: FitRow(flex: const [11, 9], spacing: 12, children: [_cameraCard(live), measuring]),
-        ),
-      );
-    });
   }
 
   Widget _adjustBody(PolarAlignLive live, Color color) {
@@ -856,51 +545,40 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
               spacing: 8,
               crossAxisAlignment: WrapCrossAlignment.center,
               children: [
-                TextButton(
-                  key: const Key('polar-align-abort'),
-                  style: _night ? TextButton.styleFrom(foregroundColor: AraColors.textPrimary) : null,
-                  onPressed: _busy ? null : _abort,
-                  child: const Text('Abort'),
-                ),
+                _stopButton(),
                 if (single)
                   FilledButton.tonalIcon(
                     key: const Key('polar-align-take-frame'),
                     onPressed: _busy || live.frameInProgress
                         ? null
-                        : () => _run('take a frame', (api) => api.requestCapture()),
+                        : () => _run(context.l10n.polarActionCapture, (api) => api.requestCapture()),
                     icon: const Icon(Icons.camera),
-                    label: const Text('Take Frame'),
+                    label: Text(context.l10n.polarTakeFrame),
                   ),
-                Tooltip(
-                  message: inTolerance || tolerance == null
-                      ? ''
-                      : 'Available once the total error is under ${tolerance.toStringAsFixed(1)}′',
-                  child: FilledButton.tonalIcon(
-                    key: const Key('polar-align-done'),
-                    onPressed: _busy || !inTolerance
-                        ? null
-                        : () => _run('complete polar alignment', (api) => api.complete()),
-                    icon: const Icon(Icons.check),
-                    label: const Text('Done'),
-                  ),
-                ),
-                Tooltip(
-                  message: inTolerance
-                      ? _checkCaption ?? ''
-                      : tolerance == null
-                      ? ''
-                      : 'Available once the total error is under ${tolerance.toStringAsFixed(1)}′',
-                  child: FilledButton.icon(
-                    key: const Key('polar-align-check'),
-                    onPressed: _busy || !inTolerance ? null : _check,
-                    icon: const Icon(Icons.fact_check_outlined),
-                    label: Text(context.l10n.polarCheck),
-                  ),
+                FilledButton(
+                  key: const Key('polar-align-done'),
+                  onPressed: _busy || !inTolerance
+                      ? null
+                      : () => _run(context.l10n.polarActionComplete, (api) => api.complete()),
+                  child: Text(context.l10n.polarDone),
                 ),
               ],
             ),
           ],
         ),
+        // Done waits for the profile's tolerance: said in the open, not in a tooltip.
+        if (!inTolerance && tolerance != null) ...[
+          const SizedBox(height: 8),
+          Align(
+            alignment: Alignment.centerRight,
+            child: Text(
+              context.l10n.polarDoneWaits(polarToleranceText(tolerance)),
+              key: const Key('polar-align-done-waits'),
+              textAlign: TextAlign.right,
+              style: const TextStyle(fontSize: _smallFont, color: AraColors.textSecondary),
+            ),
+          ),
+        ],
         if (unconfirmed != null) ...[
           const SizedBox(height: 8),
           Align(
@@ -910,17 +588,6 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
               key: const Key('polar-align-unconfirmed'),
               textAlign: TextAlign.right,
               style: const TextStyle(fontSize: _smallFont, color: AraColors.accentBusy, height: 1.3),
-            ),
-          ),
-        ],
-        if (_checkCaption != null) ...[
-          const SizedBox(height: 8),
-          Align(
-            alignment: Alignment.centerRight,
-            child: Text(
-              _checkCaption!,
-              key: const Key('polar-align-check-caption'),
-              style: const TextStyle(fontSize: _smallFont, color: AraColors.textSecondary),
             ),
           ),
         ],
@@ -1555,7 +1222,6 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
     );
   }
 
-  void _abort() => _run('abort polar alignment', (api) => api.stop());
 }
 
 /// Header icon: a polar-scope reticle (three rings + crosshair) with a green

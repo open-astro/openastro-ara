@@ -29,7 +29,7 @@ class _Api implements PolarAlignClient {
   @override
   Future<PolarAlignStatus?> getStatus() async => null;
   @override
-  Future<void> start({String? stage}) async {}
+  Future<void> start() async {}
   @override
   Future<void> stop() async {}
   @override
@@ -86,10 +86,10 @@ class _Live extends PolarAlignLiveNotifier {
 
 const _base = PolarAligner(present: true, carrier: 'switch', name: 'Polar base', drivable: true);
 
-/// The fine stage inside the 2′ tolerance: Verify and Done are on.
+/// Adjusting inside the 2′ tolerance: Done is on.
 PolarAlignLive _fine(PolarAlignerRun? run) => PolarAlignLive(
       phase: PolarAlignStates.adjusting,
-      stage: PolarAlignStages.fine,
+      stage: PolarAlignStages.align,
       altErrorArcmin: -0.7,
       azErrorArcmin: -1.3,
       totalErrorArcmin: 1.5,
@@ -153,16 +153,16 @@ void main() {
     expect(find.textContaining('Stopped'), findsOneWidget);
   });
 
-  testWidgets('the Polar Aligner block has its own slot between Setup and Error', (tester) async {
+  testWidgets('the Polar Aligner block has its own slot between the settings and the readout', (tester) async {
     await _pump(tester, _fine(const PolarAlignerRun(state: 'measuring')));
     final setup = tester.getRect(_key('simple-polar-setup'));
     final block = tester.getRect(_key('polar-aligner-block'));
-    final error = tester.getRect(find.text('Error'));
+    final readout = tester.getRect(_key('simple-polar-total'));
     expect(setup.bottom, lessThanOrEqualTo(block.top));
-    expect(block.bottom, lessThanOrEqualTo(error.top));
+    expect(block.bottom, lessThanOrEqualTo(readout.top));
   });
 
-  testWidgets('no Polar Aligner on the rig: no block, the arrows and Verify / Done as today', (tester) async {
+  testWidgets('no Polar Aligner on the rig: no block, the arrows and Done as today', (tester) async {
     await _pump(tester, _fine(null), device: const PolarAligner());
     expect(_key('polar-aligner-block'), findsNothing);
     expect(_arrowOpacity(tester, 'alt'), 1);
@@ -178,15 +178,13 @@ void main() {
     expect(_arrowOpacity(tester, 'az'), 1);
   });
 
-  testWidgets('Verify and Done step aside while the motors work and come back when they converge or stop',
+  testWidgets('Done steps aside while the motors work and comes back when they converge or stop',
       (tester) async {
     await _pump(tester, _fine(const PolarAlignerRun(state: 'settling', seconds: 2)));
-    expect(_key('simple-polar-check'), findsNothing);
     expect(_key('simple-polar-done'), findsNothing);
-    expect(_key('simple-polar-verify-caption'), findsNothing);
+    expect(_key('simple-polar-done-waits'), findsNothing);
     _liveNotifier.set(_fine(const PolarAlignerRun(state: 'converged', moves: 4)));
     await tester.pumpAndSettle();
-    expect(_key('simple-polar-check'), findsOneWidget);
     expect(_key('simple-polar-done'), findsOneWidget);
     _liveNotifier.set(_fine(const PolarAlignerRun(state: 'stopped', cause: 'diverging')));
     await tester.pumpAndSettle();

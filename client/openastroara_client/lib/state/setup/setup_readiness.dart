@@ -69,7 +69,7 @@ SetupStepState polarAlignStepState(
   // it), so a green is the running stage's own.
   if (live.zone == 'green') return SetupStepState.done;
   if (live.phase == PolarAlignStates.failed) return SetupStepState.problem;
-  // A finished check outside the green zone is a measurement that says
+  // A verified run outside the green zone is a measurement that says
   // "not aligned": the step needs work, it is not untouched.
   if (live.phase == PolarAlignStates.checked) return SetupStepState.problem;
   if (live.isActive) return SetupStepState.inProgress;

@@ -1287,7 +1287,7 @@
   "@polarSingle": {
     "description": "Simple Mode Polar align panel: single mode segment (waits for a tap before each frame); also the rail chip caption"
   },
-  "polarStart": "Start polar alignment",
+  "polarStart": "Start Polar Alignment",
   "@polarStart": {
     "description": "Polar align shutter button's spoken label when idle"
   },
@@ -1315,10 +1315,6 @@
   "@polarActionComplete": {
     "description": "Simple Mode Polar align panel: error message tail after \"Couldn't \" when finishing the routine fails; lower-case, no period"
   },
-  "polarPhaseSeeding": "Finding the pole…",
-  "@polarPhaseSeeding": {
-    "description": "Simple Mode Polar align panel: routine phase: first frames, locating the pole"
-  },
   "polarPhaseAdjusting": "Adjusting",
   "@polarPhaseAdjusting": {
     "description": "Simple Mode Polar align panel: routine phase: the user turns the mount bolts"
@@ -1331,26 +1327,10 @@
   "@polarPhaseFailed": {
     "description": "Simple Mode Polar align panel: routine phase: failed"
   },
-  "polarPhaseReady": "Ready",
-  "@polarPhaseReady": {
-    "description": "Simple Mode Polar align panel: routine phase: idle"
-  },
   "polarPhaseHoming": "Going Home…",
-  "@polarPhaseHoming": {
-    "description": "Simple Mode Polar align panel: routine phase: the mount is finding its home position"
-  },
-  "polarPhaseChecking": "Checking {done} of {total}",
-  "@polarPhaseChecking": {
-    "description": "Simple Mode Polar align panel: routine phase: the three-point check, solves done so far of the daemon's total",
-    "placeholders": {
-      "done": {
-        "type": "int"
-      },
-      "total": {
-        "type": "int"
-      }
-    }
-  },
+  "@polarPhaseHoming": {"description": "Polar align: the calm line while the mount goes Home (the Home button, and after Done)"},
+  "polarPhaseChecking": "Checking the alignment — {point} of {total}",
+  "@polarPhaseChecking": {"description": "Polar align: the calm line while the three solves after Done run: the solve being taken of the daemon's total", "placeholders": {"point": {"type": "int"}, "total": {"type": "int"}}},
   "polarVerdictExcellent": "Excellent",
   "@polarVerdictExcellent": {
     "description": "Simple Mode Polar align panel: the daemon's check verdict 'excellent' (1 arcminute or better)"
@@ -1370,39 +1350,6 @@
   "polarVerdictFarOff": "Far off",
   "@polarVerdictFarOff": {
     "description": "Simple Mode Polar align panel: the daemon's check verdict 'far_off' (worse than 30 arcminutes)"
-  },
-  "polarPhaseChecked": "Checked",
-  "@polarPhaseChecked": {
-    "description": "Simple Mode Polar align panel: routine phase: the three-point check has its result"
-  },
-  "polarCheckedLine": "Three-point check: {verdict}",
-  "@polarCheckedLine": {
-    "description": "Simple Mode Polar align panel: the check's verdict",
-    "placeholders": {
-      "verdict": {
-        "type": "String"
-      }
-    }
-  },
-  "polarCheckedVsFine": "Three-point check: {verdict}, {delta}′ from the last run's readout",
-  "@polarCheckedVsFine": {
-    "description": "Simple Mode Polar align panel: the check's verdict and its disagreement with the readout of the last run (#2082)",
-    "placeholders": {
-      "verdict": {
-        "type": "String"
-      },
-      "delta": {
-        "type": "String"
-      }
-    }
-  },
-  "polarCheck": "Check",
-  "@polarCheck": {
-    "description": "Polar align: the button that starts a three-point check, a confirmed new measurement (#2082): on the adjust screen it ends the adjust loop first"
-  },
-  "polarActionCheck": "start the check",
-  "@polarActionCheck": {
-    "description": "Completes \"Couldn't …\" for the Check it button"
   },
   "polarAltitude": "Altitude",
   "@polarAltitude": {
@@ -7757,19 +7704,6 @@
       }
     }
   },
-  "polarSetup": "Setup",
-  "@polarSetup": {
-    "description": "Simple Mode Polar align panel: heading over the routine's settings"
-  },
-  "polarErrorHeading": "Error",
-  "@polarErrorHeading": {
-    "description": "Simple Mode Polar align panel: heading over the bullseye and the turns"
-  },
-  "polarCheckCaption": "Check turns the mount 2 × {step}° and takes three frames to measure the alignment.",
-  "@polarCheckCaption": {
-    "description": "Polar align (#2082): caption with the Check button, how far it turns the mount (the profile's check step, whole degrees) before it moves",
-    "placeholders": {"step": {"type": "String"}}
-  },
   "polarNoisyMeasurement": "Noisy measurement: the solves at one point scattered more than 3″, even after a retake. Check focus and seeing, or take more frames per point.",
   "@polarNoisyMeasurement": {
     "description": "Polar align (#2082): caution under the readout or the check's verdict when a point's frames stayed scattered after their retake"
@@ -7782,7 +7716,7 @@
       "sigma": {"type": "String"}
     }
   },
-  "polarUnconfirmedBySigma": "Inside your {tolerance}′ tolerance, but at ± {sigma} this measurement can't confirm the alignment. Larger turns help most: 20° in place of 10° cuts the uncertainty about four times (Polar align turn and Check step in Settings).",
+  "polarUnconfirmedBySigma": "Inside your {tolerance}′ tolerance, but at ± {sigma} this measurement can't confirm the alignment. Larger turns help most: 20° in place of 10° cuts the uncertainty about four times (Polar align turn in Settings).",
   "@polarUnconfirmedBySigma": {
     "description": "Polar align (#2072): the error is inside the tolerance but the error plus twice its 1σ is not, so the alignment is not confirmed (Done stays available)",
     "placeholders": {
@@ -7790,7 +7724,7 @@
       "sigma": {"type": "String"}
     }
   },
-  "polarAlignerConvergedUnconfirmed": "The motors stopped inside your {tolerance}′ tolerance, but at ± {sigma} this measurement can't confirm the alignment. More moves cannot help; larger turns do (20° in place of 10° cuts the uncertainty about four times), so run Check with a larger Check step.",
+  "polarAlignerConvergedUnconfirmed": "The motors stopped inside your {tolerance}′ tolerance, but at ± {sigma} this measurement can't confirm the alignment. More moves cannot help; larger turns do (20° in place of 10° cuts the uncertainty about four times), so start again with a larger turn.",
   "@polarAlignerConvergedUnconfirmed": {
     "description": "Polar Aligner block (#2072): the motors converged inside the tolerance, but the error plus twice its 1σ is outside it, so the alignment is not confirmed",
     "placeholders": {
@@ -7840,10 +7774,6 @@
   "@polarKnobTurn": {
     "description": "Settings \u2192 Imaging \u2192 Polar align: RA turn field label with its accepted range"
   },
-  "polarKnobVerifyStep": "Check step (°, 5 to 30)",
-  "@polarKnobVerifyStep": {
-    "description": "Settings \u2192 Imaging \u2192 Polar align: Verify step field label with its accepted range"
-  },
   "polarKnobMainExposure": "Main camera exposure (s, 0.1 to 60)",
   "@polarKnobMainExposure": {
     "description": "Settings \u2192 Imaging \u2192 Polar align: main camera exposure field label with its accepted range"
@@ -7856,15 +7786,11 @@
   "@polarKnobTurnHint": {
     "description": "Imaging > Polar align settings panel hint"
   },
-  "polarKnobVerifyStepHint": "Kept between 5° and 30°",
-  "@polarKnobVerifyStepHint": {
-    "description": "Imaging > Polar align settings panel hint"
-  },
   "polarAligner": "Polar Aligner",
   "@polarAligner": {
     "description": "The Polar Aligner (glossary term): a motorised device that turns the mount's polar axis. Block heading in Polar align, row in Settings > Devices, status line"
   },
-  "polarAlignerIdle": "Tap the shutter to start. Ara measures, makes a small test move on each axis, then turns the motors until the error is inside your {tolerance}′ tolerance.",
+  "polarAlignerIdle": "After Start, Ara measures, makes a small test move on each axis, then turns the motors until the error is inside your {tolerance}′ tolerance.",
   "@polarAlignerIdle": {
     "description": "Polar Aligner block before the routine starts",
     "placeholders": {
@@ -7924,7 +7850,7 @@
   "@polarAlignerHoming": {
     "description": "Polar Aligner block: the device is going home"
   },
-  "polarAlignerConverged": "{moves, plural, =1{Inside your {tolerance}′ tolerance after 1 move.} other{Inside your {tolerance}′ tolerance after {moves} moves.}} Finish with Check or Done. If the error drifts out, the motors correct again.",
+  "polarAlignerConverged": "{moves, plural, =1{Inside your {tolerance}′ tolerance after 1 move.} other{Inside your {tolerance}′ tolerance after {moves} moves.}} Finish with Done. If the error drifts out, the motors correct again.",
   "@polarAlignerConverged": {
     "description": "Polar Aligner block: the motors rest inside the tolerance",
     "placeholders": {
@@ -7936,7 +7862,7 @@
       }
     }
   },
-  "polarAlignerConvergedPlain": "{moves, plural, =1{Inside your tolerance after 1 move.} other{Inside your tolerance after {moves} moves.}} Check and Done wait for your polar-align settings to load. If the error drifts out, the motors correct again.",
+  "polarAlignerConvergedPlain": "{moves, plural, =1{Inside your tolerance after 1 move.} other{Inside your tolerance after {moves} moves.}} Done waits for your polar-align settings to load. If the error drifts out, the motors correct again.",
   "@polarAlignerConvergedPlain": {
     "description": "Polar Aligner block: the motors rest inside the tolerance, while the polar-align settings (and so the tolerance in arcminutes) are not loaded from the rig",
     "placeholders": {
@@ -8191,31 +8117,12 @@
   "@polarKnobAlignerAutoOff": {
     "description": "Imaging > Polar align settings panel hint"
   },
-  "polarKnobStopTracking": "Stop tracking when polar align ends",
-  "@polarKnobStopTracking": {
-    "description": "Imaging > Polar align settings panel: switch for the profile's stop_tracking_when_done (NINA's StopTrackingWhenDone)"
-  },
-  "polarKnobStopTrackingOn": "Every end of a run turns tracking off",
-  "@polarKnobStopTrackingOn": {
-    "description": "Imaging > Polar align settings panel hint while stop_tracking_when_done is on"
-  },
-  "polarKnobStopTrackingOff": "Off: a run that finishes gives back the tracking it found. A Stop always leaves tracking off",
-  "@polarKnobStopTrackingOff": {
-    "description": "Imaging > Polar align settings panel hint while stop_tracking_when_done is off"
-  },
   "polarAdvancedTitle": "Advanced",
   "@polarAdvancedTitle": {
     "description": "Advanced Mode Polar Align Start card: the row that opens the routine's four knobs"
   },
-  "polarAdvancedSummary": "{turn}° turn · {step}° step · {exposure} s",
-  "@polarAdvancedSummary": {
-    "description": "Advanced Mode Polar Align Start card: the collapsed Advanced row's one-line summary of the seed turn, the Check step and the main camera exposure",
-    "placeholders": {
-      "turn": {"type": "String"},
-      "step": {"type": "String"},
-      "exposure": {"type": "String"}
-    }
-  },
+  "polarAdvancedSummary": "{turn}° turn · {exposure} s",
+  "@polarAdvancedSummary": {"description": "Polar align Start card, collapsed Advanced row: the turn and the main camera exposure", "placeholders": {"turn": {"type": "String"}, "exposure": {"type": "String"}}},
   "polarAdvancedRange": "{min} to {max}",
   "@polarAdvancedRange": {
     "description": "Advanced Mode Polar Align Start card: the range a knob accepts, as it follows 'Use '",
@@ -8929,11 +8836,7 @@
   "@polarReadoutMeasures": {
     "description": "Polar align full UI: what the live readout measures, and the azimuth convention (#2072)"
   },
-  "polarCheckMeasures": "Verify's figure: a fresh three-point measurement of the RA axis against the refracted pole. Azimuth is the true arc on the sky (cos alt applied).",
-  "@polarCheckMeasures": {
-    "description": "Polar align full UI checked card: what the check's figure measures, and the azimuth convention (#2072)"
-  },
-  "polarReadoutCautionAltitudeWeak": "The camera points nearly due east or west of the pole, where this readout reads the altitude bolt poorly. Trust Verify, or start again with the scope nearer the pole.",
+  "polarReadoutCautionAltitudeWeak": "The camera points nearly due east or west of the pole, where this readout reads the altitude bolt poorly. Trust the result after Done, or start again with the scope nearer the pole.",
   "@polarReadoutCautionAltitudeWeak": {
     "description": "Polar align (Simple Mode panel and full UI): the live readout is weak in altitude for this camera position (#2072)"
   },
@@ -8993,5 +8896,53 @@
   "sequencerRunSaveInvalid": "the sequence is invalid.",
   "@sequencerRunSaveInvalid": {"description": "Sequencer Run (#2168): the reason when the daemon's refusal had no sentence"},
   "sequencerRunSaveFailed": "Your changes couldn't be saved, so the run didn't start. Check the connection and try again.",
-  "@sequencerRunSaveFailed": {"description": "Sequencer Run (#2168): saving unsaved edits before Run failed to reach the rig"}
+  "@sequencerRunSaveFailed": {"description": "Sequencer Run (#2168): saving unsaved edits before Run failed to reach the rig"},
+  "polarHome": "Home",
+  "@polarHome": {"description": "Polar align: the one button while the mount is not at Home; sends the mount Home"},
+  "polarHomeHint": "Polar alignment starts with the mount at Home.",
+  "@polarHomeHint": {"description": "Polar align: the quiet line under the Home button"},
+  "polarStartHint": "The mount turns {step}° twice from Home and measures its axis.",
+  "@polarStartHint": {"description": "Polar align: the quiet line under Start, with the profile's turn in whole degrees", "placeholders": {"step": {"type": "String"}}},
+  "polarMountMoving": "The mount is moving. Wait for it to stop.",
+  "@polarMountMoving": {"description": "Polar align: why Start is off while the mount moves for something else"},
+  "polarUnpark": "Unpark",
+  "@polarUnpark": {"description": "Polar align: the one button while the mount is parked"},
+  "polarActionHome": "send the mount Home",
+  "@polarActionHome": {"description": "Completes \"Couldn't …\": the Polar align Home button failed"},
+  "polarActionStopMount": "stop the mount",
+  "@polarActionStopMount": {"description": "Completes \"Couldn't …\": Stop while the mount goes Home failed"},
+  "polarActionUnpark": "unpark the mount",
+  "@polarActionUnpark": {"description": "Completes \"Couldn't …\": the Polar align Unpark button failed"},
+  "polarActionReadMount": "read the mount",
+  "@polarActionReadMount": {"description": "Completes \"Couldn't …\": the mount's state could not be read for the Polar align screen"},
+  "polarMeasuring": "Measuring the mount's axis…",
+  "@polarMeasuring": {"description": "Polar align: the calm line during the three-point measurement when the rig has not said which point"},
+  "polarMeasuringPoint": "Measuring — point {point} of {total}",
+  "@polarMeasuringPoint": {"description": "Polar align: the calm line during the three-point measurement", "placeholders": {"point": {"type": "int"}, "total": {"type": "int"}}},
+  "polarReturningHome": "Returning Home…",
+  "@polarReturningHome": {"description": "Polar align: the quiet line under the verdict while the mount goes back Home"},
+  "polarStoppedLine": "Polar alignment stopped.",
+  "@polarStoppedLine": {"description": "Polar align: the one sentence on the Ready screen after a Stop"},
+  "polarLastResult": "Last result: {verdict}, {error} from the pole.",
+  "@polarLastResult": {"description": "Polar align: the quiet line on the Ready screen after the user left a result with Done", "placeholders": {"verdict": {"type": "String"}, "error": {"type": "String"}}},
+  "polarVerdictTotal": "{error} from the pole",
+  "@polarVerdictTotal": {"description": "Polar align result: the measured total error, e.g. '0.5′ ± 0.6′ from the pole'", "placeholders": {"error": {"type": "String"}}},
+  "polarVerdictAxes": "Altitude {altitude} · Azimuth {azimuth}",
+  "@polarVerdictAxes": {"description": "Polar align result: the two axes' signed errors in arcminutes", "placeholders": {"altitude": {"type": "String"}, "azimuth": {"type": "String"}}},
+  "polarVerdictExcellentMeaning": "Polar alignment won't limit your exposures.",
+  "@polarVerdictExcellentMeaning": {"description": "Polar align result: what Excellent means"},
+  "polarVerdictVeryGoodMeaning": "Plenty for guided imaging.",
+  "@polarVerdictVeryGoodMeaning": {"description": "Polar align result: what Very good means"},
+  "polarVerdictGoodMeaning": "Fine with guiding. Keep unguided exposures short.",
+  "@polarVerdictGoodMeaning": {"description": "Polar align result: what Good means"},
+  "polarVerdictRoughMeaning": "Stars will drift in longer exposures. Adjust again to get closer.",
+  "@polarVerdictRoughMeaning": {"description": "Polar align result: what Rough means"},
+  "polarVerdictFarOffMeaning": "The mount is far from the pole. Adjust again.",
+  "@polarVerdictFarOffMeaning": {"description": "Polar align result: what Far off means"},
+  "polarAdjustAgain": "Adjust again",
+  "@polarAdjustAgain": {"description": "Polar align result: the secondary button; starts a new run from Home"},
+  "polarDoneWaits": "Done turns on once the total error is under {tolerance}′.",
+  "@polarDoneWaits": {"description": "Polar align adjust screen: why Done is off, with the profile's tolerance", "placeholders": {"tolerance": {"type": "String"}}},
+  "polarAlignErrorHomeFailed": "The mount did not go Home. Check the mount, send it Home, then start again.",
+  "@polarAlignErrorHomeFailed": {"description": "polar_align.error reason home_failed: the mount refused or did not finish going Home after Done"}
 }

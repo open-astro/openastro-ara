@@ -301,8 +301,8 @@ SimplePreflightStep? simplePreflightNext(
 
 /// Simple Mode's Preflight: the night's steps in order, each handing over to
 /// the next. Null while it isn't running. The plan queues tonight's targets;
-/// a finished autofocus moves on to polar align, whose routine waits for the
-/// shutter; the last step's Done starts imaging, which ends Preflight.
+/// a finished autofocus moves on to polar align, whose run waits for Home and
+/// Start; the last step's Done starts imaging, which ends Preflight.
 class SimplePreflightNotifier extends Notifier<SimplePreflightStep?> {
   @override
   SimplePreflightStep? build() {
@@ -316,7 +316,7 @@ class SimplePreflightNotifier extends Notifier<SimplePreflightStep?> {
     });
     ref.listen(simpleRunProvider, (prev, next) {
       // Imaging started (the last Done, or by hand): Preflight is done. The
-      // last Done already ended its polar routine; this stops nothing again.
+      // polar result's Done found its run over; this stops nothing.
       // Not a run's updates while it images (ALP-4982).
       if (state != null && next.started && !(prev?.started ?? false)) {
         state = null;
@@ -346,18 +346,14 @@ class SimplePreflightNotifier extends Notifier<SimplePreflightStep?> {
     guided: _guided(ref),
   );
 
-  /// The polar step's Done completed its routine: leaving stops nothing.
-  bool _polarFinished = false;
-
   void _go(SimplePreflightStep step) {
     if (state == SimplePreflightStep.polarAlign && step != SimplePreflightStep.polarAlign) {
       _endPolar();
     }
-    if (step == SimplePreflightStep.polarAlign) _polarFinished = false;
     state = step;
     ref.read(simpleShowingProvider.notifier)._show(step.screen);
-    // Entering polar align does not start the routine: it turns the mount,
-    // so the user sends the mount Home and starts it from the shutter.
+    // Entering polar align does not start the run: it turns the mount, so
+    // the user sends the mount Home and starts it.
     // Entering guide starts the guider's routine; leaving
     // the step keeps it guiding (imaging wants it). Not while the main camera
     // is busy (a shot, a loop, a plan's exposure): calibration turns the
@@ -428,12 +424,6 @@ class SimplePreflightNotifier extends Notifier<SimplePreflightStep?> {
     );
   }
 
-  /// The polar step's Done: its routine is complete, then on as [next].
-  void polarDone() {
-    _polarFinished = true;
-    next();
-  }
-
   void back() {
     final s = state;
     if (s != null && s.index > 0) _go(SimplePreflightStep.values[s.index - 1]);
@@ -451,14 +441,11 @@ class SimplePreflightNotifier extends Notifier<SimplePreflightStep?> {
     state = null;
   }
 
-  /// Leaving the polar step (Skip, Back, another mode) with its routine still
-  /// running stops it: it moves the mount, and its stop button leaves the
-  /// screen with the step. Done has already finished it.
+  /// Leaving the polar step (Skip, Back, another mode) with its run still
+  /// going stops it: it moves the mount, and its stop button leaves the
+  /// screen with the step. The result's Done finds it over: nothing to stop.
   void _endPolar() {
-    if (_polarFinished ||
-        !ref.read(polarAlignLiveProvider).isActive) {
-      return;
-    }
+    if (!ref.read(polarAlignLiveProvider).isActive) return;
     final api = ref.read(polarAlignApiProvider);
     if (api != null) unawaited(_stepAction(api.stop, (l) => l.polarActionStop));
   }

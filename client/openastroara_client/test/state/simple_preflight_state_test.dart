@@ -47,7 +47,7 @@ final _side = NotifierProvider<_Side, double>(_Side.new);
 class _PolarApi implements PolarAlignClient {
   final calls = <String>[];
   @override
-  Future<void> start({String? stage}) async => calls.add('start');
+  Future<void> start() async => calls.add('start');
   @override
   Future<void> stop() async => calls.add('stop');
   @override
@@ -81,10 +81,10 @@ class _Live extends PolarAlignLiveNotifier {
   @override
   PolarAlignLive build() => const PolarAlignLive();
   void running() => state = PolarAlignLive(phase: PolarAlignStates.adjusting);
-  void checked() => state = const PolarAlignLive(phase: PolarAlignStates.checked, stage: PolarAlignStages.check);
+  void checked() => state = const PolarAlignLive(phase: PolarAlignStates.checked, stage: PolarAlignStages.verify);
   void stopped({String? zone}) => state = PolarAlignLive(
     phase: PolarAlignStates.stopped,
-    stage: PolarAlignStages.fine,
+    stage: PolarAlignStages.align,
     zone: zone,
   );
 }
@@ -450,7 +450,7 @@ void main() {
       polar.state = const PolarAlignLive(
         phase: PolarAlignStates.checked,
         zone: 'green',
-        stage: PolarAlignStages.fine,
+        stage: PolarAlignStages.align,
       );
       expect(
         c.read(doneTonightProvider),
@@ -459,7 +459,7 @@ void main() {
       polar.state = const PolarAlignLive(
         phase: PolarAlignStates.failed,
         zone: 'green',
-        stage: PolarAlignStages.fine,
+        stage: PolarAlignStages.align,
       );
       expect(
         c.read(doneTonightProvider),
@@ -493,7 +493,7 @@ void main() {
           const PolarAlignLive(
             phase: PolarAlignStates.checked,
             zone: 'green',
-            stage: PolarAlignStages.fine,
+            stage: PolarAlignStages.align,
           );
       expect(
         c.read(doneTonightProvider),

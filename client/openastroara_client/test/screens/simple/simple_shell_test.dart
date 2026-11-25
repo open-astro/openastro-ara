@@ -741,7 +741,7 @@ class _PolarProfile implements PolarAlignClient {
   @override
   Future<PolarAlignStatus?> getStatus() async => null;
   @override
-  Future<void> start({String? stage}) async {}
+  Future<void> start() async {}
   @override
   Future<void> stop() async {}
   @override

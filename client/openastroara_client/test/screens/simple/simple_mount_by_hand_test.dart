@@ -18,6 +18,7 @@ import 'package:openastroara/services/center_api.dart';
 import 'package:openastroara/services/plate_solve_api.dart';
 import 'package:openastroara/services/refusal.dart';
 import 'package:openastroara/state/equipment/camera_state.dart';
+import 'package:openastroara/state/equipment/mount_home_state.dart';
 import 'package:openastroara/state/equipment/mount_state.dart';
 import 'package:openastroara/state/plate_solve/plate_solve_api_state.dart';
 import 'package:openastroara/state/sequencer/sequence_list_state.dart';
@@ -602,7 +603,7 @@ void main() {
       expect(find.text('Finding home…'), findsNothing);
       expect(find.text('Position · At home'), findsOneWidget);
       expect(find.byKey(const Key('simple-mount-park-home')), findsNothing, reason: 'Parked / Unparked only');
-      expect(c.read(simpleMountHomeProvider), isFalse);
+      expect(c.read(mountHomeProvider), isFalse);
     });
 
     // #2173 — Home is the way out of an unverified position: the pad centre runs the mount's home search, and the
@@ -698,7 +699,7 @@ void main() {
       await tester.tap(find.byKey(const Key('simple-mount-pad-home')));
       await tester.pump();
       await tester.pump(const Duration(seconds: 4));
-      expect(c.read(simpleMountHomeProvider), isFalse);
+      expect(c.read(mountHomeProvider), isFalse);
     });
 
     testWidgets('no Home without the capability; Home takes no tap while parked', (tester) async {

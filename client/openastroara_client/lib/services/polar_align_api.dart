@@ -11,11 +11,15 @@ import 'refusal.dart';
 abstract interface class PolarAlignClient {
   Future<PolarAlignStatus?> getStatus();
 
-  /// Begin one measurement at [stage] ([PolarAlignStages]; null = fine), from
-  /// the mount's Home position. A measurement never leads into another; a
-  /// check started from the adjust loop ends the loop first.
-  Future<void> start({String? stage});
+  /// Begin a run from the mount's Home position: the three-point measurement,
+  /// then the live adjust loop.
+  Future<void> start();
+
+  /// Stop the run where it is, at any time (the mount going Home included).
   Future<void> stop();
+
+  /// Done: the rig stops the adjust loop, sends the mount Home, verifies the
+  /// alignment and sends the mount Home again, ending in `checked`.
   Future<void> complete();
   Future<void> requestCapture();
   Future<Uint8List?> getLiveFrame();
@@ -56,19 +60,13 @@ class PolarAlignApi implements PolarAlignClient {
     }
   }
 
-  /// Begin one measurement at [stage]. 202-Accepted; a start the rig refuses
-  /// surfaces as a 409/422, and one with a declared cause (a parked mount, a
-  /// mount not at Home, an unverified mount clock or position) is a [Refusal].
-  /// A check waits [endTimeout]: from the adjust screen the daemon ends the
-  /// loop (a confirmed stop) first.
+  /// Begin a run. No body. 202-Accepted; a start the rig refuses surfaces as
+  /// a 409/422, and one with a declared cause (a parked mount, a mount not at
+  /// Home, an unverified mount clock or position) is a [Refusal].
   @override
-  Future<void> start({String? stage}) async {
+  Future<void> start() async {
     try {
-      await _dio.post<void>(
-        '/api/v1/equipment/polaralign/start',
-        data: <String, dynamic>{'stage': ?stage},
-        options: stage == PolarAlignStages.check ? Options(receiveTimeout: endTimeout) : null,
-      );
+      await _dio.post<void>('/api/v1/equipment/polaralign/start');
     } on DioException catch (e) {
       final refusal = Refusal.fromDio(e);
       if (refusal != null) throw refusal;
@@ -76,9 +74,8 @@ class PolarAlignApi implements PolarAlignClient {
     }
   }
 
-  /// Abort — the mount stops where it is (#2048: AbortSlew and both motors
-  /// stopped, confirmed on the daemon, tracking left off); logged as
-  /// `aborted`. 202-Accepted.
+  /// Stop: the mount stops where it is, also while it goes Home (#2048: the
+  /// daemon confirms the stop before it answers). 202-Accepted.
   @override
   Future<void> stop() async {
     await _dio.post<void>(
@@ -87,8 +84,8 @@ class PolarAlignApi implements PolarAlignClient {
     );
   }
 
-  /// The user is satisfied: same unwind as [stop] but the §45.13 session row
-  /// records `complete` with the achieved error. 202-Accepted.
+  /// Done. 202-Accepted at once; the rest of the run (Home, verify, Home)
+  /// arrives on the `polar_align.*` WS stream and needs no further call.
   @override
   Future<void> complete() async {
     await _dio.post<void>(

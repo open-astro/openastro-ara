@@ -13,8 +13,8 @@ import '../../util/friendly_error.dart';
 import '../help_icon.dart';
 import '../settings/section_load_state.dart';
 
-/// #1736 The Start card's collapsed Advanced row: the routine's three knobs
-/// (`check_step_deg`, `coarse_exposure_seconds`, `seed_rotation_deg`), edited
+/// #1736 The Ready step's collapsed Advanced row: the routine's two knobs
+/// (`seed_rotation_deg`, `coarse_exposure_seconds`), edited
 /// through the same module as the Settings panel
 /// ([polarAlignSettingsProvider], ADR 0013 rule 3): nothing shows or saves
 /// until the rig's copy is loaded, each edit saves at once, a failed save puts
@@ -107,7 +107,6 @@ class _PolarAdvancedRowState extends ConsumerState<PolarAdvancedRow> {
                         child: Text(
                           l10n.polarAdvancedSummary(
                             polarKnobText(s.seedRotationDeg),
-                            polarKnobText(s.checkStepDeg),
                             polarKnobText(s.coarseExposureSeconds),
                           ),
                           overflow: TextOverflow.ellipsis,
@@ -142,15 +141,6 @@ class _PolarAdvancedRowState extends ConsumerState<PolarAdvancedRow> {
         polarSeedRotationRange,
         (x) => x.seedRotationDeg,
         (x, v) => x.copyWith(seedRotationDeg: v),
-        l10n,
-      ),
-      _numberField(
-        const Key('polar-advanced-check-step'),
-        l10n.polarKnobVerifyStep,
-        'img.polar.check_step_deg',
-        polarCheckStepRange,
-        (x) => x.checkStepDeg,
-        (x, v) => x.copyWith(checkStepDeg: v),
         l10n,
       ),
       _numberField(

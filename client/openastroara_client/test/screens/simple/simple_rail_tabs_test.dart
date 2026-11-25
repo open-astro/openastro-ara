@@ -590,7 +590,7 @@ void main() {
             const PolarAlignLive(
               phase: PolarAlignStates.checked,
               zone: 'green',
-              stage: PolarAlignStages.fine,
+              stage: PolarAlignStages.align,
             ),
           );
           await tester.pump();
@@ -604,7 +604,7 @@ void main() {
             const PolarAlignLive(
               phase: PolarAlignStates.failed,
               zone: 'green',
-              stage: PolarAlignStages.fine,
+              stage: PolarAlignStages.align,
             ),
           );
           await tester.pump();

@@ -1126,29 +1126,28 @@ const Map<String, Help> helpRegistry = {
     relatedSettings: [],
     keywords: ['bahtinov', 'mask', 'focus', 'spikes', 'manual focuser', 'critical focus zone'],
   ),
-  'setup.polar_align.stages': Help(
-    key: 'setup.polar_align.stages',
-    title: 'Polar alignment: one measurement per Start',
+  'setup.polar_align.flow': Help(
+    key: 'setup.polar_align.flow',
+    title: 'Polar alignment: Home, Start, adjust, Done',
     body:
-        '* **Start** — send the mount Home first (tube at the pole, counterweights down), then start. Ara refuses a parked mount (unpark it first) and, on a mount that can find Home by itself, a mount that is not at Home. On a mount that cannot find Home, put it in its home position yourself. RA then turns about 10° twice, the way the *Polar align turn direction* setting says (east in the north, west in the south unless you change it). Keep a hand on the mount\'s power switch the first time you run this on a mount.\n'
-        '* **One measurement** — the camera solves a frame at each of three stops while the RA motor makes two turns of the profile\'s turn (10° for a new profile). Each turn runs the motor for a set time; the solved frames, not the mount\'s own readings, say where the mount went. The circle through them is where the mount\'s axis really points (a camera not square to the axis adds nothing false); then tracking stops and every solve shows your knob adjustments live, until Done or Stop. Lower/Raise and Move east/west name the knob to turn. A Start never moves on to another measurement by itself.\n'
-        '* **Check** — on the adjust screen once inside the tolerance, and again after Done: three solves, turning the profile\'s check step (10° for a new profile) between them. It says how far it turns before it moves. From the adjust screen it ends the live loop first. Three points fix the axis exactly, with nothing taken from the live loop, so the verdict says how good the alignment really is; a check whose three frames show the same field, or a turn far from the one the mount was told (a slipping clutch, a stalled motor), gives no verdict. *Disagreement* is how far the check\'s axis sits from the last run\'s readout: more than 2′ means trust the check and adjust again.\n'
+        '* **Home** — every run starts from the mount\'s Home position (tube at the pole, counterweights down). On a mount that can find Home by itself, tap Home and wait until it gets there; on any other mount, put it in its home position yourself. A parked mount is unparked first.\n'
+        '* **Start Polar Alignment** — the camera solves a frame at each of three stops while the RA motor makes two turns of the profile\'s turn (10° for a new profile), the way the *Polar align turn direction* setting says (east in the north, west in the south unless you change it). The circle through the three points is where the mount\'s axis really points (a camera not square to the axis adds nothing false). Keep a hand on the mount\'s power switch the first time you run this on a mount.\n'
+        '* **Adjust** — every solve then shows your knob adjustments live. Lower/Raise and Move east/west name the knob to turn. Done turns on once the error is inside the tolerance.\n'
+        '* **Done** — the mount goes Home, three more solves around two RA turns measure the result with nothing taken from the live readout, and the mount goes Home again. The result says how good the alignment really is. Adjust again starts a new run from Home.\n'
         '* **Frames per point** — each of the three points averages several frames (3 by default). A point that stays scattered over 3″ after one retake marks the result *noisy*.\n'
-        '* Every move is the RA motor alone, never a GoTo or a Dec move, as NINA\'s three-point polar alignment. Stop halts the motor at once. The mount\'s own limits still apply.\n'
-        '* **Stop** stops the mount where it is: it stops both motors and checks that the mount stands still. Every end of a run leaves tracking off unless *Stop tracking when polar align ends* is off and the run finished.\n'
+        '* Every measuring turn is the RA motor alone, never a GoTo or a Dec move, as NINA\'s three-point polar alignment. The mount\'s own limits still apply.\n'
+        '* **Stop** stops the mount where it is, in every step and while it goes Home.\n'
         '* **Azimuth** is a true arc on the sky (cos alt applied). NINA shows the angle itself, about 1/cos(latitude) larger (1.5× at 48°); the Full UI shows NINA\'s figure beside Ara\'s.\n'
         '* A measurement that starts more than 2° from the pole warns that the correction is less reliable: get closer, then run again. Over 10°, check the site location and that the mount turned only in RA.',
     relatedHelpKeys: [
-      'img.polar.stop_tracking_when_done',
       'img.polar.seed_rotation_deg',
-      'img.polar.check_step_deg',
       'img.polar.coarse_exposure_seconds',
       'img.polar.camera',
       'img.polar.frames_per_point',
       'img.polar.east_direction',
     ],
     relatedSettings: ['eq.guider.guide_focal_length', 'eq.guider.guide_pixel_size'],
-    keywords: ['polar', 'alignment', 'home', 'parked', 'three point', 'check', 'pole', 'east', 'west', 'nina', 'azimuth'],
+    keywords: ['polar', 'alignment', 'home', 'parked', 'three point', 'done', 'verify', 'pole', 'east', 'west', 'nina', 'azimuth'],
   ),
   'setup.focusing.guide': Help(
     key: 'setup.focusing.guide',
@@ -2431,14 +2430,6 @@ const Map<String, Help> helpRegistry = {
         'How close to the pole counts as aligned. Done turns on once the error is inside it.',
     relatedSettings: ['img.polar.target_tolerance_arcmin'],
   ),
-  'img.polar.stop_tracking_when_done': Help(
-    key: 'img.polar.stop_tracking_when_done',
-    title: 'Stop tracking when polar align ends',
-    body:
-        'On (the default, as NINA): every end of a run turns tracking off, so the mount cannot track into the pier while nobody watches. Off: a run that finishes (Done, or a check\'s result) gives back the tracking it found. A Stop or a failure always leaves tracking off. Starting guiding while a run is open gives back the tracking it found, because guiding needs it.\n\n'
-        'Every end of a run also stops the mount first: Ara stops both motors and checks that the mount stands still. If it cannot confirm that, it tells you to cut the mount\'s power.',
-    relatedSettings: ['img.polar.stop_tracking_when_done'],
-  ),
   'img.polar.polar_aligner_auto': Help(
     key: 'img.polar.polar_aligner_auto',
     title: "Correct with the Polar Aligner's motors",
@@ -2453,13 +2444,6 @@ const Map<String, Help> helpRegistry = {
         'Each of the two RA turns between the three frames that measure the axis, from 5° to 30° (10° by default, as NINA). A Start turns twice by it and no further. The mount turns with its RA motor, never a GoTo.',
     relatedSettings: ['img.polar.seed_rotation_deg'],
   ),
-  'img.polar.check_step_deg': Help(
-    key: 'img.polar.check_step_deg',
-    title: 'Check step',
-    body:
-        'The RA turn between the three frames of a Check, from 5° to 30° (10° by default). The Check says how far it turns (2 × the step) before the mount moves. The mount turns with its RA motor, never a GoTo.',
-    relatedSettings: ['img.polar.check_step_deg'],
-  ),
   'img.polar.coarse_exposure_seconds': Help(
     key: 'img.polar.coarse_exposure_seconds',
     title: 'Main camera exposure',
@@ -2471,7 +2455,7 @@ const Map<String, Help> helpRegistry = {
     key: 'img.polar.camera',
     title: 'Polar align camera',
     body:
-        'Which camera measures the RA axis, shows your knob turns live and takes the Check.\n\n'
+        'Which camera measures the RA axis, shows your knob turns live and takes the solves after Done.\n\n'
         '* **Guide camera** (the default): a frame about every second through the guider, solved with the guide optics.\n'
         '* **Main camera**: its own plate solver and optics, at the main camera exposure. Slower, but it sees more stars; use it when the guide camera cannot solve the pole field. Start refuses while the main camera is not connected.',
     relatedSettings: ['img.polar.camera', 'img.polar.coarse_exposure_seconds'],
@@ -2491,7 +2475,7 @@ const Map<String, Help> helpRegistry = {
     title: 'Frames per point',
     body:
         'A measurement solves three points around two RA turns. At each point Polar align takes this many frames with the mount still (1 to 5, 3 by default) and averages them, so one noisy solve does not move the axis. The scatter of the solves is in the log.\n\n'
-        'A point whose solves scatter more than 3″ is retaken once. If it is still scattered, the run goes on, but the readout or the Check says the measurement is noisy: check focus and seeing, or take more frames per point.',
+        'A point whose solves scatter more than 3″ is retaken once. If it is still scattered, the run goes on, but the readout or the result says the measurement is noisy: check focus and seeing, or take more frames per point.',
     relatedSettings: ['img.polar.frames_per_point'],
   ),
   'img.unguided.eccentricity': Help(

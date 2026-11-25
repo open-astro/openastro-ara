@@ -7,16 +7,16 @@ library;
 abstract final class PolarAlignStates {
   static const idle = 'idle';
 
-  /// The mount is going Home.
+  /// The mount is going Home: after Done, before and after the verify solves.
   static const homing = 'homing';
   static const seeding = 'seeding';
   static const adjusting = 'adjusting';
   static const paused = 'paused';
 
-  /// The check stage's three solves are running.
+  /// The verify stage's three solves are running.
   static const checking = 'checking';
 
-  /// Terminal: the three-point check has its result (`check_result`).
+  /// Terminal: the run is verified (`check_result`) and the mount is back Home.
   static const checked = 'checked';
   static const stopped = 'stopped';
   static const failed = 'failed';
@@ -34,7 +34,8 @@ abstract final class PolarAlignStates {
 /// `polar_align.progress` payload).
 abstract final class PolarAlignReadoutCautions {
   /// The camera sits nearly due east or west of the pole: the live readout
-  /// reads the altitude bolt poorly, so the Check is the number to trust.
+  /// reads the altitude bolt poorly, so the verdict after Done is the number
+  /// to trust.
   static const altitudeWeak = 'altitude_weak';
 }
 
@@ -48,39 +49,26 @@ abstract final class PolarAlignCameras {
   static const main = 'main';
 }
 
-/// The routine's measurements (`PolarAlignStateDto.stage`), one per Start:
-/// fine (the three-point seed, two RA-motor turns, then the live adjust loop)
-/// and check (three solves around two RA turns, an exact fit, no adjusting).
-/// Both use the profile's `polar_align.camera`.
+/// The two halves of a run (`PolarAlignStateDto.stage`): align (the
+/// three-point measurement from Home, then the live adjust loop) and verify
+/// (from Done: Home, three solves around two RA turns, Home again). Both use
+/// the profile's `polar_align.camera`.
 abstract final class PolarAlignStages {
-  static const fine = 'fine';
-  static const check = 'check';
+  static const align = 'align';
+  static const verify = 'verify';
 }
 
-/// The check stage's result (`check_result` on the status and the
-/// `polar_align.checked` payload).
+/// The verify stage's result (`check_result` on the status, on
+/// `polar_align.stage` once known, and the `polar_align.checked` payload).
 class PolarAlignCheckResult {
   final double altErrorArcmin;
   final double azErrorArcmin;
   final double totalErrorArcmin;
 
-  /// How far off the axis the three pointings sat (conditioning).
-  final double coneHalfAngleDeg;
-
-  /// How far the solved turns disagreed with the turns the mount was told.
-  final double turnMismatchDeg;
-
-  /// The last run's readout (its total), and the distance between the
-  /// check's axis and that run's — alt and az both, so a readout of the
-  /// same size on the other side of the pole still shows as a disagreement;
-  /// null when no run ended with a readout since the daemon started.
-  final double? fineErrorArcmin;
-  final double? fineDeltaArcmin;
-
   /// `excellent` | `very_good` | `good` | `rough` | `far_off`.
   final String verdict;
 
-  /// #2082 a point of the check stayed scattered over 3″ after its retake.
+  /// #2082 a point of the measurement stayed scattered over 3″ after its retake.
   final bool noisy;
 
   /// #2072 the fit's 1σ on the total error (arcmin); null from an older daemon.
@@ -90,10 +78,6 @@ class PolarAlignCheckResult {
     required this.altErrorArcmin,
     required this.azErrorArcmin,
     required this.totalErrorArcmin,
-    this.coneHalfAngleDeg = 0,
-    this.turnMismatchDeg = 0,
-    this.fineErrorArcmin,
-    this.fineDeltaArcmin,
     this.verdict = '',
     this.noisy = false,
     this.totalSigmaArcmin,
@@ -104,10 +88,6 @@ class PolarAlignCheckResult {
         altErrorArcmin: (json['altitude_error_arcmin'] as num?)?.toDouble() ?? 0,
         azErrorArcmin: (json['azimuth_error_arcmin'] as num?)?.toDouble() ?? 0,
         totalErrorArcmin: (json['total_error_arcmin'] as num?)?.toDouble() ?? 0,
-        coneHalfAngleDeg: (json['cone_half_angle_deg'] as num?)?.toDouble() ?? 0,
-        turnMismatchDeg: (json['turn_mismatch_deg'] as num?)?.toDouble() ?? 0,
-        fineErrorArcmin: (json['fine_error_arcmin'] as num?)?.toDouble(),
-        fineDeltaArcmin: (json['fine_delta_arcmin'] as num?)?.toDouble(),
         verdict: json['verdict'] is String ? json['verdict'] as String : '',
         noisy: json['noisy'] == true,
         totalSigmaArcmin: (json['total_sigma_arcmin'] as num?)?.toDouble(),
@@ -325,8 +305,11 @@ class PolarAlignStatus {
   /// [PolarAlignStages]; null when idle before any run.
   final String? stage;
 
-  /// Check stage: solves done so far (0–3).
+  /// Verify stage: solves done so far (0–3).
   final int checkSolvesDone;
+
+  /// Non-null as soon as the verify verdict exists: already while the mount
+  /// returns Home, before `checked`.
   final PolarAlignCheckResult? checkResult;
 
   /// #1565 — null from an older daemon or before any routine ended.
@@ -417,22 +400,14 @@ class PolarAlignSettings {
   /// [PolarAlignLoopModes.loop] or [PolarAlignLoopModes.single].
   final String loopMode;
 
-  /// Check stage: each of the two RA turns between the three solves.
-  final double checkStepDeg;
-
   /// The main camera's exposure, when [camera] is the main camera.
   final double coarseExposureSeconds;
 
   /// #1971 the routine turns the Polar Aligner's motors (off: by hand).
   final bool polarAlignerAuto;
 
-  /// #2048 every end of a run turns tracking off (NINA's StopTrackingWhenDone,
-  /// on by default). Off: a run that finishes gives back the tracking it
-  /// found; a Stop or a failure still leaves tracking off.
-  final bool stopTrackingWhenDone;
-
-  /// #2082 the camera of the measurement, its live loop and the check
-  /// ([PolarAlignCameras]).
+  /// #2082 the camera of the measurement, its live loop and the verify
+  /// solves ([PolarAlignCameras]).
   final String camera;
 
   /// #2082 frames averaged at each of a measurement's three points (1–5).
@@ -451,10 +426,8 @@ class PolarAlignSettings {
     required this.loopCadenceMs,
     required this.settleSeconds,
     required this.loopMode,
-    required this.checkStepDeg,
     required this.coarseExposureSeconds,
     required this.polarAlignerAuto,
-    required this.stopTrackingWhenDone,
     required this.camera,
     required this.framesPerPoint,
     required this.eastDirection,
@@ -468,10 +441,8 @@ class PolarAlignSettings {
         'loop_cadence_ms': loopCadenceMs,
         'settle_seconds': settleSeconds,
         'loop_mode': loopMode,
-        'check_step_deg': checkStepDeg,
         'coarse_exposure_seconds': coarseExposureSeconds,
         'polar_aligner_auto': polarAlignerAuto,
-        'stop_tracking_when_done': stopTrackingWhenDone,
         'camera': camera,
         'frames_per_point': framesPerPoint,
         'east_direction': eastDirection,
@@ -485,10 +456,8 @@ class PolarAlignSettings {
     int? loopCadenceMs,
     double? settleSeconds,
     String? loopMode,
-    double? checkStepDeg,
     double? coarseExposureSeconds,
     bool? polarAlignerAuto,
-    bool? stopTrackingWhenDone,
     String? camera,
     int? framesPerPoint,
   }) =>
@@ -501,11 +470,9 @@ class PolarAlignSettings {
         loopCadenceMs: loopCadenceMs ?? this.loopCadenceMs,
         settleSeconds: settleSeconds ?? this.settleSeconds,
         loopMode: loopMode ?? this.loopMode,
-        checkStepDeg: checkStepDeg ?? this.checkStepDeg,
         coarseExposureSeconds:
             coarseExposureSeconds ?? this.coarseExposureSeconds,
         polarAlignerAuto: polarAlignerAuto ?? this.polarAlignerAuto,
-        stopTrackingWhenDone: stopTrackingWhenDone ?? this.stopTrackingWhenDone,
         camera: camera ?? this.camera,
         framesPerPoint: framesPerPoint ?? this.framesPerPoint,
         eastDirection: eastDirection,
@@ -521,10 +488,8 @@ class PolarAlignSettings {
         loopCadenceMs: loopCadenceMs,
         settleSeconds: settleSeconds,
         loopMode: loopMode,
-        checkStepDeg: checkStepDeg,
         coarseExposureSeconds: coarseExposureSeconds,
         polarAlignerAuto: polarAlignerAuto,
-        stopTrackingWhenDone: stopTrackingWhenDone,
         camera: camera,
         framesPerPoint: framesPerPoint,
         eastDirection: value,

@@ -139,6 +139,18 @@ void main() {
     }
   });
 
+  test('a mount that did not go Home after Done reads in the app language, in en and pt-BR', () {
+    final live = failed('home_failed', message: 'FindHome was refused by the driver');
+    expect(
+      polarAlignErrorText(en, live),
+      'The mount did not go Home. Check the mount, send it Home, then start again.',
+    );
+    expect(
+      polarAlignErrorText(pt, live),
+      'A montagem não foi para Home. Verifique a montagem, envie-a para Home e comece de novo.',
+    );
+  });
+
   test('a guard reason keeps the cut-power warnings the daemon sent, in both languages', () {
     for (final l in [en, pt]) {
       expect(

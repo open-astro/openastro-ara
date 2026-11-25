@@ -45,6 +45,8 @@ String? _guardText(AppLocalizations l, String? reason) => switch (reason) {
   'mount_parked' => l.refusalPolarAlignMountParked,
   'mount_did_not_stop' => l.polarAlignStopNotConfirmed,
   'aligner_did_not_stop' => l.polarAlignerStopNotConfirmed,
+  // The mount refused, or did not finish, going Home after Done.
+  'home_failed' => l.polarAlignErrorHomeFailed,
   _ => null,
 };
 

@@ -25,7 +25,7 @@ class _Api implements PolarAlignClient {
   @override
   Future<PolarAlignStatus?> getStatus() async => status;
   @override
-  Future<void> start({String? stage}) async {}
+  Future<void> start() async {}
   @override
   Future<void> stop() async {}
   @override
@@ -78,13 +78,13 @@ void main() {
     c.listen(polarAlignFrameProvider, (_, _) {});
     live().set(PolarAlignLive(
         phase: PolarAlignStates.adjusting,
-        stage: PolarAlignStages.fine,
+        stage: PolarAlignStages.align,
         camera: PolarAlignCameras.main,
         lastFrame: _frame(1)));
     await pumpEventQueue();
     api.status = PolarAlignStatus.fromJson({
       'state': PolarAlignStates.adjusting,
-      'stage': PolarAlignStages.fine,
+      'stage': PolarAlignStages.align,
       'camera': PolarAlignCameras.main,
     });
     await c.read(polarAlignFrameProvider.notifier).hydrate();
@@ -111,7 +111,7 @@ void main() {
 
   test('opening a panel on a running routine fetches its frame', () async {
     c.listen(polarAlignFrameProvider, (_, _) {});
-    api.status = PolarAlignStatus.fromJson({'state': PolarAlignStates.adjusting, 'stage': PolarAlignStages.fine});
+    api.status = PolarAlignStatus.fromJson({'state': PolarAlignStates.adjusting, 'stage': PolarAlignStages.align});
     final opening = c.read(polarAlignFrameProvider.notifier).hydrate();
     await pumpEventQueue();
     expect(api.frameCalls, 1);

@@ -35,7 +35,7 @@ final _aligned = NotifierProvider<_Step, SetupStepState>(() => _Step(SetupStepSt
 class _PolarApi implements PolarAlignClient {
   final calls = <String>[];
   @override
-  Future<void> start({String? stage}) async => calls.add('start');
+  Future<void> start() async => calls.add('start');
   @override
   Future<void> stop() async => calls.add('stop');
   @override
@@ -102,6 +102,9 @@ class _Live extends PolarAlignLiveNotifier {
   @override
   PolarAlignLive build() => const PolarAlignLive();
   void run() => state = const PolarAlignLive(phase: PolarAlignStates.adjusting);
+
+  /// Verified and back Home: the run is over.
+  void checked() => state = const PolarAlignLive(phase: PolarAlignStates.checked);
 }
 
 class _Run extends SequenceRunStateNotifier {
@@ -326,7 +329,7 @@ void main() {
     });
   }
 
-  test("the polar step's Done completes the routine: moving on stops nothing", () async {
+  test("the polar result's Done finds the run over: moving on stops nothing and starts imaging", () async {
     final (c, api) = await _container();
     final plan = c.read(simpleRunProvider.notifier) as _Plan;
     final pilot = c.read(simplePreflightProvider.notifier);
@@ -335,10 +338,12 @@ void main() {
     pilot.next();
     c.read(_focus.notifier).set(SetupStepState.done);
     expect(c.read(simplePreflightProvider), SimplePreflightStep.polarAlign);
-    (c.read(polarAlignLiveProvider.notifier) as _Live).run(); // complete sent, the rig not caught up yet
-    pilot.polarDone();
+    final live = c.read(polarAlignLiveProvider.notifier) as _Live;
+    live.run(); // started, adjusted, Done
+    live.checked(); // verified, the mount back Home
+    pilot.next(); // the result's Done
     await Future<void>.value();
-    expect(api.calls, isNot(contains('stop')));
+    expect(api.calls, isEmpty, reason: 'nothing runs: no stop, and Done sends nothing');
     expect(plan.starts, hasLength(1));
   });
 

@@ -2,7 +2,6 @@ import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:openastroara/models/polar_align.dart';
 import 'package:openastroara/models/server.dart';
 import 'package:openastroara/services/polar_align_api.dart';
 import 'package:openastroara/services/refusal.dart';
@@ -46,15 +45,11 @@ class _StartDaemon implements HttpClientAdapter {
 }
 
 void main() {
-  test('a start posts only its stage: no confirmation, direction or plan goes with it', () async {
+  test('a start posts no body: no stage, confirmation, direction or plan goes with it', () async {
     final d = _StartDaemon();
     final api = PolarAlignApi(const AraServer(hostname: 'x', port: 80), dio: Dio()..httpClientAdapter = d);
     await api.start();
-    await api.start(stage: PolarAlignStages.check);
-    expect(d.bodies, [
-      <String, dynamic>{},
-      {'stage': 'check'},
-    ]);
+    expect(d.bodies, [null]);
   });
 
   test('a start the rig refuses for a mount away from Home is the polar-align-not-home Refusal', () async {
@@ -79,17 +74,6 @@ void main() {
       ('POST /api/v1/equipment/polaralign/stop', PolarAlignApi.endTimeout),
       ('POST /api/v1/equipment/polaralign/complete', PolarAlignApi.endTimeout),
       ('POST /api/v1/equipment/polaralign/capture', null),
-    ]);
-  });
-
-  test('a Check waits as long as Stop: from the adjust screen it ends the loop first (#2082)', () async {
-    final d = _Daemon();
-    final api = PolarAlignApi(const AraServer(hostname: 'x', port: 80), dio: Dio()..httpClientAdapter = d);
-    await api.start(stage: PolarAlignStages.check);
-    await api.start(stage: PolarAlignStages.fine);
-    expect(d.seen, [
-      ('POST /api/v1/equipment/polaralign/start', PolarAlignApi.endTimeout),
-      ('POST /api/v1/equipment/polaralign/start', null),
     ]);
   });
 

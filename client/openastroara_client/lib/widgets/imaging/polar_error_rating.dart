@@ -54,7 +54,7 @@ double polarRatedArcmin(double totalArcmin, double? sigmaArcmin) =>
 
 double _hundredths(double arcmin) => (arcmin * 100).round() / 100;
 
-/// #2072 the Check's verdict token: with the result's σ, the bands on the
+/// #2072 a result's verdict token: with the result's σ, the bands on the
 /// error plus twice its σ (the daemon's own rule, `RatedErrorArcmin`); without
 /// one, the daemon's token, or the bands on the total for a token this build
 /// does not know. Pure — unit-tested.
@@ -63,11 +63,6 @@ String polarCheckVerdict(PolarAlignCheckResult r) {
   if (sigma != null) return polarVerdictFor(polarRatedArcmin(r.totalErrorArcmin, sigma));
   return _ratingByVerdict.containsKey(r.verdict) ? r.verdict : polarVerdictFor(r.totalErrorArcmin);
 }
-
-/// The words for a verdict the daemon sent (`check_result.verdict`), so the
-/// checked card shows the daemon's own call; null for a token this build does
-/// not know (fall back to [polarErrorRating] on the total). Pure — unit-tested.
-(String, String)? polarRatingForVerdict(String verdict) => _ratingByVerdict[verdict];
 
 const _ratingByVerdict = <String, (String, String)>{
   'excellent': ('Excellent', "Polar alignment won't limit your exposures."),

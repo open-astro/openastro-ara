@@ -70,12 +70,22 @@ class PolarAlignLive {
   /// [PolarAlignStages]; null before the first run.
   final String? stage;
 
-  /// Check stage: solves done so far (0–3).
+  /// The measurement's point being taken (1–3), from the seed frame's id;
+  /// null when the rig has not said.
+  final int? measuringPoint;
+
+  /// Verify stage: solves done so far (0–3).
   final int checkSolvesDone;
 
-  /// Check stage: solves the daemon takes (`check_solves_total`); 3 unless it says otherwise.
+  /// Verify stage: solves the daemon takes (`check_solves_total`); 3 unless it says otherwise.
   final int checkSolvesTotal;
+
+  /// The verify verdict: known from the last `homing` on, before `checked`.
   final PolarAlignCheckResult? checkResult;
+
+  /// The user left the result with Done: the screen is Ready again. A new
+  /// run, or a result this one did not show, clears it.
+  final bool resultDismissed;
 
   /// #1971 the Polar Aligner's run; null without one Ara drives, before its
   /// first measurement, and once the routine ends.
@@ -114,9 +124,11 @@ class PolarAlignLive {
     this.frameExposureSeconds,
     this.lastFrame,
     this.stage,
+    this.measuringPoint,
     this.checkSolvesDone = 0,
     this.checkSolvesTotal = 3,
     this.checkResult,
+    this.resultDismissed = false,
     this.correction,
     this.readoutCaution,
     this.camera,
@@ -155,9 +167,11 @@ class PolarAlignLive {
     bool clearFrameInProgress = false,
     bool clearReadout = false,
     String? stage,
+    int? measuringPoint,
     int? checkSolvesDone,
     int? checkSolvesTotal,
     PolarAlignCheckResult? checkResult,
+    bool? resultDismissed,
     PolarAlignerRun? correction,
     bool clearCorrection = false,
     String? readoutCaution,
@@ -189,9 +203,11 @@ class PolarAlignLive {
             : frameExposureSeconds ?? this.frameExposureSeconds,
         lastFrame: lastFrame ?? this.lastFrame,
         stage: stage ?? this.stage,
+        measuringPoint: measuringPoint ?? this.measuringPoint,
         checkSolvesDone: checkSolvesDone ?? this.checkSolvesDone,
         checkSolvesTotal: checkSolvesTotal ?? this.checkSolvesTotal,
         checkResult: checkResult ?? this.checkResult,
+        resultDismissed: resultDismissed ?? this.resultDismissed,
         correction: clearCorrection ? null : correction ?? this.correction,
         // The readout's own caution goes with it.
         readoutCaution: clearReadout || clearReadoutCaution ? null : readoutCaution ?? this.readoutCaution,
@@ -208,6 +224,14 @@ double? _num(Map<String, dynamic> payload, String key) =>
 String? _str(Map<String, dynamic> payload, String key) =>
     payload[key] is String ? payload[key] as String : null;
 
+/// The measurement point a frame belongs to, from its id (`seed-a…`,
+/// `seed-b…`, `seed-c…`): 1 to 3, or null for any other frame.
+int? polarMeasuringPoint(String? frameId) {
+  if (frameId == null || !frameId.startsWith('seed-') || frameId.length < 6) return null;
+  final point = 'abc'.indexOf(frameId[5]);
+  return point < 0 ? null : point + 1;
+}
+
 /// Pure fold of one WS event into the live routine view. Returns null when the
 /// event is not a `polar_align.*` event (no state write). [now] stamps a
 /// `frame_started` (injectable for tests). Exposed for unit tests.
@@ -222,7 +246,7 @@ PolarAlignLive? foldPolarAlignEvent(PolarAlignLive current, WsEvent event,
             : PolarAlignStates.seeding,
         stage: event.payload['stage'] is String
             ? event.payload['stage'] as String
-            : PolarAlignStages.fine,
+            : PolarAlignStages.align,
         camera: _str(event.payload, 'camera'),
       );
     case PolarAlignWsEvents.stopped:
@@ -237,6 +261,10 @@ PolarAlignLive? foldPolarAlignEvent(PolarAlignLive current, WsEvent event,
       final nextStage = event.payload['stage'] is String
           ? event.payload['stage'] as String
           : current.stage;
+      // The verify verdict, once the rig has it: the mount is still on its
+      // way Home, and the screen shows the verdict already.
+      final verdict = event.payload['check_result'];
+      final result = verdict is Map<String, dynamic> ? PolarAlignCheckResult.fromJson(verdict) : null;
       return current.copyWith(
         stage: nextStage,
         phase: event.payload['state'] is String
@@ -246,10 +274,17 @@ PolarAlignLive? foldPolarAlignEvent(PolarAlignLive current, WsEvent event,
             (event.payload['check_solves_done'] as num?)?.toInt() ?? 0,
         checkSolvesTotal:
             (event.payload['check_solves_total'] as num?)?.toInt() ?? current.checkSolvesTotal,
+        checkResult: result,
+        altErrorArcmin: result?.altErrorArcmin,
+        azErrorArcmin: result?.azErrorArcmin,
+        totalErrorArcmin: result?.totalErrorArcmin,
+        totalSigmaArcmin: result?.totalSigmaArcmin,
+        clearSigma: result != null && result.totalSigmaArcmin == null,
+        zone: polarAlignZone(result?.totalErrorArcmin),
         clearFrameInProgress: true,
-        // A new stage measures afresh: the previous stage's readout (and its
-        // green) must not stand for it while it seeds.
-        clearReadout: nextStage != current.stage,
+        // A new stage measures afresh: the adjust loop's readout (and its
+        // green) must not stand for the verify stage before its verdict.
+        clearReadout: result == null && nextStage != current.stage,
       );
     case PolarAlignWsEvents.checked:
       return current.copyWith(
@@ -294,6 +329,7 @@ PolarAlignLive? foldPolarAlignEvent(PolarAlignLive current, WsEvent event,
       return current.copyWith(
         frameStartedAt: now(),
         frameExposureSeconds: _num(event.payload, 'exposure_seconds'),
+        measuringPoint: polarMeasuringPoint(_str(event.payload, 'frame_id')),
       );
     case PolarAlignWsEvents.frameComplete:
       final failures =
@@ -374,9 +410,22 @@ class PolarAlignLiveNotifier extends Notifier<PolarAlignLive> {
   }
 
   /// Hydrate [state] from a REST status snapshot (on panel open / reconnect,
-  /// where the WS resume may have skipped past routine events).
+  /// where the WS resume may have skipped past routine events). A result the
+  /// user already left with Done stays left.
   void hydrateFromStatus(PolarAlignStatus status) {
-    state = liveFromStatus(status);
+    final next = liveFromStatus(status);
+    final same = state.resultDismissed &&
+        next.phase == PolarAlignStates.checked &&
+        next.checkResult?.totalErrorArcmin == state.checkResult?.totalErrorArcmin;
+    state = same ? next.copyWith(resultDismissed: true) : next;
+  }
+
+  /// Done on the result: the screen goes back to Ready. The result stays in
+  /// the view (the Setup checklist reads it); nothing is sent to the rig.
+  void dismissResult() {
+    if (state.phase == PolarAlignStates.checked) {
+      state = state.copyWith(resultDismissed: true);
+    }
   }
 }
 
@@ -394,6 +443,7 @@ PolarAlignLive liveFromStatus(PolarAlignStatus status) => PolarAlignLive(
       zone: polarAlignZone(status.currentErrorArcmin),
       lastFrame: status.lastFrame,
       stage: status.stage,
+      measuringPoint: status.state == PolarAlignStates.seeding ? polarMeasuringPoint(status.lastFrameId) : null,
       checkSolvesDone: status.checkSolvesDone,
       checkResult: status.checkResult,
       correction: status.correction,

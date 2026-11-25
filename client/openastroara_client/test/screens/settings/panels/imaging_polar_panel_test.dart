@@ -34,23 +34,24 @@ Future<FakePolarAlignSection> _pump(
 }
 
 void main() {
-  testWidgets('there is no Home switch: polar align never sends the mount Home (#2048)', (
+  testWidgets("the only switch is the Polar Aligner's: no Home switch, no stop-tracking switch", (
     tester,
   ) async {
     await _pump(tester);
     expect(find.textContaining('Home'), findsNothing);
-    expect(find.byType(Switch), findsNWidgets(2), reason: 'the Polar Aligner and stop-tracking switches only');
+    expect(find.textContaining('tracking'), findsNothing);
+    expect(find.byType(Switch), findsOneWidget);
   });
 
   testWidgets(
-    'the turn, check step, main camera exposure and tolerance each save their own field (#1736)',
+    'the turn, main camera exposure and tolerance each save their own field (#1736)',
     (tester) async {
       final api = await _pump(tester);
       final fields = find.byType(TextField);
-      expect(fields, findsNWidgets(5), reason: 'and frames per point (#2082)');
-      // Row order: tolerance, turn, check step, main camera exposure.
-      final entered = ['2', '25', '20', '7.5'];
-      for (var i = 0; i < 4; i++) {
+      expect(fields, findsNWidgets(4), reason: 'and frames per point (#2082)');
+      // Row order: tolerance, turn, main camera exposure.
+      final entered = ['2', '25', '7.5'];
+      for (var i = 0; i < 3; i++) {
         await tester.enterText(fields.at(i), entered[i]);
         await tester.testTextInput.receiveAction(TextInputAction.done);
         await tester.pumpAndSettle();
@@ -58,7 +59,6 @@ void main() {
       final last = api.puts.last;
       expect(last.targetToleranceArcmin, 2.0);
       expect(last.seedRotationDeg, 25.0);
-      expect(last.checkStepDeg, 20.0);
       expect(last.coarseExposureSeconds, 7.5);
     },
   );
@@ -76,7 +76,7 @@ void main() {
       rig.initial = rigPolarAlign;
       await tester.tap(find.byKey(const Key('section-retry')));
       await tester.pumpAndSettle();
-      expect(find.byType(TextField), findsNWidgets(5));
+      expect(find.byType(TextField), findsNWidgets(4));
     },
   );
 
@@ -151,7 +151,7 @@ void main() {
     'the Polar Aligner switch shows the profile value and saves polar_aligner_auto, keeping the other fields (#1971)',
     (tester) async {
       final rig = FakePolarAlignSection(
-        initial: rigPolarAlign.copyWith(exposureSeconds: 4, checkStepDeg: 15, polarAlignerAuto: false),
+        initial: rigPolarAlign.copyWith(exposureSeconds: 4, seedRotationDeg: 15, polarAlignerAuto: false),
       );
       await _pump(tester, rig: rig);
       expect(find.text("Correct with the Polar Aligner's motors"), findsOneWidget);
@@ -162,30 +162,9 @@ void main() {
       await tester.pumpAndSettle();
       final saved = rig.puts.single;
       expect(saved.polarAlignerAuto, isTrue);
-      expect((saved.exposureSeconds, saved.checkStepDeg), (4.0, 15.0), reason: 'saved over the loaded section');
+      expect((saved.exposureSeconds, saved.seedRotationDeg), (4.0, 15.0), reason: 'saved over the loaded section');
       expect(
         find.text('On a rig with a Polar Aligner, Polar align turns its motors after each measurement'),
-        findsOneWidget,
-      );
-    },
-  );
-
-  testWidgets(
-    'the stop-tracking switch shows the profile value and saves stop_tracking_when_done, keeping the other fields (#2048)',
-    (tester) async {
-      final rig = FakePolarAlignSection(initial: rigPolarAlign.copyWith(exposureSeconds: 4, checkStepDeg: 15));
-      await _pump(tester, rig: rig);
-      expect(find.text('Stop tracking when polar align ends'), findsOneWidget);
-      expect(find.text('Every end of a run turns tracking off'), findsOneWidget);
-      final stopTracking = find.byType(Switch).at(1);
-      expect(tester.widget<Switch>(stopTracking).value, isTrue);
-      await tester.tap(stopTracking);
-      await tester.pumpAndSettle();
-      final saved = rig.puts.single;
-      expect(saved.stopTrackingWhenDone, isFalse);
-      expect((saved.exposureSeconds, saved.checkStepDeg), (4.0, 15.0), reason: 'saved over the loaded section');
-      expect(
-        find.text('Off: a run that finishes gives back the tracking it found. A Stop always leaves tracking off'),
         findsOneWidget,
       );
     },
@@ -195,7 +174,7 @@ void main() {
     'Polar align: a load that fails after a rig change shows not loaded, and nothing is sent (ADR 0015)',
     (tester) async {
       final rig = await _pump(tester);
-      expect(find.byType(Switch), findsNWidgets(2));
+      expect(find.byType(Switch), findsOneWidget);
       // A different rig or profile: every section back to not loaded, and
       // this one's next load fails.
       rig.initial = null;
@@ -231,17 +210,17 @@ void main() {
           statusCode: 412,
         ),
       );
-      final stopTracking = find.byType(Switch).at(1);
-      await tester.tap(stopTracking);
+      final aligner = find.byType(Switch);
+      await tester.tap(aligner);
       await tester.pumpAndSettle();
       expect(rig.puts, isEmpty);
-      expect(tester.widget<Switch>(find.byType(Switch).at(1)).value, isFalse, reason: 'the change stays on screen');
+      expect(tester.widget<Switch>(aligner).value, isFalse, reason: 'the change stays on screen');
       expect(find.byKey(const Key('section-reload')), findsOneWidget);
 
       rig.refuse = null;
       await tester.tap(find.byKey(const Key('section-reload')));
       await tester.pumpAndSettle();
-      expect(tester.widget<Switch>(find.byType(Switch).at(1)).value, isTrue, reason: "the rig's copy again");
+      expect(tester.widget<Switch>(aligner).value, isTrue, reason: "the rig's copy again");
       expect(find.byKey(const Key('section-reload')), findsNothing);
     },
   );
@@ -255,14 +234,14 @@ void main() {
       addTearDown(tester.view.reset);
       final rig = await _pump(
         tester,
-        rig: FakePolarAlignSection(initial: rigPolarAlign.copyWith(checkStepDeg: 15)),
+        rig: FakePolarAlignSection(initial: rigPolarAlign.copyWith(seedRotationDeg: 15)),
       );
       expect(find.text('Automatic'), findsOneWidget);
       await tester.tap(find.byKey(const Key('polar-knob-east-direction')));
       await tester.pumpAndSettle();
       await tester.tap(find.text('West').last);
       await tester.pumpAndSettle();
-      expect((rig.puts.last.eastDirection, rig.puts.last.checkStepDeg), (false, 15.0));
+      expect((rig.puts.last.eastDirection, rig.puts.last.seedRotationDeg), (false, 15.0));
       expect(rig.puts.last.toJson()['east_direction'], false);
 
       await tester.tap(find.byKey(const Key('polar-knob-east-direction')));
