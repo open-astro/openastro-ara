@@ -348,12 +348,11 @@ public partial class Program {
         builder.Services.AddSingleton<ActiveRunSessionRegistry>();
         // #2141 — Rig Occupancy: each routine registers once with what it holds and a reading of its own running
         // state; every busy question asks the register. Readings resolve at call time (no construction cycle).
+        // #2142 — and its stop: every stop ladder ends routines through the register.
         builder.Services.AddSingleton(sp => new RigOccupancy()
             .RegisterSession(sp.GetRequiredService<ActiveRunSessionRegistry>(), () => sp.GetService<ISequencerService>())
-            .Register("polar alignment", RigHolding.Mount | RigHolding.MainCamera | RigHolding.GuideCamera,
-                () => sp.GetService<IPolarAlignService>()?.IsActive == true)
-            .Register("centering", RigHolding.Mount | RigHolding.MainCamera,
-                () => sp.GetService<ICenteringService>()?.IsCentering == true));
+            .RegisterPolarAlign(() => sp.GetService<IPolarAlignService>())
+            .RegisterCenter(() => sp.GetService<ICenteringService>()));
         // Singleton on purpose: the service sweeps stale request/result files from the storage
         // exchange in its constructor (#1135), which is only safe because exactly one instance is
         // built — resolved eagerly after Build() below, so the sweep really runs at boot and
@@ -976,7 +975,7 @@ public partial class Program {
                 sp.GetService<IFlatDeviceService>(),
                 sp.GetService<INotificationService>(),
                 sp.GetService<ILogger<UnattendedShutdownService>>(),
-                polarAlignResolver: () => sp.GetService<IPolarAlignService>()));
+                occupancy: sp.GetService<RigOccupancy>()));
         // Hosted so a daemon shutdown cancels a pending countdown.
         builder.Services.AddHostedService(sp => sp.GetRequiredService<UnattendedShutdownService>());
 
@@ -992,8 +991,8 @@ public partial class Program {
             sp.GetService<IRotatorService>(),
             sp.GetService<IFlatDeviceService>(),
             sp.GetService<ILogger<ShutdownLadder>>(),
-            // #2066 — resolved lazily (Polar Align is built after the ladder): ended before the Find Home and park.
-            () => sp.GetService<IPolarAlignService>()));
+            // #2066, #2142 — every routine on the rig ends before the Find Home and park.
+            sp.GetService<RigOccupancy>()));
         builder.Services.AddSingleton<IHostPoweroffStarter>(_ => new SystemctlHostPoweroffStarter(ServerUpdateService.RunAsync));
         builder.Services.AddSingleton(sp => new EndNightService(
             sp.GetRequiredService<ShutdownLadder>(),
@@ -1084,8 +1083,8 @@ public partial class Program {
                 sp.GetService<TargetRecenter>(),
                 // #1689 — an unsafe reaction turns dome following off (Func<>: registered later in this file).
                 () => sp.GetService<DomeFollower>(),
-                // #2066 — the park stops a running polar alignment and the Polar Aligner first.
-                () => sp.GetService<IPolarAlignService>(),
+                // #2066, #2142 — the park stops every routine that holds the mount, and the Polar Aligner, first.
+                sp.GetService<RigOccupancy>(),
                 sp.GetService<IPolarAlignerService>()));
         // Hosted so the poll timer starts with the daemon and a shutdown cancels a
         // pending auto-resume countdown.
@@ -1118,16 +1117,16 @@ public partial class Program {
                 sp.GetService<IFaultLogService>(),
                 // §42.2 — the guider learns which runs a guider episode paused (resolved lazily).
                 () => sp.GetService<GuiderService>(),
-                // #2066 — the give-up park stops a running polar alignment and the Polar Aligner first.
-                () => sp.GetService<IPolarAlignService>(),
+                // #2066, #2142 — the give-up park stops every routine that holds the mount, and the Polar Aligner, first.
+                sp.GetService<RigOccupancy>(),
                 sp.GetService<IPolarAlignerService>()));
         // Hosted so the hub subscription is armed with the daemon and a shutdown cancels
         // any in-flight reconnect ladder.
         builder.Services.AddHostedService(sp => sp.GetRequiredService<FaultReactionService>());
 
         // §35.3 — emergency stop (abort runs → stop mount where it is → halt rotator → abort exposure →
-        // stop focus/Bahtinov/autofocus/polar → stop guiding → stop mount again if polar ran → flat light
-        // off → cooler off), behind POST /api/v1/server/emergency-stop.
+        // stop focus/Bahtinov/autofocus → stop every Rig Occupancy routine → stop guiding → stop mount again if a
+        // mount holder ran → flat light off → cooler off), behind POST /api/v1/server/emergency-stop.
         // Same optional-dep + sequencer-resolver pattern as the reaction engine.
         builder.Services.AddSingleton<EmergencyStopService>(sp =>
             new EmergencyStopService(
@@ -1143,7 +1142,7 @@ public partial class Program {
                 sp.GetService<IGuideFocusService>(),
                 sp.GetService<IBahtinovFocusService>(),
                 sp.GetService<AutofocusRunTracker>(),
-                sp.GetService<IPolarAlignService>(),
+                sp.GetService<RigOccupancy>(),
                 () => sp.GetService<DomeFollower>(),
                 sp.GetService<IPolarAlignerService>()));
 

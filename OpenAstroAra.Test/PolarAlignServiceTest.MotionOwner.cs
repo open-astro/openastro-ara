@@ -201,7 +201,7 @@ namespace OpenAstroAra.Test {
             svc.TakeoverStopBound = TimeSpan.FromMilliseconds(200); // the daemon's 9 s
             await svc.StartConfirmedAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
             await solver.Entered.Task.WaitAsync(SignalTimeout).ConfigureAwait(false);
-            var ladder = new ShutdownLadder(telescope: mount, polarAlign: () => svc);
+            var ladder = new ShutdownLadder(telescope: mount, occupancy: new RigOccupancy().RegisterPolarAlign(() => svc));
 
             try {
                 Assert.That(mount.Tracking, Is.True, "the mount tracks before the shutdown");
@@ -219,6 +219,28 @@ namespace OpenAstroAra.Test {
                     Assert.That(mount.Motions.Where(m => m.Kind is MotionKind.FindHome or MotionKind.Park), Is.Empty,
                         "no Find Home or park reached the mount. " + mount.Describe());
                 });
+            } finally {
+                solver.Release();
+            }
+        }
+
+        // #2142 — the register confirms polar alignment's stop by IsActive. A run stuck in a call that ignores cancellation
+        // is fenced at the takeover's bound (#2066): that stop took effect, so Emergency Stop does not name it as failed.
+        [Test]
+        public async Task A_fenced_stuck_run_counts_as_stopped_by_the_register() {
+            var mount = PolledGemAt(-4.0);
+            var ws = new WsRecorder();
+            var solver = new StuckSolver();
+            using var svc = NewGemServiceWith(mount, ws, solver);
+            svc.TakeoverStopBound = TimeSpan.FromMilliseconds(200);
+            await svc.StartConfirmedAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            await solver.Entered.Task.WaitAsync(SignalTimeout).ConfigureAwait(false);
+            var occupancy = new RigOccupancy().RegisterPolarAlign(() => svc);
+
+            try {
+                var stops = await occupancy.StopAsync(RigHolding.Any, MountStopReasons.EmergencyStop, TimeSpan.FromSeconds(10)).ConfigureAwait(false);
+
+                Assert.That(stops.Single().Stopped, Is.True, "IsActive after the fenced takeover: " + svc.IsActive);
             } finally {
                 solver.Release();
             }

@@ -385,5 +385,21 @@ namespace OpenAstroAra.Test {
             await Assert.ThrowsAsync<PlateSolverConfigurationException>(
                 () => sut.CenterAndRotateAsync(Target, 0.0, NoProgress, CancellationToken.None));
         }
+
+        // #2142 — Center's stop: the centering under way ends cancelled (its next attempt sends no slew), the call returns
+        // once none is under way, and a Center started afterwards runs.
+        [Test]
+        public async Task StopAsync_ends_the_centering_under_way_and_a_later_one_still_runs() {
+            using var center = await RunningCenter.StartAsync();
+
+            await center.Service.StopAsync(CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(10));
+            Assert.That(center.Service.IsCentering, Is.False, "the stop returned while a centering was under way");
+            await center.ReleaseNextAttemptAsync();
+            Assert.That(center.Slewed(), Is.False);
+
+            var later = await center.Service.CenterOnTarget(new Coordinates(Angle.ByHours(5), Angle.ByDegree(20), Epoch.J2000),
+                null, null, CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(10));
+            Assert.That(later.Success, Is.True, "a Center after the stop is not stopped");
+        }
     }
 }

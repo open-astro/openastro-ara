@@ -1,0 +1,2 @@
+### Fixed (rig)
+- **Emergency Stop, the safety park, the fault park and End Night now end a Center** (#2142): a Center started outside a sequence could slew the mount again after any of these stops, because none of them knew about it. Now every stop asks the one Rig Occupancy register, which ends each running routine (polar alignment and Center) through its own stop and checks that it ended. A routine that is still running after its stop is named in Emergency Stop's result ("stop_centering FAILED") and in the log.

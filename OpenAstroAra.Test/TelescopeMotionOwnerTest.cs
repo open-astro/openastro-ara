@@ -364,7 +364,7 @@ namespace OpenAstroAra.Test {
                 hold.Dispose(); // the run's end gives the mount back
                 return Task.FromResult(new OperationAcceptedDto(Guid.NewGuid(), "polar-align.stop", DateTimeOffset.UtcNow, null));
             });
-            var ladder = new ShutdownLadder(telescope: svc, polarAlign: () => polarAlign.Object);
+            var ladder = new ShutdownLadder(telescope: svc, occupancy: new RigOccupancy().RegisterPolarAlign(() => polarAlign.Object));
 
             var home = await ladder.FindHomeAsync();
             hold = svc.AcquireMotion(MotionOwners.PolarAlign); // a run started again before the park step

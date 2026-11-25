@@ -67,7 +67,7 @@ public sealed partial class ShutdownLadder {
     private readonly IFocuserService? _focuser;
     private readonly IRotatorService? _rotator;
     private readonly IFlatDeviceService? _flatDevice;
-    private readonly Func<IPolarAlignService?>? _polarAlign;
+    private readonly RigOccupancy? _occupancy;
     private readonly ILogger _logger;
 
     // ─── test seams (the ClientSessionService knob pattern) ───
@@ -81,10 +81,10 @@ public sealed partial class ShutdownLadder {
     internal TimeSpan ParkTimeout { get; set; } = TimeSpan.FromSeconds(90);
     /// <summary>Cap on the Find Home attempt.</summary>
     internal TimeSpan FindHomeTimeout { get; set; } = TimeSpan.FromSeconds(120);
-    /// <summary>#2066 — cap on ending a running polar alignment before the Find Home or park (its own end is bounded
-    /// too, under a minute for a run stuck in a hung call). Past it the step goes on: the mount refuses the move while the
-    /// routine still holds it, and the park step stops tracking instead.</summary>
-    internal TimeSpan PolarAlignTakeoverTimeout { get; set; } = TimeSpan.FromSeconds(60);
+    /// <summary>#2066, #2142 — cap on ending each routine before the Find Home or park (polar alignment's own end is
+    /// bounded too, under a minute for a run stuck in a hung call). Past it the step goes on: the mount refuses the move
+    /// while polar alignment still holds it, and the park step stops tracking instead.</summary>
+    internal TimeSpan RoutineStopTimeout { get; set; } = TimeSpan.FromSeconds(60);
 
     public ShutdownLadder(
             IProfileStore? profiles = null,
@@ -96,7 +96,7 @@ public sealed partial class ShutdownLadder {
             IRotatorService? rotator = null,
             IFlatDeviceService? flatDevice = null,
             ILogger? logger = null,
-            Func<IPolarAlignService?>? polarAlign = null) {
+            RigOccupancy? occupancy = null) {
         _profiles = profiles;
         _guider = guider;
         _telescope = telescope;
@@ -105,26 +105,23 @@ public sealed partial class ShutdownLadder {
         _focuser = focuser;
         _rotator = rotator;
         _flatDevice = flatDevice;
-        _polarAlign = polarAlign;
+        _occupancy = occupancy;
         _logger = logger ?? NullLogger.Instance;
     }
 
-    /// <summary>#2066 (ARA-2) — the mount steps' first move: a running polar alignment holds the mount, and the mediator
-    /// refuses a Find Home or park while it does. It ends through its takeover, as before the safety and fault parks: it
-    /// stops its motor and leaves the mount to this step, and gives the mount back. Bounded by
-    /// <see cref="PolarAlignTakeoverTimeout"/>; a fault or a hang is logged and the step goes on.</summary>
-    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
-        Justification = "Best-effort by design: a routine that faults or hangs must not stop the rest of the shutdown.")]
-    private async Task EndPolarAlignFirstAsync() {
-        var polarAlign = _polarAlign?.Invoke();
-        if (polarAlign is null
-                || !(polarAlign.IsActive || (_telescope as IMountMotionControl)?.MotionOwner == MotionOwners.PolarAlign)) {
+    /// <summary>#2066 (ARA-2), #2142 — the mount steps' first move: every routine in <see cref="RigOccupancy"/> ends
+    /// through its own stop, the mount's holders first. A running polar alignment holds the mount, and the mediator refuses
+    /// a Find Home or park while it does: it ends through its takeover (it stops its motor, leaves the mount to this step
+    /// and gives the mount back). A Center is cancelled, so it does not re-slew. Each stop is bounded by
+    /// <see cref="RoutineStopTimeout"/>; a routine still running is logged and the step goes on.</summary>
+    private async Task EndRoutinesFirstAsync() {
+        if (_occupancy is null) {
             return;
         }
-        try {
-            await polarAlign.StopForTakeoverAsync("shutdown", CancellationToken.None).WaitAsync(PolarAlignTakeoverTimeout).ConfigureAwait(false);
-        } catch (Exception ex) {
-            LogStepFailed("stop-polar-align", ex);
+        foreach (var stop in await _occupancy.StopAsync(RigHolding.Any, MountStopReasons.Shutdown, RoutineStopTimeout).ConfigureAwait(false)) {
+            if (!stop.Stopped) {
+                LogStepFailed(stop.FailedRung, stop.Fault!);
+            }
         }
     }
 
@@ -162,7 +159,7 @@ public sealed partial class ShutdownLadder {
         try {
             var mount = _telescope.GetInfo();
             if (!mount.Connected || !mount.CanFindHome || mount.AtPark) return new(LadderOutcome.Skipped, string.Empty);
-            await EndPolarAlignFirstAsync().ConfigureAwait(false);
+            await EndRoutinesFirstAsync().ConfigureAwait(false);
             using var cts = new CancellationTokenSource(FindHomeTimeout);
             var found = await _telescope.FindHome(new Progress<OpenAstroAra.Core.Model.ApplicationStatus>(), cts.Token).ConfigureAwait(false);
             return found
@@ -199,7 +196,7 @@ public sealed partial class ShutdownLadder {
                 return new(new(LadderOutcome.Failed, "Mount state unreadable — tracking stop attempted. "), MountRest.Unknown);
             }
             if (mount.Connected) {
-                await EndPolarAlignFirstAsync().ConfigureAwait(false);
+                await EndRoutinesFirstAsync().ConfigureAwait(false);
             }
             if (mount.CanPark && !mount.AtPark) {
                 var parked = false;

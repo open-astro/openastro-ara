@@ -72,9 +72,9 @@ public sealed partial class FaultReactionService : IHostedService, IDisposable {
     private readonly ILogger<FaultReactionService> _logger;
     private readonly IFaultLogService? _faultLog;
     private readonly Func<IGuiderEpisodeListener?>? _guiderEpisodes;
-    // #2066 — the give-up park stops a running polar alignment and the Polar Aligner first, as the safety park does.
-    // Func<>: polar alignment is built from services registered around this one.
-    private readonly Func<IPolarAlignService?>? _polarAlignResolver;
+    // #2066, #2142 — the give-up park stops every routine that holds the mount (Rig Occupancy) and the Polar Aligner
+    // first, as the safety park does.
+    private readonly RigOccupancy? _occupancy;
     private readonly IPolarAlignerService? _polarAligner;
 
     private readonly object _gate = new();
@@ -107,9 +107,10 @@ public sealed partial class FaultReactionService : IHostedService, IDisposable {
     internal TimeSpan ReleasePollInterval { get; set; } = TimeSpan.FromSeconds(2);
     internal TimeSpan LingerInterval { get; set; } = TimeSpan.FromSeconds(120);
     internal int LingerMaxAttempts { get; set; } = 30;
-    /// <summary>#2066 — how long the park waits for polar alignment and the Polar Aligner to stop first. A routine that
-    /// hangs must not hold the park back: the park also counts as a stop, so the routine starts no move after it.</summary>
-    internal TimeSpan StopPolarAlignBeforeParkTimeout { get; set; } = TimeSpan.FromSeconds(10);
+    /// <summary>#2066, #2142 — how long the park waits for each routine that holds the mount, and the Polar Aligner, to
+    /// stop first. A routine that hangs must not hold the park back: the park also counts as a stop, so the routine starts
+    /// no move after it.</summary>
+    internal TimeSpan StopRoutinesBeforeParkTimeout { get; set; } = TimeSpan.FromSeconds(10);
 
     public FaultReactionService(
             EquipmentFaultHub? hub = null,
@@ -122,9 +123,9 @@ public sealed partial class FaultReactionService : IHostedService, IDisposable {
             ILogger<FaultReactionService>? logger = null,
             IFaultLogService? faultLog = null,
             Func<IGuiderEpisodeListener?>? guiderEpisodes = null,
-            Func<IPolarAlignService?>? polarAlignResolver = null,
+            RigOccupancy? occupancy = null,
             IPolarAlignerService? polarAligner = null) {
-        _polarAlignResolver = polarAlignResolver;
+        _occupancy = occupancy;
         _polarAligner = polarAligner;
         _hub = hub;
         _reconnector = reconnector;
@@ -801,9 +802,9 @@ public sealed partial class FaultReactionService : IHostedService, IDisposable {
             return false;
         }
         try {
-            // #2066 — a polar alignment turning the RA motor (and its Polar Aligner) is stopped before the park: the stop
-            // its turn sends when it ends would otherwise land on the park.
-            await StopPolarAlignQuietlyAsync().ConfigureAwait(false);
+            // #2066, #2142 — a routine that holds the mount (a polar alignment turning the RA motor, a Center) and the Polar
+            // Aligner are stopped before the park: a re-slew, or the stop a turn sends when it ends, would otherwise land on it.
+            await StopMountHoldersQuietlyAsync().ConfigureAwait(false);
             await _telescope.ParkAsync(new ParkRequestDto("equipment.fault"), null, CancellationToken.None)
                 .ConfigureAwait(false);
             return true;
@@ -817,11 +818,11 @@ public sealed partial class FaultReactionService : IHostedService, IDisposable {
         }
     }
 
-    /// <summary>#2066 — the park's first step (<see cref="ReactionMountStops.StopPolarAlignBeforeParkAsync"/>, shared with the
-    /// other reaction's park so the two stay in step), each step bounded by <see cref="StopPolarAlignBeforeParkTimeout"/>.</summary>
-    private Task StopPolarAlignQuietlyAsync() =>
-        ReactionMountStops.StopPolarAlignBeforeParkAsync(_polarAlignResolver, _polarAligner, MountStopReasons.FaultPark,
-            StopPolarAlignBeforeParkTimeout, LogRungFailed);
+    /// <summary>#2066 — the park's first step (<see cref="ReactionMountStops.StopMountHoldersBeforeParkAsync"/>, shared with the
+    /// other reaction's park so the two stay in step), each step bounded by <see cref="StopRoutinesBeforeParkTimeout"/>.</summary>
+    private Task StopMountHoldersQuietlyAsync() =>
+        ReactionMountStops.StopMountHoldersBeforeParkAsync(_occupancy, _polarAligner, MountStopReasons.FaultPark,
+            StopRoutinesBeforeParkTimeout, LogRungFailed);
 
     // #2070 — the park was refused because the mount's position is unverified: stop its motion and its
     // tracking (best effort) and say so loudly, since the run ended with the mount unparked. The abort

@@ -174,6 +174,37 @@ namespace OpenAstroAra.Test {
             Assert.That(occupancy.Holder(), Is.Null);
         }
 
+        // #2142 — every composed stop ladder ends routines through the one register: Emergency Stop, the safety and fault
+        // parks, End Night's ladder and the unattended shutdown's own ladder. A ladder composed without it stops no routine.
+        [Test]
+        public async Task Every_composed_stop_ladder_reads_the_one_rig_occupancy() {
+            const System.Reflection.BindingFlags Private = System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic;
+            static object? Field(object owner, string name) => owner.GetType().GetField(name, Private)!.GetValue(owner);
+            var occupancy = app.Services.GetRequiredService<RigOccupancy>();
+            var ladders = new Dictionary<string, object> {
+                ["emergency stop"] = app.Services.GetRequiredService<EmergencyStopService>(),
+                ["safety park"] = app.Services.GetRequiredService<SafetyReactionService>(),
+                ["fault park"] = app.Services.GetRequiredService<FaultReactionService>(),
+                ["end night"] = app.Services.GetRequiredService<ShutdownLadder>(),
+                ["unattended shutdown"] = Field(app.Services.GetRequiredService<UnattendedShutdownService>(), "_ladder")!,
+            };
+            Assert.Multiple(() => {
+                foreach (var (name, ladder) in ladders) {
+                    Assert.That(Field(ladder, "_occupancy"), Is.SameAs(occupancy), name);
+                }
+            });
+
+            // The composed Center has a stop: a ladder that asks for the mount reaches it (held gate: it never ends here).
+            var gate = (SemaphoreSlim)Field(app.Services.GetRequiredService<ICenteringService>(), "_centeringGate")!;
+            await gate.WaitAsync();
+            try {
+                var stops = await occupancy.StopAsync(RigHolding.Mount, MountStopReasons.EmergencyStop, TimeSpan.FromMilliseconds(100));
+                Assert.That(stops.Single().Name, Is.EqualTo("centering"));
+            } finally {
+                gate.Release();
+            }
+        }
+
         [Test]
         public void The_test_host_resolves_the_fake_guider_supervisor_not_systemctl() {
             // The real supervisor runs `systemctl start|restart openastro-guider`; on a Linux desktop with a

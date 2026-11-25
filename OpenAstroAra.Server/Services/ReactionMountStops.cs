@@ -21,23 +21,26 @@ namespace OpenAstroAra.Server.Services;
 
 /// <summary>
 /// #2107 — the quiet mount stops the safety reaction (<see cref="SafetyReactionService"/>) and the equipment-fault
-/// reaction (<see cref="FaultReactionService"/>) share, so their two parks stay in step: Polar Align and the Polar
-/// Aligner stop before the park, and a park refused for an unverified position stops the mount's motion and tracking
+/// reaction (<see cref="FaultReactionService"/>) share, so their two parks stay in step: every routine that holds the
+/// mount (#2142) and the Polar Aligner stop before the park, and a park refused for an unverified position stops the mount's motion and tracking
 /// instead. Every step is best effort: a fault is handed to <c>rungFailed</c> (the caller's log line) and never thrown.
 /// </summary>
 internal static class ReactionMountStops {
 
-    /// <summary>#2066 — the park's first step: a running polar alignment ends and leaves the mount to the park (no stop
-    /// confirmation of its own, which would hold the park back), then the Polar Aligner stops. Each step is bounded by
-    /// <paramref name="bound"/>; a fault or a hang is logged and the park goes ahead.</summary>
-    /// <param name="takeoverBy">The park's name for Polar Align's log (<see cref="MountStopReasons.SafetyPark"/> or
+    /// <summary>#2066, #2142 — the park's first step: every routine that holds the mount ends through its own stop in
+    /// <see cref="RigOccupancy"/> (polar alignment leaves the mount to the park, with no stop confirmation of its own that
+    /// would hold the park back; a Center is cancelled), then the Polar Aligner stops. Each step is bounded by
+    /// <paramref name="bound"/>; a fault, a hang or a routine still running is logged and the park goes ahead.</summary>
+    /// <param name="takeoverBy">The park's name for the routines' logs (<see cref="MountStopReasons.SafetyPark"/> or
     /// <see cref="MountStopReasons.FaultPark"/>).</param>
-    public static async Task StopPolarAlignBeforeParkAsync(Func<IPolarAlignService?>? polarAlignResolver, IPolarAlignerService? aligner,
+    public static async Task StopMountHoldersBeforeParkAsync(RigOccupancy? occupancy, IPolarAlignerService? aligner,
             string takeoverBy, TimeSpan bound, Action<string, Exception> rungFailed) {
-        var polarAlign = polarAlignResolver?.Invoke();
-        if (polarAlign is { IsActive: true }) {
-            await BoundedQuietlyAsync("stop_polar_align", () => polarAlign.StopForTakeoverAsync(takeoverBy, CancellationToken.None), bound, rungFailed)
-                .ConfigureAwait(false);
+        if (occupancy is not null) {
+            foreach (var stop in await occupancy.StopAsync(RigHolding.Mount, takeoverBy, bound).ConfigureAwait(false)) {
+                if (!stop.Stopped) {
+                    rungFailed(stop.FailedRung, stop.Fault!);
+                }
+            }
         }
         if (aligner is { IsPresent: true }) {
             await BoundedQuietlyAsync("stop_polar_aligner", () => aligner.StopAsync(null, CancellationToken.None), bound, rungFailed)
@@ -46,7 +49,7 @@ internal static class ReactionMountStops {
     }
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
-        Justification = "Best-effort step before the park: a routine or aligner that faults or hangs must not block the park; logged, never rethrown.")]
+        Justification = "Best-effort step before the park: an aligner that faults or hangs must not block the park; logged, never rethrown.")]
     private static async Task BoundedQuietlyAsync(string rung, Func<Task> step, TimeSpan bound, Action<string, Exception> rungFailed) {
         try {
             await step().WaitAsync(bound).ConfigureAwait(false);

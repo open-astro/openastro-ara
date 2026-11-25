@@ -216,13 +216,31 @@ namespace OpenAstroAra.Test {
             service = new SafetyReactionService(
                 monitor.Object, weather.Object, profiles.Object, () => sequencer.Object,
                 guider.Object, telescope.Object, notifications.Object, ws.Object,
-                polarAlignResolver: () => polar.Object, polarAligner: aligner.Object);
+                occupancy: new RigOccupancy().RegisterPolarAlign(() => polar.Object), polarAligner: aligner.Object);
             SetMonitor(safe: false);
 
             await service.TickAsync();
 
             Assert.That(calls, Is.EqualTo(PolarAlignThenAlignerThenPark));
             polar.Verify(p => p.StopAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Never, "not the Stop that confirms its own stop first");
+        }
+
+        // #2142 — the safety park ends a Center under way first: its next attempt does not slew against the park.
+        [Test]
+        public async Task A_safety_park_ends_a_center_under_way_first() {
+            using var center = await RunningCenter.StartAsync();
+            service.Dispose();
+            service = new SafetyReactionService(
+                monitor.Object, weather.Object, profiles.Object, () => sequencer.Object,
+                guider.Object, telescope.Object, notifications.Object, ws.Object,
+                occupancy: new RigOccupancy().RegisterCenter(() => center.Service));
+            SetMonitor(safe: false);
+
+            await service.TickAsync();
+            await center.ReleaseNextAttemptAsync();
+
+            telescope.Verify(t => t.ParkAsync(It.IsAny<ParkRequestDto>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Once);
+            Assert.That(center.Slewed(), Is.False, "the Center slewed after the safety park");
         }
 
         // #2066 — a polar alignment that hangs on its stop must not hold the safety park back.
@@ -236,8 +254,8 @@ namespace OpenAstroAra.Test {
             service = new SafetyReactionService(
                 monitor.Object, weather.Object, profiles.Object, () => sequencer.Object,
                 guider.Object, telescope.Object, notifications.Object, ws.Object,
-                polarAlignResolver: () => polar.Object) {
-                StopPolarAlignBeforeParkTimeout = TimeSpan.FromMilliseconds(50),
+                occupancy: new RigOccupancy().RegisterPolarAlign(() => polar.Object)) {
+                StopRoutinesBeforeParkTimeout = TimeSpan.FromMilliseconds(50),
             };
             SetMonitor(safe: false);
 
