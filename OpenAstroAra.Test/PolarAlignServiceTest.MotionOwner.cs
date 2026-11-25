@@ -224,7 +224,7 @@ namespace OpenAstroAra.Test {
             }
         }
 
-        // #2142 — the register confirms polar alignment's stop by IsActive. A run stuck in a call that ignores cancellation
+        // #2142 — the register confirms polar alignment's stop by its return, not by IsActive. A run stuck in a call that ignores cancellation
         // is fenced at the takeover's bound (#2066): that stop took effect, so Emergency Stop does not name it as failed.
         [Test]
         public async Task A_fenced_stuck_run_counts_as_stopped_by_the_register() {
