@@ -973,7 +973,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get polarSingle => 'Single';
 
   @override
-  String get polarStart => 'Start polar alignment';
+  String get polarStart => 'Start Polar Alignment';
 
   @override
   String get polarStop => 'Stop';
@@ -994,9 +994,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get polarActionComplete => 'complete polar alignment';
 
   @override
-  String get polarPhaseSeeding => 'Finding the pole…';
-
-  @override
   String get polarPhaseAdjusting => 'Adjusting';
 
   @override
@@ -1006,20 +1003,11 @@ class AppLocalizationsEn extends AppLocalizations {
   String get polarPhaseFailed => 'Polar alignment failed';
 
   @override
-  String get polarPhaseReady => 'Ready';
-
-  @override
   String get polarPhaseHoming => 'Going Home…';
 
   @override
-  String get polarPhaseNeedsHome => 'Put the mount at Home';
-
-  @override
-  String get polarPhaseRough => 'Rough step';
-
-  @override
-  String polarPhaseChecking(int done, int total) {
-    return 'Checking $done of $total';
+  String polarPhaseChecking(int point, int total) {
+    return 'Checking the alignment — $point of $total';
   }
 
   @override
@@ -1036,57 +1024,6 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get polarVerdictFarOff => 'Far off';
-
-  @override
-  String get polarPhaseChecked => 'Checked';
-
-  @override
-  String get polarRoughWaiting =>
-      'The main camera measures the mount axis with a turn in RA, then follows your knob moves. Waiting for the first solve…';
-
-  @override
-  String get polarSideOnPole => 'The mount axis is on the pole.';
-
-  @override
-  String polarSideSits(String parts) {
-    return 'The mount axis sits $parts of the pole.';
-  }
-
-  @override
-  String polarSideSitsVertical(String parts) {
-    return 'The mount axis sits $parts the pole.';
-  }
-
-  @override
-  String get polarSideAbove => 'above';
-
-  @override
-  String get polarSideBelow => 'below';
-
-  @override
-  String get polarSideEast => 'east';
-
-  @override
-  String get polarSideWest => 'west';
-
-  @override
-  String get polarSideJoin => ' and ';
-
-  @override
-  String polarCheckedLine(String verdict) {
-    return 'Three-point check: $verdict';
-  }
-
-  @override
-  String polarCheckedVsFine(String verdict, String delta) {
-    return 'Three-point check: $verdict, $delta′ from the last run\'s readout';
-  }
-
-  @override
-  String get polarCheck => 'Check';
-
-  @override
-  String get polarActionCheck => 'start the check';
 
   @override
   String get polarAltitude => 'Altitude';
@@ -6060,44 +5997,6 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get polarStepRough => 'Rough';
-
-  @override
-  String get polarStepFine => 'Fine';
-
-  @override
-  String get polarStepVerify => 'Check';
-
-  @override
-  String get polarSetup => 'Setup';
-
-  @override
-  String get polarErrorHeading => 'Error';
-
-  @override
-  String polarInsideTolerance(String tolerance) {
-    return 'Inside your $tolerance′ tolerance. Done keeps this alignment; stop and start again to refine it with the guide camera.';
-  }
-
-  @override
-  String polarOutsideTolerance(String tolerance) {
-    return 'Outside your $tolerance′ tolerance: stop with the shutter, then start again to refine it with the guide camera.';
-  }
-
-  @override
-  String polarCheckCaption(String step) {
-    return 'Check turns the mount 2 × $step° and takes three frames to measure the alignment.';
-  }
-
-  @override
-  String get polarRoughFirst => 'Rough first (main camera)';
-
-  @override
-  String polarRoughFirstCaption(String step) {
-    return 'Rough first turns the mount 2 × $step° and measures with the main camera.';
-  }
-
-  @override
   String get polarNoisyMeasurement =>
       'Noisy measurement: the solves at one point scattered more than 3″, even after a retake. Check focus and seeing, or take more frames per point.';
 
@@ -6108,12 +6007,12 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String polarUnconfirmedBySigma(String tolerance, String sigma) {
-    return 'Inside your $tolerance′ tolerance, but at ± $sigma this measurement can\'t confirm the alignment. Larger turns help most: 20° in place of 10° cuts the uncertainty about four times (Polar align turn and Check step in Settings).';
+    return 'Inside your $tolerance′ tolerance, but at ± $sigma this measurement can\'t confirm the alignment. Larger turns help most: 20° in place of 10° cuts the uncertainty about four times (Polar align turn in Settings).';
   }
 
   @override
   String polarAlignerConvergedUnconfirmed(String tolerance, String sigma) {
-    return 'The motors stopped inside your $tolerance′ tolerance, but at ± $sigma this measurement can\'t confirm the alignment. More moves cannot help; larger turns do (20° in place of 10° cuts the uncertainty about four times), so run Check with a larger Check step.';
+    return 'The motors stopped inside your $tolerance′ tolerance, but at ± $sigma this measurement can\'t confirm the alignment. More moves cannot help; larger turns do (20° in place of 10° cuts the uncertainty about four times), so start again with a larger turn.';
   }
 
   @override
@@ -6143,12 +6042,6 @@ class AppLocalizationsEn extends AppLocalizations {
       'Averaged; a point scattered over 3″ is retaken once';
 
   @override
-  String get polarConfirmMainCamera => 'This measurement uses the main camera.';
-
-  @override
-  String get polarStepDone => 'Done';
-
-  @override
   String get polarKnobSection => 'Polar align';
 
   @override
@@ -6158,27 +6051,21 @@ class AppLocalizationsEn extends AppLocalizations {
   String get polarKnobTurn => 'Turn (°, 5 to 30)';
 
   @override
-  String get polarKnobVerifyStep => 'Check step (°, 5 to 30)';
-
-  @override
-  String get polarKnobRoughExposure => 'Rough step exposure (s, 0.1 to 60)';
+  String get polarKnobMainExposure => 'Main camera exposure (s, 0.1 to 60)';
 
   @override
   String get polarKnobToleranceHint =>
-      'Done turns on once the error is inside it';
+      'A Polar Aligner\'s motors stop once the error is inside it';
 
   @override
   String get polarKnobTurnHint => 'Kept between 5° and 30°';
-
-  @override
-  String get polarKnobVerifyStepHint => 'Kept between 5° and 30°';
 
   @override
   String get polarAligner => 'Polar Aligner';
 
   @override
   String polarAlignerIdle(String tolerance) {
-    return 'Tap the shutter to start. Ara measures, makes a small test move on each axis, then turns the motors until the error is inside your $tolerance′ tolerance.';
+    return 'After Start, Ara measures, makes a small test move on each axis, then turns the motors until the error is inside your $tolerance′ tolerance.';
   }
 
   @override
@@ -6213,7 +6100,7 @@ class AppLocalizationsEn extends AppLocalizations {
       other: 'Inside your $tolerance′ tolerance after $moves moves.',
       one: 'Inside your $tolerance′ tolerance after 1 move.',
     );
-    return '$_temp0 Finish with Check or Done. If the error drifts out, the motors correct again.';
+    return '$_temp0 Finish with Done. If the error drifts out, the motors correct again.';
   }
 
   @override
@@ -6224,7 +6111,7 @@ class AppLocalizationsEn extends AppLocalizations {
       other: 'Inside your tolerance after $moves moves.',
       one: 'Inside your tolerance after 1 move.',
     );
-    return '$_temp0 Check and Done wait for your polar-align settings to load. If the error drifts out, the motors correct again.';
+    return '$_temp0 If the error drifts out, the motors correct again.';
   }
 
   @override
@@ -6418,21 +6305,11 @@ class AppLocalizationsEn extends AppLocalizations {
       'Off: Polar align shows the turns and you make them';
 
   @override
-  String get polarKnobStopTracking => 'Stop tracking when polar align ends';
-
-  @override
-  String get polarKnobStopTrackingOn => 'Every end of a run turns tracking off';
-
-  @override
-  String get polarKnobStopTrackingOff =>
-      'Off: a run that finishes gives back the tracking it found. A Stop always leaves tracking off';
-
-  @override
   String get polarAdvancedTitle => 'Advanced';
 
   @override
-  String polarAdvancedSummary(String turn, String step, String exposure) {
-    return '$turn° turn · $step° step · $exposure s';
+  String polarAdvancedSummary(String turn, String exposure) {
+    return '$turn° turn · $exposure s';
   }
 
   @override
@@ -6764,16 +6641,11 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get refusalPolarAlignMountParked =>
-      'The mount is parked. Unpark it and point it near the pole first.';
+      'The mount is parked. Unpark it and send it Home first.';
 
   @override
-  String get refusalPolarAlignUnconfirmed =>
-      'Polar alignment moves the mount only after you confirm it. Start it again and confirm.';
-
-  @override
-  String refusalPolarAlignSweepLimit(String offset) {
-    return 'The mount has turned $offset° from where Polar Align started. Slew it back near the pole, counterweights down, and start again.';
-  }
+  String get refusalPolarAlignNotHome =>
+      'The mount is not at Home. Send it Home first, then start polar alignment.';
 
   @override
   String get refusalPolarAlignMovingMount =>
@@ -6800,48 +6672,8 @@ class AppLocalizationsEn extends AppLocalizations {
       'Ara could not confirm that the mount stopped. Cut the mount\'s power now, and check the mount before you start again.';
 
   @override
-  String get polarAlignErrorSlewStalled =>
-      'The mount stopped turning partway through an RA turn. Check that it can turn freely and is still connected, then start again.';
-
-  @override
-  String get polarAlignErrorSlewTimeout =>
-      'The mount took more than twice as long as it should to make an RA turn, so Polar Align stopped it. Check the mount, then start again.';
-
-  @override
-  String get polarAlignErrorDecMoved =>
-      'The mount\'s Dec reading moved during an RA turn, which an RA turn never does. Check that the Dec clutch is tight, then start again.';
-
-  @override
-  String get polarAlignErrorPierChanged =>
-      'The mount reported a different side of the pier during an RA turn. Polar Align never flips the mount. Check where it points, then start again.';
-
-  @override
-  String get polarAlignErrorTurnMismatch =>
-      'The mount did not turn the way Polar Align asked. Check that it turns freely, only in RA, and stops when told, then start again.';
-
-  @override
-  String get polarAlignErrorPierFlip =>
-      'The mount flipped to the other side of the pier between two frames. Polar Align stopped it and turned tracking off. Check where it points, then start again.';
-
-  @override
   String get polarAlignErrorTrackingOff =>
       'The mount is not tracking and did not start tracking when Ara asked. Turn tracking on from the mount controls, then start again.';
-
-  @override
-  String get polarAlignErrorSweepLimit =>
-      'The next turn would take the RA axis past Polar Align\'s limit. Slew it back near the pole, counterweights down, or take fewer or shorter frames, then start again.';
-
-  @override
-  String get refusalPolarAlignOnAxis =>
-      'The scope points within 3° of the pole. Point it 2–5° from the pole, counterweights down, then start again.';
-
-  @override
-  String get refusalPolarAlignPointingUnknown =>
-      'Polar Align got no fresh reading of where the mount points. Check the mount\'s connection, then start again.';
-
-  @override
-  String get refusalPolarAlignPoseAmbiguous =>
-      'The mount reports a Dec past the pole, so its pier side is not known. Point the tube 2–5° from the pole, counterweights down, with the hand controller (or send the mount Home), then start again.';
 
   @override
   String get refusalPolarAlignMountBusy =>
@@ -6894,57 +6726,8 @@ class AppLocalizationsEn extends AppLocalizations {
       'No meridian flip has completed on this profile yet. Watch one flip from start to end, then confirm it.';
 
   @override
-  String get refusalPolarAlignAlreadyRunning =>
-      'Polar alignment is running. Wait for it to end, or stop it, then try again.';
-
-  @override
-  String get polarConfirmTitle => 'Before the mount moves';
-
-  @override
-  String get polarConfirmPoint =>
-      'Point the tube 2–5° from the pole, with the counterweights down.';
-
-  @override
-  String polarConfirmTurns(String step, String direction, String total) {
-    return 'RA will turn about $step° twice toward the $direction ($total° in all).';
-  }
-
-  @override
-  String polarConfirmFromOrigin(String offset, String direction) {
-    return 'RA is $offset° $direction of where Polar Align started; these turns go back toward it.';
-  }
-
-  @override
-  String polarConfirmNewOrigin(String limit) {
-    return 'This pose is Polar Align\'s new start: until the mount is moved some other way, RA stays within $limit° of it.';
-  }
-
-  @override
-  String get polarConfirmPower => 'Keep a hand on the mount\'s power switch.';
-
-  @override
-  String get polarConfirmGo => 'Move the mount';
-
-  @override
-  String get polarConfirmCancel => 'Cancel';
-
-  @override
-  String get polarDirectionEast => 'east';
-
-  @override
-  String get polarDirectionWest => 'west';
-
-  @override
   String get refusalMountClockNotVerified =>
       'The mount\'s clock is not verified yet. Ara sets it from the synced rig clock: wait a moment and try again, or sync the time in Settings.';
-
-  @override
-  String get polarConfirmGuideField =>
-      'Pick a field fairly high toward the pole for your hemisphere, at least about 15° above the horizon when you can.';
-
-  @override
-  String get polarConfirmGuideMeridian =>
-      'Choose a start whose turns do not cross the meridian, so the tube cannot swing into the pier.';
 
   @override
   String get polarAzimuthArc => 'true arc (cos alt)';
@@ -6960,7 +6743,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get polarInitialErrorHuge =>
-      'The error at the start was over 10°: check the site location and the start field, and that the mount turned only in RA.';
+      'The error at the start was over 10°: check the site location, and that the mount turned only in RA.';
 
   @override
   String get bridgeSetupFoundTitle => 'Found on this rig';
@@ -7192,169 +6975,13 @@ class AppLocalizationsEn extends AppLocalizations {
       'Polar Align\'s figure: the RA axis against the refracted pole, from plate solves, live as you turn the bolts. Azimuth is the true arc on the sky (cos alt applied).';
 
   @override
-  String get polarCheckMeasures =>
-      'Verify\'s figure: a fresh three-point measurement of the RA axis against the refracted pole. Azimuth is the true arc on the sky (cos alt applied).';
-
-  @override
   String get polarReadoutCautionAltitudeWeak =>
-      'The camera points nearly due east or west of the pole, where this readout reads the altitude bolt poorly. Trust Verify, or start again with the scope nearer the pole.';
-
-  @override
-  String polarDecSpreadWarning(String arcsec) {
-    return 'The mount\'s Dec reading moved $arcsec″ across the three points (more than 2″), so this measurement may be off. Check the Dec clutch is tight, then measure again.';
-  }
+      'The camera points nearly due east or west of the pole, where this readout reads the altitude bolt poorly. Trust the result after Done, or start again with the scope nearer the pole.';
 
   @override
   String versionMismatchWarning(String server, String app) {
     return 'Server $server and app $app differ; update both from the same release.';
   }
-
-  @override
-  String get polarPreflightTitle => 'Pre-flight checks';
-
-  @override
-  String polarPreflightReach(String deg) {
-    return 'Polar align turns the mount up to $deg° each way.';
-  }
-
-  @override
-  String get polarPreflightChecking => 'Checking the rig…';
-
-  @override
-  String get polarPreflightReadFailed =>
-      'Couldn\'t read the pre-flight checks. The rig still checks them when you start.';
-
-  @override
-  String get polarPreflightRetry => 'Retry';
-
-  @override
-  String get polarPreflightRefresh => 'Check again';
-
-  @override
-  String polarPreflightSummary(int passed, int notYet) {
-    return '$passed passed · $notYet not checked yet';
-  }
-
-  @override
-  String get polarPreflightShowAll => 'Show all checks';
-
-  @override
-  String get polarPreflightShowFewer => 'Show fewer';
-
-  @override
-  String get polarPreflightStatusOk => 'passed';
-
-  @override
-  String get polarPreflightStatusWarn => 'note';
-
-  @override
-  String get polarPreflightStatusFail => 'fails, Start is off';
-
-  @override
-  String get polarPreflightStatusUnknown => 'not checked yet';
-
-  @override
-  String get polarPreflightBlocked =>
-      'A pre-flight check fails: see the list in Polar align';
-
-  @override
-  String get polarPreflightCheckMountConnected => 'Mount connected';
-
-  @override
-  String get polarPreflightCheckMountParked => 'Mount not parked';
-
-  @override
-  String get polarPreflightCheckSiteLatitude => 'Site latitude';
-
-  @override
-  String get polarPreflightCheckSiteLongitude =>
-      'Site longitude and sidereal time';
-
-  @override
-  String get polarPreflightCheckMountClock => 'Mount clock';
-
-  @override
-  String get polarPreflightCheckPoseVerified => 'Mount position trusted';
-
-  @override
-  String get polarPreflightCheckClearance =>
-      'Counterweight and cable clearance';
-
-  @override
-  String get polarPreflightCheckStartPointing => 'Where the scope points';
-
-  @override
-  String get polarPreflightCheckMountType => 'Mount type';
-
-  @override
-  String get polarPreflightCheckCanMoveAxis => 'RA motor control';
-
-  @override
-  String get polarPreflightCheckAligner => 'Polar Aligner';
-
-  @override
-  String get polarPreflightCheckMountLimits => 'The mount\'s own limits';
-
-  @override
-  String get polarClearanceButton => 'Confirm clearance…';
-
-  @override
-  String get polarClearanceChange => 'Change clearance…';
-
-  @override
-  String get polarClearanceTitle => 'Room to turn the mount';
-
-  @override
-  String polarClearanceQuestion(String deg) {
-    return 'Polar Align will turn the mount up to $deg° each way. Is there room for the tube, counterweight and cables to move that far?';
-  }
-
-  @override
-  String get polarClearanceYes => 'Yes, there is room';
-
-  @override
-  String get polarClearanceTakeBack => 'Take back';
-
-  @override
-  String get polarActionClearance => 'save the mount\'s clearance';
-
-  @override
-  String refusalPolarAlignClearanceNotConfirmed(String reach) {
-    return 'Polar align turns this mount up to $reach° each way. Confirm there is room for the tube, counterweight and cables to move that far: tap Confirm clearance in Polar align.';
-  }
-
-  @override
-  String get refusalPolarAlignSiteNotSet =>
-      'Polar align needs your site: set its latitude and longitude in the site settings (not 0° and 0°), so it knows the sidereal time.';
-
-  @override
-  String get refusalPolarAlignAltAzMount =>
-      'Polar align needs an equatorial mount. This mount says it is alt-az, so turning it would turn azimuth, not RA.';
-
-  @override
-  String get refusalPolarAlignCannotMoveAxis =>
-      'This mount cannot turn its RA axis by motor speed, so Polar align cannot turn it. Polar align needs a mount whose driver can move the RA axis.';
-
-  @override
-  String get polarKnobClearance => 'Room to turn the mount';
-
-  @override
-  String polarKnobClearanceConfirmed(String deg) {
-    return 'Turns up to $deg° each way, room confirmed for this mount';
-  }
-
-  @override
-  String polarKnobClearanceNotConfirmed(String deg) {
-    return 'Turns up to $deg° each way, not confirmed: the motor does not turn this mount';
-  }
-
-  @override
-  String get polarKnobClearanceNoMount =>
-      'Connect the mount to see and confirm its clearance';
-
-  @override
-  String get polarKnobClearanceHint =>
-      'Kept for each mount. A bigger turn size asks again.';
 
   @override
   String get polarKnobEastDirection => 'Turn direction';
@@ -7370,124 +6997,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get polarKnobEastDirectionHint =>
-      'Automatic is east in the north and west in the south. A new start turns this way; later starts turn back toward it';
-
-  @override
-  String get polarMotorDirection => 'RA motor direction';
-
-  @override
-  String polarMotorDirectionSaved(String mount, String direction) {
-    return 'Tested on $mount: the motor\'s positive speed turns RA $direction.';
-  }
-
-  @override
-  String polarMotorDirectionOtherDriver(String mount) {
-    return 'Tested on another mount or driver ($mount): the next start tests it again with a 0.5° turn.';
-  }
-
-  @override
-  String polarMotorDirectionMountDriver(String mount, String driver) {
-    return '$mount, driver $driver';
-  }
-
-  @override
-  String get polarMotorDirectionUntested =>
-      'Not tested yet: the next start first turns the mount 0.5° to learn it.';
-
-  @override
-  String get polarMotorDirectionUnknown =>
-      'This rig does not save a motor direction.';
-
-  @override
-  String get polarMotorDirectionReadFailed =>
-      'Could not read the saved motor direction from the rig.';
-
-  @override
-  String get polarMotorDirectionRetest => 'Test direction again';
-
-  @override
-  String get polarMotorDirectionRetestDone =>
-      'The next start tests the motor direction again.';
-
-  @override
-  String polarConfirmDirectionTest(String deg) {
-    return 'First it turns the mount $deg° to learn the motor direction (not tested yet for this mount and driver).';
-  }
-
-  @override
-  String get polarAlignTurnWrongWay =>
-      'The mount turned the other way from its saved motor direction, so Polar align stopped it and never turned it back. Check the mount, then tap Test direction again in Settings › Imaging › Polar align, and start again.';
-
-  @override
-  String get refusalPolarAlignRunActive =>
-      'A Polar align run is going. Stop it first, then move to the start position.';
-
-  @override
-  String get refusalPolarAlignCannotMoveDec =>
-      'This mount cannot turn its Dec axis by motor speed, so Polar align cannot move it to the start position. Point it 2–5° from the pole with its own controls.';
-
-  @override
-  String get refusalPolarAlignMoveToStartNotNeeded =>
-      'The scope does not point within 3° of the pole, so it needs no move. Start Polar align.';
-
-  @override
-  String get refusalPolarAlignMoveNotConfirmed =>
-      'Polar align moves the scope to the start position only after you confirm it. Tap Move to start position again and confirm.';
-
-  @override
-  String get polarMoveToStartButton => 'Move to start position';
-
-  @override
-  String get polarMoveToStartMoving =>
-      'Moving the scope to the start position…';
-
-  @override
-  String get polarMoveToStartStop => 'Stop';
-
-  @override
-  String get polarMoveToStartTitle => 'Move to the start position?';
-
-  @override
-  String polarMoveToStartConfirmBody(String deg, String probe) {
-    return 'Polar align turns the Dec axis alone until the scope points about $deg° from the pole. The RA axis and the counterweights stay where they are. It first moves Dec $probe° to learn which way its motor turns.';
-  }
-
-  @override
-  String get polarMoveToStartBlockedParked =>
-      'Unpark the mount first: Polar align never unparks it.';
-
-  @override
-  String get polarMoveToStartBlockedSite =>
-      'Set the site\'s latitude first, so Polar align knows which pole to move from.';
-
-  @override
-  String get polarMoveToStartBlockedPose =>
-      'Confirm the mount\'s Home first: its position is not trusted.';
-
-  @override
-  String polarMoveToStartBlockedClearance(String deg) {
-    return 'Confirm clearance first: Polar align moves nothing until you do. The move turns the Dec axis alone, up to $deg°.';
-  }
-
-  @override
-  String get polarMoveToStartBlockedAltAz =>
-      'This mount says it is alt-az: Polar align needs an equatorial mount.';
-
-  @override
-  String get polarMoveToStartBlockedDec =>
-      'This mount cannot turn its Dec axis by motor speed. Point it 2–5° from the pole with its own controls.';
-
-  @override
-  String get polarMoveToStartBlockedOther =>
-      'Fix the failing check above first.';
-
-  @override
-  String polarMoveToStartFailed(String message) {
-    return 'The move to the start position stopped: $message';
-  }
-
-  @override
-  String get polarActionMoveToStart => 'move the scope to the start position';
+      'Automatic is east in the north and west in the south. Every run turns this way';
 
   @override
   String get poseCheckButton => 'Check position with a plate solve';
@@ -7576,4 +7086,88 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get sequencerRunSaveFailed =>
       'Your changes couldn\'t be saved, so the run didn\'t start. Check the connection and try again.';
+
+  @override
+  String get polarHome => 'Home';
+
+  @override
+  String get polarHomeHint => 'Polar alignment starts with the mount at Home.';
+
+  @override
+  String polarStartHint(String step) {
+    return 'The mount turns $step° twice from Home and measures its axis.';
+  }
+
+  @override
+  String get polarMountMoving => 'The mount is moving. Wait for it to stop.';
+
+  @override
+  String get polarUnpark => 'Unpark';
+
+  @override
+  String get polarActionHome => 'send the mount Home';
+
+  @override
+  String get polarActionStopMount => 'stop the mount';
+
+  @override
+  String get polarActionUnpark => 'unpark the mount';
+
+  @override
+  String get polarActionReadMount => 'read the mount';
+
+  @override
+  String get polarMeasuring => 'Measuring the mount\'s axis…';
+
+  @override
+  String polarMeasuringPoint(int point, int total) {
+    return 'Measuring — point $point of $total';
+  }
+
+  @override
+  String get polarReturningHome => 'Returning Home…';
+
+  @override
+  String get polarStoppedLine => 'Polar alignment stopped.';
+
+  @override
+  String polarLastResult(String verdict, String error) {
+    return 'Last result: $verdict, $error from the pole.';
+  }
+
+  @override
+  String polarVerdictTotal(String error) {
+    return '$error from the pole';
+  }
+
+  @override
+  String polarVerdictAxes(String altitude, String azimuth) {
+    return 'Altitude $altitude · Azimuth $azimuth';
+  }
+
+  @override
+  String get polarVerdictExcellentMeaning =>
+      'Polar alignment won\'t limit your exposures.';
+
+  @override
+  String get polarVerdictVeryGoodMeaning => 'Plenty for guided imaging.';
+
+  @override
+  String get polarVerdictGoodMeaning =>
+      'Fine with guiding. Keep unguided exposures short.';
+
+  @override
+  String get polarVerdictRoughMeaning =>
+      'Stars will drift in longer exposures. Adjust again to get closer.';
+
+  @override
+  String get polarVerdictFarOffMeaning =>
+      'The mount is far from the pole. Adjust again.';
+
+  @override
+  String get polarAdjustAgain => 'Adjust again';
+
+  @override
+  String get polarAlignErrorHomeFailed =>
+      'The mount did not go Home. Check the mount, send it Home, then start again.';
 }

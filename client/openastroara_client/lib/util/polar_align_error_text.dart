@@ -5,19 +5,12 @@ import '../state/polar_align/polar_align_state.dart';
 /// the run (Stop Mount, Emergency Stop, the direction pad, a reaction, …).
 const polarAlignSlewAbortedExternally = 'slew_aborted_externally';
 
-/// #2081 the `polar_align.error` reason of a turn that went the other way
-/// from the saved RA motor direction (never the Polar Aligner's
-/// `wrong_direction`).
-const polarAlignTurnWrongWay = 'turn_wrong_way';
-
 /// #2107 why a failed polar alignment ended, in the app's language where the
 /// app knows the cause: a stop from outside is worded from the event's
 /// `stopped_by`, with the cut-power warning when the run could not confirm
 /// its stop afterwards (#2066: the daemon's sentence carries it, and no
 /// `mount_did_not_stop` follows). #2067 a reason the app can word in full
-/// (`_guardText`) reads in the app's language too, with the same warnings;
-/// #2081 a turn the wrong way is one of them, and says where to test the
-/// direction again.
+/// (`_guardText`) reads in the app's language too, with the same warnings.
 /// Anything else shows the daemon's own sentence, then its reason token; null
 /// when the run did not fail with a reason.
 String? polarAlignErrorText(AppLocalizations l, PolarAlignLive live) {
@@ -48,22 +41,12 @@ const _alignerNotStopped =
 /// carries what only the daemon knows (the solver's fix, a driver's fault, one
 /// of several causes), which then shows as sent.
 String? _guardText(AppLocalizations l, String? reason) => switch (reason) {
-  'slew_stalled' => l.polarAlignErrorSlewStalled,
-  'slew_timeout' => l.polarAlignErrorSlewTimeout,
-  'dec_moved' => l.polarAlignErrorDecMoved,
-  'pier_changed' => l.polarAlignErrorPierChanged,
-  'turn_mismatch' => l.polarAlignErrorTurnMismatch,
-  'pier_flip' => l.polarAlignErrorPierFlip,
   'tracking_off' => l.polarAlignErrorTrackingOff,
-  'sweep_limit' => l.polarAlignErrorSweepLimit,
-  polarAlignTurnWrongWay => l.polarAlignTurnWrongWay,
   'mount_parked' => l.refusalPolarAlignMountParked,
-  'on_axis' => l.refusalPolarAlignOnAxis,
-  'pointing_unknown' => l.refusalPolarAlignPointingUnknown,
-  'pose_ambiguous' => l.refusalPolarAlignPoseAmbiguous,
-  'mount_busy' => l.refusalPolarAlignMountBusy,
   'mount_did_not_stop' => l.polarAlignStopNotConfirmed,
   'aligner_did_not_stop' => l.polarAlignerStopNotConfirmed,
+  // The mount refused, or did not finish, going Home after Done.
+  'home_failed' => l.polarAlignErrorHomeFailed,
   _ => null,
 };
 

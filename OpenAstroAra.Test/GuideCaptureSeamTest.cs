@@ -97,14 +97,8 @@ namespace OpenAstroAra.Test {
             mount.Setup(m => m.SlewToCoordinatesAsync(It.IsAny<Coordinates>(), It.IsAny<CancellationToken>()))
                 .Callback<Coordinates, CancellationToken>((target, _) => position = target)
                 .ReturnsAsync(true);
-            // Polar alignment turns with the RA motor: each command steps the reported RA 0.25°.
-            mount.Setup(m => m.MoveAxis(It.IsAny<OpenAstroAra.Core.Enums.TelescopeAxes>(), It.IsAny<double>()))
-                .Callback<OpenAstroAra.Core.Enums.TelescopeAxes, double>((_, rate) => {
-                    if (rate != 0) {
-                        position = new Coordinates((position.RADegrees + Math.Sign(rate) * 0.25 + 360.0) % 360.0, position.Dec,
-                            Epoch.JNOW, Coordinates.RAType.Degrees);
-                    }
-                });
+            // Polar alignment turns with the RA motor, by time; the scripted solver says where the frames land.
+            mount.Setup(m => m.MoveAxis(It.IsAny<OpenAstroAra.Core.Enums.TelescopeAxes>(), It.IsAny<double>()));
             mount.Setup(m => m.WaitForSlew(It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
             mount.Setup(m => m.SetTrackingEnabled(It.IsAny<bool>())).Returns(true);
             return mount;
@@ -115,17 +109,16 @@ namespace OpenAstroAra.Test {
             var store = new InMemoryProfileStore();
             store.PutSiteSettings(store.GetSiteSettings() with { LatitudeDeg = -33.856784, LongitudeDeg = 151.215297 });
             store.PutPolarAlignSettings(new PolarAlignSettingsDto(
-                ExposureSeconds: 0.05, LoopCadenceMs: 20, SettleSeconds: 0, SeedRotationDeg: 30.0, FramesPerPoint: 1).Confirmed());
-            // #2081 — the mount's RA motor direction is already saved for it: no 0.5° test before the turns.
+                ExposureSeconds: 0.05, LoopCadenceMs: 20, SettleSeconds: 0, SeedRotationDeg: 30.0, FramesPerPoint: 1));
             var mount = NewMount().Object;
-            var key = PolarAlignService.MountDriverOf(mount.GetInfo());
-            store.PutPolarAlignMotorDirection(new PolarAlignMotorDirectionDto(1, key.Mount, key.Info, key.Version, DateTimeOffset.UtcNow));
+            // The routine times its turns on this clock, which jumps through each wait: a turn takes no real time.
+            var clock = new OpenAstroAra.Test.PolarAlign.ManualMountClock { AutoAdvance = true };
             return new PolarAlignService(guider, NullLogger<PolarAlignService>.Instance, solver ?? new ScriptedSolver(SolveA, SolveB),
-                mount, OpenAstroAra.Test.PolarAlign.MediatorMotionControl.For(mount), store, ws, log: null, fetcher ?? new FileFetcher()) {
+                mount, OpenAstroAra.Test.PolarAlign.MediatorMotionControl.For(mount, clock), store, ws, log: null, fetcher ?? new FileFetcher()) {
+                Clock = clock,
                 PausedRetryDelay = TimeSpan.Zero,
                 TrackingConfirmTimeout = TimeSpan.FromMilliseconds(200),
                 TrackingConfirmPoll = TimeSpan.Zero,
-                AxisMovePoll = TimeSpan.FromMilliseconds(1),
                 AxisSettle = TimeSpan.Zero,
                 StopVerifyPoll = TimeSpan.FromMilliseconds(1),
                 StopVerifyStillFor = TimeSpan.Zero,
@@ -141,7 +134,7 @@ namespace OpenAstroAra.Test {
             var fetcher = new FileFetcher();
             using var svc = NewPolarAlign(guider, fetcher: fetcher);
 
-            await svc.StartConfirmedAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            await svc.StartAsync(null, CancellationToken.None).ConfigureAwait(false);
             await guider.WhenCapturedAsync(2).WaitAsync(Timeout).ConfigureAwait(false);
 
             Assert.That(guider.Custody.Holder, Is.EqualTo(CameraUse.PolarAlign));
@@ -166,8 +159,8 @@ namespace OpenAstroAra.Test {
             var guider = new FakeGuideCapture { AppState = state };
             using var svc = NewPolarAlign(guider);
 
-            // #2066 (ARA-2) — refused at the start's plan with the mount-busy cause, before the custody module is asked.
-            var ex = await Assert.ThrowsAsync<RefusalException>(() => svc.StartConfirmedAsync(PolarAlignStages.Fine, null, CancellationToken.None)).ConfigureAwait(false);
+            // Refused by the start's own checks with the mount-busy cause, before the custody module is asked.
+            var ex = await Assert.ThrowsAsync<RefusalException>(() => svc.StartAsync(null, CancellationToken.None)).ConfigureAwait(false);
 
             Assert.That(ex!.Cause, Is.EqualTo(RefusalCatalog.PolarAlignMountBusy));
             // The sentence's fixed part says "stop guiding" whatever the state: the reason must name the state itself.
@@ -185,7 +178,7 @@ namespace OpenAstroAra.Test {
             var ws = new WsRecorder();
             using var svc = NewPolarAlign(guider, ws: ws);
 
-            await svc.StartConfirmedAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            await svc.StartAsync(null, CancellationToken.None).ConfigureAwait(false);
             var error = await ws.WhenAsync(WsEventCatalog.PolarAlignError).WaitAsync(Timeout).ConfigureAwait(false);
             await guider.WhenLeaseReleasedAsync().WaitAsync(Timeout).ConfigureAwait(false);
 
@@ -203,7 +196,7 @@ namespace OpenAstroAra.Test {
             var ws = new WsRecorder();
             using var svc = NewPolarAlign(guider, ws: ws);
 
-            await svc.StartConfirmedAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            await svc.StartAsync(null, CancellationToken.None).ConfigureAwait(false);
             var error = await ws.WhenAsync(WsEventCatalog.PolarAlignError).WaitAsync(Timeout).ConfigureAwait(false);
 
             Assert.That(error.GetProperty("reason").GetString(), Is.EqualTo("capture_rejected"));
@@ -217,7 +210,7 @@ namespace OpenAstroAra.Test {
             var guider = new FakeGuideCapture { Script = _ => FakeCaptureOutcome.NeverCompletes };
             using var svc = NewPolarAlign(guider);
 
-            await svc.StartConfirmedAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            await svc.StartAsync(null, CancellationToken.None).ConfigureAwait(false);
             await guider.WhenCapturedAsync(1).WaitAsync(Timeout).ConfigureAwait(false);
             Assert.That(guider.Subscribers, Is.EqualTo(1), "the run listens while the capture is out");
 

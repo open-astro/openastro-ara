@@ -9,31 +9,23 @@ import 'package:openastroara/models/polar_align.dart';
 import 'package:openastroara/models/server.dart';
 import 'package:openastroara/screens/settings/panels/imaging_polar_panel.dart';
 import 'package:openastroara/services/polar_align_api.dart';
+import 'package:openastroara/state/equipment/mount_state.dart';
 import 'package:openastroara/state/polar_align/polar_align_state.dart';
 import 'package:openastroara/state/saved_server_state.dart'
     show activeServerProvider;
 import 'package:openastroara/widgets/imaging/polar_align_panel.dart';
 
+import '../support/fake_mount.dart';
 import '../support/imaging_sections.dart' show staleSave;
 import '../support/polar_align_section.dart';
 
 /// The routine's fake Polar Align client: no routine runs.
 class _Api implements PolarAlignClient {
   @override
-  Future<PolarAlignMoveToStartResult> moveToStart(
-    PolarAlignMoveToStartOffer offer,
-  ) =>
-      throw UnimplementedError();
-  @override
-  Future<PolarAlignPreflight?> preflight({String? stage}) async => null;
-  @override
-  Future<PolarAlignStartPlan> startPlan({String? stage}) async =>
-      PolarAlignStartPlan(stage: stage, direction: PolarAlignDirections.east);
-  @override
   Future<PolarAlignStatus?> getStatus() async => null;
 
   @override
-  Future<void> start(PolarAlignStartPlan plan) async {}
+  Future<void> start() async {}
   @override
   Future<void> stop() async {}
   @override
@@ -55,7 +47,6 @@ class _Live extends PolarAlignLiveNotifier {
 
 const _toggle = Key('polar-advanced-toggle');
 const _seed = Key('polar-advanced-seed');
-const _check = Key('polar-advanced-check-step');
 const _coarse = Key('polar-advanced-coarse');
 
 /// The Start card and, under it, the Settings panel: one rig, one module.
@@ -75,6 +66,8 @@ Future<FakePolarAlignSection> _pump(
         ...polarAlignSectionOverrides(api),
         polarAlignApiProvider.overrideWithValue(_Api()),
         polarAlignLiveProvider.overrideWith(() => _Live(live)),
+        // At Home: the Ready step offers Start.
+        mountProvider.overrideWith(FakeMount.atHome),
         activeServerProvider.overrideWithValue(
           const AraServer(hostname: 'rig', port: 1),
         ),
@@ -128,8 +121,8 @@ void main() {
       await tester.tap(find.byKey(_toggle));
       await tester.pumpAndSettle();
       expect(find.byKey(_seed), findsOneWidget);
-      expect(find.byKey(_check), findsOneWidget);
       expect(find.byKey(_coarse), findsOneWidget);
+      expect(find.byKey(const Key('polar-advanced-check-step')), findsNothing, reason: 'Done verifies with the same turn');
       expect(find.byKey(const Key('polar-advanced-use-home')), findsNothing, reason: '#2048: no Home switch');
     },
   );
@@ -140,7 +133,7 @@ void main() {
       final api = await _pump(tester);
       await _enter(tester, _seed, '25');
       expect(api.puts.single.seedRotationDeg, 25.0);
-      // Settings rows, in order: tolerance, turn, verify step, rough exposure.
+      // Settings rows, in order: tolerance, turn, main camera exposure.
       final settingsFields = find.descendant(
         of: find.byType(ImagingPolarPanel),
         matching: find.byType(TextField),
@@ -153,12 +146,11 @@ void main() {
   );
 
   testWidgets(
-    'collapsed: the row sums up the rig\'s turn, step and exposure (#1736)',
+    'collapsed: the row sums up the rig\'s turn and exposure (#1736)',
     (tester) async {
       final rig = FakePolarAlignSection(
         initial: rigPolarAlign.copyWith(
           seedRotationDeg: 25,
-          checkStepDeg: 20,
           coarseExposureSeconds: 5,
         ),
       );
@@ -167,7 +159,7 @@ void main() {
       expect(
         find.descendant(
           of: row,
-          matching: find.text('25° turn · 20° step · 5 s'),
+          matching: find.text('25° turn · 5 s'),
         ),
         findsOneWidget,
       );
@@ -196,11 +188,11 @@ void main() {
       matching: find.byType(TextField),
     );
     await tester.ensureVisible(settingsFields.at(2));
-    await tester.enterText(settingsFields.at(2), '20');
+    await tester.enterText(settingsFields.at(2), '7');
     await tester.testTextInput.receiveAction(TextInputAction.done);
     await tester.pumpAndSettle();
-    expect(api.puts.single.checkStepDeg, 20.0);
-    expect(_text(tester, _check), '20');
+    expect(api.puts.single.coarseExposureSeconds, 7.0);
+    expect(_text(tester, _coarse), '7');
   });
 
   testWidgets(
@@ -237,15 +229,16 @@ void main() {
   );
 
   testWidgets(
-    'seed 4 and check 31 are refused in the field with the range, and nothing is sent (#1736)',
+    'a turn of 4 and a main exposure of 61 are refused in the field with their range, and nothing is sent (#1736)',
     (tester) async {
       final api = await _pump(tester);
       await _enter(tester, _seed, '4');
-      await _enter(tester, _check, '31');
+      await _enter(tester, _coarse, '61');
       expect(api.sent, isEmpty);
       expect(find.textContaining('5 to 30'), findsWidgets);
       expect(_text(tester, _seed), '4');
-      expect(find.text('Out of range: use 5 to 30'), findsNWidgets(2));
+      expect(find.text('Out of range: use 5 to 30'), findsOneWidget);
+      expect(find.text('Out of range: use 0.10 to 60'), findsOneWidget);
     },
   );
 
@@ -277,8 +270,8 @@ void main() {
     bool enabled() =>
         tester.widget<ButtonStyleButton>(find.byKey(start)).enabled;
     expect(enabled(), isTrue);
-    await tester.ensureVisible(find.byKey(_check));
-    await tester.enterText(find.byKey(_check), '20');
+    await tester.ensureVisible(find.byKey(_coarse));
+    await tester.enterText(find.byKey(_coarse), '9');
     await tester.testTextInput.receiveAction(TextInputAction.done);
     await tester.pump();
     expect(rig.sent, hasLength(1));
@@ -289,15 +282,14 @@ void main() {
   });
 
   testWidgets(
-    'each of the three controls has its knob name for a screen reader (#1736)',
+    'each control has its knob name for a screen reader (#1736)',
     (tester) async {
       final handle = tester.ensureSemantics();
       await _pump(tester);
       final l10n = AppLocalizations.of(tester.element(find.byKey(_toggle)))!;
       for (final (key, name) in [
         (_seed, l10n.polarKnobTurn),
-        (_check, l10n.polarKnobVerifyStep),
-        (_coarse, l10n.polarKnobRoughExposure),
+        (_coarse, l10n.polarKnobMainExposure),
       ]) {
         expect(
           find.descendant(

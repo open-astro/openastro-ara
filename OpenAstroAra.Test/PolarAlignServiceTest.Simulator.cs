@@ -126,28 +126,12 @@ namespace OpenAstroAra.Test {
                     encoder = target;
                     return true;
                 });
-            // Polar alignment turns with the motors (MoveAxis), not GoTos: each command steps the encoder 0.25°, and
-            // the stop sends the simulator where the encoder says, as a slew there would.
-            var moving = false;
-            mount.Setup(m => m.MoveAxis(Moq.It.IsAny<OpenAstroAra.Core.Enums.TelescopeAxes>(), Moq.It.IsAny<double>()))
-                .Callback<OpenAstroAra.Core.Enums.TelescopeAxes, double>((axis, rate) => {
-                    if (rate == 0) {
-                        if (moving) {
-                            moving = false;
+            // Polar alignment turns with the motors (MoveAxis), not GoTos: the bench motors turn the encoder on the bench
+            // clock, and each stop sends the simulator where the encoder says, as a slew there would.
 #pragma warning disable CA2025 // the slew completes synchronously here, inside the test that owns the client
-                            SlewSimulatorAsync(http, encoder.RADegrees / 15.0, encoder.Dec).GetAwaiter().GetResult();
+            SimulateMotors(mount, () => encoder, c => encoder = c,
+                stopped: at => SlewSimulatorAsync(http, at.RADegrees / 15.0, at.Dec).GetAwaiter().GetResult());
 #pragma warning restore CA2025
-                        }
-                        return;
-                    }
-                    moving = true;
-                    var step = Math.Sign(rate) * 0.25;
-                    encoder = axis == OpenAstroAra.Core.Enums.TelescopeAxes.Primary
-                        ? new OpenAstroAra.Astrometry.Coordinates((encoder.RADegrees + step + 360.0) % 360.0, encoder.Dec,
-                            OpenAstroAra.Astrometry.Epoch.JNOW, OpenAstroAra.Astrometry.Coordinates.RAType.Degrees)
-                        : new OpenAstroAra.Astrometry.Coordinates(encoder.RADegrees, encoder.Dec >= 0 ? encoder.Dec - step : encoder.Dec + step,
-                            OpenAstroAra.Astrometry.Epoch.JNOW, OpenAstroAra.Astrometry.Coordinates.RAType.Degrees);
-                });
             mount.Setup(m => m.WaitForSlew(Moq.It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
             mount.Setup(m => m.SetTrackingEnabled(Moq.It.IsAny<bool>())).Returns<bool>(on => {
                 using var form = new FormUrlEncodedContent([new("Tracking", on ? "true" : "false"), new("ClientID", "1"), new("ClientTransactionID", "1")]);
@@ -178,15 +162,16 @@ namespace OpenAstroAra.Test {
                 var store = new InMemoryProfileStore();
                 store.PutSiteSettings(store.GetSiteSettings() with { LatitudeDeg = latitudeDeg, LongitudeDeg = longitudeDeg });
                 store.PutPolarAlignSettings(new PolarAlignSettingsDto(
-                    ExposureSeconds: 0.05, LoopCadenceMs: 200, SettleSeconds: 0.5, SeedRotationDeg: 30.0).Confirmed());
+                    ExposureSeconds: 0.05, LoopCadenceMs: 200, SettleSeconds: 0.5, SeedRotationDeg: 30.0));
                 var ws = new WsRecorder();
+                var clock = BenchClockOf(mount);
                 using var svc = new PolarAlignService(NewFake(), Microsoft.Extensions.Logging.Abstractions.NullLogger<PolarAlignService>.Instance,
-                    new SimulatedSkySolver(http), mount.Object, MediatorMotionControl.For(mount.Object), store, ws, log: null, new FakeFrameFetcher(), aligner: aligners) {
-                    AxisMovePoll = TimeSpan.FromMilliseconds(5),
+                    new SimulatedSkySolver(http), mount.Object, MediatorMotionControl.For(mount.Object, clock), store, ws, log: null, new FakeFrameFetcher(), aligner: aligners) {
                     AxisSettle = TimeSpan.Zero,
+                    Clock = clock,
                 };
 
-                await svc.StartConfirmedAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+                await svc.StartAsync(null, CancellationToken.None).ConfigureAwait(false);
                 await ws.WhenAsync(events => Array.Exists(events, e => e.Type == WsEventCatalog.PolarAlignCorrection
                         && e.Payload.GetProperty("state").GetString() is PolarAlignCorrectionStates.Converged or PolarAlignCorrectionStates.Stopped)
                     || Array.Exists(events, e => e.Type == WsEventCatalog.PolarAlignError))

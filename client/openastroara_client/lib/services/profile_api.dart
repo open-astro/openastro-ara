@@ -943,13 +943,10 @@ class ProfileApi {
       loopCadenceMs: (j['loop_cadence_ms'] as num).toInt(),
       settleSeconds: (j['settle_seconds'] as num).toDouble(),
       loopMode: mode as String,
-      checkStepDeg: (j['check_step_deg'] as num).toDouble(),
       coarseExposureSeconds: (j['coarse_exposure_seconds'] as num).toDouble(),
       polarAlignerAuto: j['polar_aligner_auto'] as bool,
-      stopTrackingWhenDone: j['stop_tracking_when_done'] as bool,
       camera: camera as String,
       framesPerPoint: (j['frames_per_point'] as num).toInt(),
-      mountClearance: _mountClearanceFromRig(j),
       eastDirection: _eastDirectionFromRig(j),
     );
   }
@@ -961,33 +958,6 @@ class ProfileApi {
       throw const FormatException('missing east_direction');
     }
     return j['east_direction'] as bool?;
-  }
-
-  // #2068 strict too: the key must be there (null is a profile with no mount's
-  // entry yet); an entry missing a field fails the load.
-  static Map<String, PolarAlignMountClearance> _mountClearanceFromRig(
-    Map<String, dynamic> j,
-  ) {
-    if (!j.containsKey('mount_clearance')) {
-      throw const FormatException('missing mount_clearance');
-    }
-    final raw = j['mount_clearance'] as Map<String, dynamic>?;
-    return {
-      for (final e in (raw ?? const <String, dynamic>{}).entries)
-        e.key: _mountClearanceEntryFromRig(e.value as Map<String, dynamic>),
-    };
-  }
-
-  // #2165 every entry names the reach it was confirmed for: an entry without
-  // one (the old slider format, a counterweight angle) fails the load.
-  static PolarAlignMountClearance _mountClearanceEntryFromRig(
-    Map<String, dynamic> j,
-  ) {
-    final reach = j['confirmed_reach_deg'];
-    if (reach is! num) {
-      throw FormatException('missing confirmed_reach_deg', reach);
-    }
-    return PolarAlignMountClearance(confirmedReachDeg: reach.toDouble());
   }
 
   /// Every safety key the client has a field for.

@@ -103,15 +103,18 @@ void main() {
     }
   });
 
-  test("the polar-align clearance sentence names the run's reach, in both languages (#2165)", () {
+  test('a polar-align start away from Home says to send the mount Home first, in both languages', () {
     const refusal = Refusal(
-      cause: RefusalCause.polarAlignClearanceNotConfirmed,
-      reason: 'polar-align-clearance-not-confirmed',
+      cause: RefusalCause.polarAlignNotHome,
+      reason: 'polar-align-not-home',
       detail: _detail,
-      parameters: {'reach_deg': 20.5},
     );
-    expect(failureReason(_en, refusal), contains('up to 20.5° each way'));
-    expect(failureReason(_pt, refusal), contains('até 20,5° para cada lado'));
+    expect(
+      failureReason(_en, refusal),
+      'The mount is not at Home. Send it Home first, then start polar alignment.',
+    );
+    expect(failureReason(_pt, refusal), _pt.refusalPolarAlignNotHome);
+    expect(_pt.refusalPolarAlignNotHome, isNot(_en.refusalPolarAlignNotHome));
   });
 
   test('an unverified mount position read too early says to try again (#2070)', () {
@@ -178,20 +181,6 @@ void main() {
       }
     },
   );
-  test('the sweep-limit sentence says how far the mount turned, in whole degrees (#2089)', () {
-    const r = Refusal(
-      cause: RefusalCause.polarAlignSweepLimit,
-      reason: 'polar-align-sweep-limit',
-      detail: _detail,
-      parameters: {'offset_deg': -60.3, 'limit_deg': 30},
-    );
-    expect(
-      failureReason(_en, r),
-      'The mount has turned 60° from where Polar Align started. Slew it back near the pole, counterweights down, and start again.',
-    );
-    expect(failureReason(_pt, r), contains('60°'));
-  });
-
   test('a cause the app does not know shows the daemon detail', () {
     const r = Refusal(
       cause: null,

@@ -24,7 +24,7 @@ String polarToleranceText(double v) =>
     v == v.roundToDouble() ? v.toStringAsFixed(0) : v.toStringAsFixed(1);
 
 /// The motors are working in a running routine: the hand-turn arrows dim and
-/// Verify and Done step aside.
+/// Done steps aside.
 bool polarAlignerMotorsBusy(PolarAlignLive live) =>
     live.isActive && (live.correction?.motorsBusy ?? false);
 

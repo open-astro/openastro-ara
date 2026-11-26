@@ -331,6 +331,31 @@ namespace OpenAstroAra.Test {
             });
         }
 
+        [Test]
+        public async Task The_holders_own_Find_Home_goes_out_while_another_flows_park_is_still_refused() {
+            var (box, svc) = await ConnectedAsync();
+            await using var device = box;
+            using var service = svc;
+            var progress = new Progress<ApplicationStatus>();
+
+            using var hold = svc.AcquireMotion(MotionOwners.PolarAlign);
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+            Task<bool> home;
+            using (svc.ActAsHolder(hold)) {
+                home = svc.FindHome(progress, cts.Token);
+            }
+            await WaitForAsync(() => Put(box, "findhome"), "the holder's own Find Home never went out");
+            var park = await Assert.ThrowsAsync<SequenceEntityFailedException>(() => svc.ParkTelescope(progress, CancellationToken.None));
+
+            Assert.Multiple(() => {
+                Assert.That(park!.Message, Does.Contain("Polar alignment is running"));
+                Assert.That(Put(box, "park"), Is.False, "the park from outside the holder's flow never reached the mount");
+                Assert.That(svc.MotionOwner, Is.EqualTo(MotionOwners.PolarAlign), "the hold never lapsed");
+            });
+            await cts.CancelAsync();
+            try { await home; } catch (OperationCanceledException) { } catch (SequenceEntityFailedException) { }
+        }
+
         // End Night's (and the unattended shutdown's) Find Home and park go through the mediator, which refuses them while
         // Polar Align holds the mount: the shutdown ladder ends Polar Align through its takeover first, as the safety and
         // fault parks do, so the shutdown is never blocked and Polar Align's motor never runs beside its Find Home or park.

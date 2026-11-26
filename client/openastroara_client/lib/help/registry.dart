@@ -1126,45 +1126,28 @@ const Map<String, Help> helpRegistry = {
     relatedSettings: [],
     keywords: ['bahtinov', 'mask', 'focus', 'spikes', 'manual focuser', 'critical focus zone'],
   ),
-  'setup.polar_align.stages': Help(
-    key: 'setup.polar_align.stages',
-    title: 'Polar alignment: one measurement per Start',
+  'setup.polar_align.flow': Help(
+    key: 'setup.polar_align.flow',
+    title: 'Polar alignment: Home, Start, adjust, Done',
     body:
-        '* **Start** — point the tube 2–5° from the pole with the counterweights down, then start. Ara never sends the mount Home or slews it, and it refuses a parked mount (unpark it first) and a tube within 3° of the pole. Then the pre-flight list offers **Move to start position**: after you confirm, it turns the Dec axis alone to about 4° from the pole (the counterweights stay down), with Stop while it moves. You can still point it yourself. Before anything moves it shows which way RA will turn — east or west: the *Polar align turn direction* setting on the first start (east in the north, west in the south unless you change it), later back toward where Polar Align first started — and how far (about 10° twice), and the mount moves only when you confirm. The first start on a mount (or after its driver or driver version changes) first turns it 0.5° to learn which way its motor runs, and says so. Keep a hand on the mount\'s power switch.\n'
-        '* **Where to point** (NINA\'s advice) — pick a field fairly high toward the pole for your hemisphere, at least about 15° above the horizon when you can, and a start whose turns do not cross the meridian, so the tube cannot swing into the pier. Keep a hand on the mount\'s power switch the first time you run this on a mount.\n'
-        '* **One measurement** — the guide camera solves a frame at each of three stops while the RA motor makes two turns of the profile\'s seed turn (10° for a new profile). The circle through them is where the mount\'s axis really points (a camera not square to the axis adds nothing false); then tracking stops and every solve shows your knob adjustments live, until Done or Stop. Lower/Raise and Move east/west name the knob to turn. A Start never moves on to another measurement by itself.\n'
-        '* **Check** — on the adjust screen once inside the tolerance, and again after Done: three solves from where the mount is, turning the profile\'s check step (10° for a new profile) between them. It says how far it turns before it moves, and goes through the same confirm step. From the adjust screen it ends the live loop first. Three points fix the axis exactly, with nothing taken from the live loop, so the verdict says how good the alignment really is; a check whose three frames do not describe a turn (a slipping clutch) gives no verdict. *Disagreement* is how far the check\'s axis sits from the last run\'s readout: more than 2′ means trust the check and adjust again.\n'
-        '* **Rough first (main camera)** — offered when the guide camera could not solve the pole field: the same measurement on the main camera, slower frames, for the big moves. It says how far it turns (2 × the turn) and goes through the same confirm step. Within a few arcminutes, stop and start again for the guide camera. To measure with the main camera every time, set *Polar align camera* to the main camera.\n'
+        '* **Home** — every run starts from the mount\'s Home position (tube at the pole, counterweights down). On a mount that can find Home by itself, tap Home and wait until it gets there; on any other mount, put it in its home position yourself. A parked mount is unparked first.\n'
+        '* **Start Polar Alignment** — the camera solves a frame at each of three stops while the RA motor makes two turns of the profile\'s turn (10° for a new profile), the way the *Polar align turn direction* setting says (east in the north, west in the south unless you change it). The circle through the three points is where the mount\'s axis really points (a camera not square to the axis adds nothing false). Keep a hand on the mount\'s power switch the first time you run this on a mount.\n'
+        '* **Adjust** — every solve then shows your knob adjustments live. Lower/Raise and Move east/west name the knob to turn. Press Done whenever you are happy with it: nothing holds it back.\n'
+        '* **Done** — the mount goes Home, three more solves around two RA turns measure the result with nothing taken from the live readout, and the mount goes Home again. The result says how good the alignment really is. Adjust again starts a new run from Home.\n'
         '* **Frames per point** — each of the three points averages several frames (3 by default). A point that stays scattered over 3″ after one retake marks the result *noisy*.\n'
-        '* Every move is one motor at a time, never a GoTo or a Find Home, and a run never moves its Dec axis, as NINA\'s three-point polar alignment; the only Dec move is **Move to start position**, when you tap it. Every Start\'s turns stay within a sweep limit of RA from where Polar Align first started: the larger of 30° and twice the turn plus 2° (30° for the default 10° turns, 62° for 30° turns). Stop halts the motor at once. The mount\'s own limits still apply.\n'
-        '* **Stop** stops the mount where it is: it stops both motors and checks that the mount stands still. Every end of a run leaves tracking off unless *Stop tracking when polar align ends* is off and the run finished.\n'
+        '* Every measuring turn is the RA motor alone, never a GoTo or a Dec move, as NINA\'s three-point polar alignment. The mount\'s own limits still apply.\n'
+        '* **Stop** stops the mount where it is, in every step and while it goes Home.\n'
         '* **Azimuth** is a true arc on the sky (cos alt applied). NINA shows the angle itself, about 1/cos(latitude) larger (1.5× at 48°); the Full UI shows NINA\'s figure beside Ara\'s.\n'
-        '* A measurement that starts more than 2° from the pole warns that the correction is less reliable: get closer, then run again. Over 10°, check the site location, the start field, and that the mount turned only in RA.',
+        '* A measurement that starts more than 2° from the pole warns that the correction is less reliable: get closer, then run again. Over 10°, check the site location and that the mount turned only in RA.',
     relatedHelpKeys: [
-      'img.polar.stop_tracking_when_done',
       'img.polar.seed_rotation_deg',
-      'img.polar.check_step_deg',
       'img.polar.coarse_exposure_seconds',
       'img.polar.camera',
       'img.polar.frames_per_point',
       'img.polar.east_direction',
-      'img.polar.motor_direction',
     ],
     relatedSettings: ['eq.guider.guide_focal_length', 'eq.guider.guide_pixel_size'],
-    keywords: ['polar', 'alignment', 'confirm', 'parked', 'three point', 'check', 'coarse', 'fine', 'pole', 'east', 'west', 'hand', 'manual', 'nina', 'azimuth'],
-  ),
-  'setup.polar_align.preflight': Help(
-    key: 'setup.polar_align.preflight',
-    title: 'Polar align pre-flight checks',
-    body:
-        'Before Polar align moves the mount, the rig checks it can do so safely, and the Start card lists every check:\n\n'
-        '* **Passed** (green tick), **Note** (amber: a reminder, it never stops a start), **Fails** (red: Start stays off until it passes), **Not checked yet** (grey: the rig could not check it yet, for example before the mount connects; it never stops a start).\n'
-        '* The checks: the mount connected and not parked; the site latitude, longitude and sidereal time (a site at 0° and 0° was never set, and is refused); the mount\'s clock, set and checked from the rig\'s synced clock; the mount\'s position trusted (no power loss or unconfirmed stop since); room for this mount to turn as far as the run turns it, confirmed by you; and where the scope points, from a fresh reading (not within 3° of the pole, within the session\'s sweep limit); an equatorial mount (an alt-az one turns azimuth, not RA); a mount that can turn its RA axis by motor speed (Polar align always turns RA with the motor); and the Polar Aligner, if you have one (with its motors on, its Stop is checked and its turns are capped).\n'
-        '* **Clearance** — the card says how far the run turns the mount each way. Tap *Confirm clearance…*: if there is room for the tube, counterweight and cables to move that far, tap *Yes, there is room*. It is kept for each mount; a bigger turn size asks again.\n'
-        '* **The mount\'s own limits** — always a note: set the slew and altitude limits in the mount\'s hand controller or app too. Ara\'s checks do not replace them.\n'
-        '* Start asks the rig again: it refuses on the first check that fails, so the list and the start never disagree. The list reads itself again when the mount connects, parks, unparks or ends a slew, when the settings change, and a few seconds after a failing clock check; the refresh button reads it at once. Check turns by its own step, so where the scope points is judged for it when it starts.',
-    relatedHelpKeys: ['setup.polar_align.stages', 'img.polar.clearance_confirmed'],
-    keywords: ['polar', 'alignment', 'preflight', 'pre-flight', 'checks', 'clearance', 'counterweight', 'safety', 'start'],
+    keywords: ['polar', 'alignment', 'home', 'parked', 'three point', 'done', 'verify', 'pole', 'east', 'west', 'nina', 'azimuth'],
   ),
   'setup.focusing.guide': Help(
     key: 'setup.focusing.guide',
@@ -2444,16 +2427,8 @@ const Map<String, Help> helpRegistry = {
     key: 'img.polar.target_tolerance_arcmin',
     title: 'Polar align tolerance',
     body:
-        'How close to the pole counts as aligned. Done turns on once the error is inside it, in the rough step too.',
+        'How close to the pole counts as aligned. A Polar Aligner\'s motors stop once the error is inside it, and the readout says when a measurement inside it is too uncertain to confirm. Done does not wait for it: that is your call.',
     relatedSettings: ['img.polar.target_tolerance_arcmin'],
-  ),
-  'img.polar.stop_tracking_when_done': Help(
-    key: 'img.polar.stop_tracking_when_done',
-    title: 'Stop tracking when polar align ends',
-    body:
-        'On (the default, as NINA): every end of a run turns tracking off, so the mount cannot track into the pier while nobody watches. Off: a run that finishes (Done, or a check\'s result) gives back the tracking it found. A Stop or a failure always leaves tracking off. Starting guiding while a run is open gives back the tracking it found, because guiding needs it.\n\n'
-        'Every end of a run also stops the mount first: Ara stops both motors and checks that the mount stands still. If it cannot confirm that, it tells you to cut the mount\'s power.',
-    relatedSettings: ['img.polar.stop_tracking_when_done'],
   ),
   'img.polar.polar_aligner_auto': Help(
     key: 'img.polar.polar_aligner_auto',
@@ -2469,63 +2444,39 @@ const Map<String, Help> helpRegistry = {
         'Each of the two RA turns between the three frames that measure the axis, from 5° to 30° (10° by default, as NINA). A Start turns twice by it and no further. The mount turns with its RA motor, never a GoTo.',
     relatedSettings: ['img.polar.seed_rotation_deg'],
   ),
-  'img.polar.check_step_deg': Help(
-    key: 'img.polar.check_step_deg',
-    title: 'Check step',
-    body:
-        'The RA turn between the three frames of a Check, from 5° to 30° (10° by default). The Check says how far it turns (2 × the step) before the mount moves. The mount turns with its RA motor, never a GoTo.',
-    relatedSettings: ['img.polar.check_step_deg'],
-  ),
   'img.polar.coarse_exposure_seconds': Help(
     key: 'img.polar.coarse_exposure_seconds',
-    title: 'Rough step exposure',
+    title: 'Main camera exposure',
     body:
-        'The main camera\'s exposure in the rough step, from 0.1 to 60 seconds, and in every measurement when Polar align\'s camera is the main camera. The pole field is sparse, so use a longer one for a slow camera.',
+        'The main camera\'s exposure, from 0.1 to 60 seconds, in every measurement when Polar align\'s camera is the main camera. The pole field is sparse, so use a longer one for a slow camera.',
     relatedSettings: ['img.polar.coarse_exposure_seconds'],
   ),
   'img.polar.camera': Help(
     key: 'img.polar.camera',
     title: 'Polar align camera',
     body:
-        'Which camera measures the RA axis, shows your knob turns live and takes the Check.\n\n'
+        'Which camera measures the RA axis, shows your knob turns live and takes the solves after Done.\n\n'
         '* **Guide camera** (the default): a frame about every second through the guider, solved with the guide optics.\n'
-        '* **Main camera**: its own plate solver and optics, at the rough step exposure. Slower, but it sees more stars; use it when the guide camera cannot solve the pole field. Start refuses while the main camera is not connected.\n\n'
-        '*Rough first (main camera)*, offered after the guide camera could not solve, always uses the main camera for that one run.',
+        '* **Main camera**: its own plate solver and optics, at the main camera exposure. Slower, but it sees more stars; use it when the guide camera cannot solve the pole field. Start refuses while the main camera is not connected.',
     relatedSettings: ['img.polar.camera', 'img.polar.coarse_exposure_seconds'],
   ),
   'img.polar.east_direction': Help(
     key: 'img.polar.east_direction',
     title: 'Polar align turn direction',
     body:
-        'Which way the RA axis turns when Polar align starts from a new pose (the first start since the mount connected, or after you moved the mount some other way). NINA\'s three-point polar alignment turns east by default.\n\n'
-        '* **Automatic** (the default): east in the northern hemisphere, west in the southern. From NINA\'s start field near the pole, east turns away from the meridian in the north; in the south east would end about 2° past it, so west is the default there.\n'
-        '* **East** or **West**: always that way for a new start.\n\n'
-        'Later starts in the same session turn back toward the first one, whatever this says, so repeated starts never walk the mount toward the pier. Pick a start whose turns do not cross the meridian. The confirm step shows the way before the mount moves.',
-    relatedSettings: ['img.polar.east_direction', 'img.polar.motor_direction'],
-  ),
-  'img.polar.motor_direction': Help(
-    key: 'img.polar.motor_direction',
-    title: 'RA motor direction',
-    body:
-        'Mount drivers do not agree on which way a positive motor speed turns RA. So the first time Polar align runs on a mount, and again on another mount or whenever its driver\'s name or version changes, it first turns the mount 0.5° (the confirm step says so), reads which way it went, and saves that for this mount. Every later turn goes the way the confirm step shows.\n\n'
-        'If a turn ever goes more than 0.5° the other way, Polar align stops the motor and ends the run. It never turns the mount back by itself. Check the mount, then tap **Test direction again** so the next start tests it afresh.',
-    relatedSettings: ['img.polar.motor_direction', 'img.polar.east_direction'],
+        'Which way the RA axis turns in a Polar align run. NINA\'s three-point polar alignment turns east by default.\n\n'
+        '* **Automatic** (the default): east in the northern hemisphere, west in the southern.\n'
+        '* **East** or **West**: always that way.\n\n'
+        'Every run starts from Home, where two turns either way are safe. If your mount turns the other way than the setting says, the measurement still works: the solved frames say where it went.',
+    relatedSettings: ['img.polar.east_direction'],
   ),
   'img.polar.frames_per_point': Help(
     key: 'img.polar.frames_per_point',
     title: 'Frames per point',
     body:
         'A measurement solves three points around two RA turns. At each point Polar align takes this many frames with the mount still (1 to 5, 3 by default) and averages them, so one noisy solve does not move the axis. The scatter of the solves is in the log.\n\n'
-        'A point whose solves scatter more than 3″ is retaken once. If it is still scattered, the run goes on, but the readout or the Check says the measurement is noisy: check focus and seeing, or take more frames per point.',
+        'A point whose solves scatter more than 3″ is retaken once. If it is still scattered, the run goes on, but the readout or the result says the measurement is noisy: check focus and seeing, or take more frames per point.',
     relatedSettings: ['img.polar.frames_per_point'],
-  ),
-  'img.polar.clearance_confirmed': Help(
-    key: 'img.polar.clearance_confirmed',
-    title: 'Clearance confirmed',
-    body:
-        'Polar align turns the mount with its RA motor, so before the first run on a mount it asks one question: it will turn the mount up to so many degrees each way (twice the turn size you picked on the Start card, plus 0.5° the first time, when it learns which way the RA motor turns). Is there room for the tube, counterweight and cables to move that far? Look, with a hand on the mount\'s power switch, and tap Yes, there is room. You never measure an angle. Until you confirm it (Confirm clearance… on the Polar align card), the motor does not turn the mount: the pre-flight list fails and Start stays off. A confirmation is for the distance you were asked about: a smaller or equal turn size stays confirmed, a bigger one asks again. Take back (in the dialog, or in Settings › Imaging › Polar align) withdraws it. The confirmation is kept for each mount, in each profile: a different mount asks again. A profile you share never carries it.',
-    relatedSettings: ['img.polar.clearance_confirmed'],
-    keywords: ['polar', 'alignment', 'clearance', 'confirm', 'counterweight', 'cables', 'safety', 'room'],
   ),
   'img.unguided.eccentricity': Help(
     key: 'img.unguided.eccentricity',

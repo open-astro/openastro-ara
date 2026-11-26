@@ -34,7 +34,7 @@ public interface IPolarAlignFrameSolver {
 
     /// <summary>
     /// Solve the FITS at <paramref name="fitsPath"/>. <paramref name="hintRaDegJnow"/>/<paramref name="hintDecDegJnow"/>
-    /// (apparent-of-date degrees), when supplied, seed a near solve around the mount's pointing —
+    /// (apparent-of-date degrees), when supplied, seed a near solve around where the frame is expected —
     /// essential for the small guide-cam FOV. Returns apparent-of-date degrees (precessed from the
     /// solver's J2000 output — precession is arcmin-scale since J2000 and may not be skipped, §45.8).
     /// </summary>
@@ -60,9 +60,9 @@ public interface IPolarAlignFrameSolver {
 }
 
 /// <summary>One solved (or unsolved) §45 frame. Coordinates are apparent-of-date degrees, valid only
-/// when <see cref="Success"/> is true. <see cref="PositionAngleDeg"/> (#2067 ARA-13) is the solve's position angle (the
-/// image's rotation from celestial north, degrees), null when the solver gave none: an RA turn of an equatorial mount
-/// keeps it, a pier flip turns it by 180°. <c>SigmaArcsec</c> (#2072) is set on a point averaged from several solves: the
+/// when <see cref="Success"/> is true. <see cref="PositionAngleDeg"/> is the solve's position angle (the
+/// image's rotation from celestial north, degrees), null when the solver gave none; the plate-solve check of the
+/// mount's position reads the pier side from it. <c>SigmaArcsec</c> (#2072) is set on a point averaged from several solves: the
 /// 1σ of its mean per axis on the sky, from their scatter (<see cref="PolarAlignGeometry.MeanStandardErrorArcsec"/>);
 /// null on a single solve, which has no scatter to measure. <c>Solves</c> is how many solves the point averages (1 for a
 /// single solve): the fit never counts a point surer than the solver's own precision of that mean
@@ -196,7 +196,7 @@ public sealed class PolarAlignFrameSolver : IPolarAlignFrameSolver {
 
         // Near-solver only, twice: the §45 loop must fail FAST on a cloudy/starless frame and retry
         // (~1 s cadence), so the long blind-solve fallback the imaging path uses is wrong here — the
-        // hint (mount pointing / last solve) is always available to a running routine.
+        // hint (the pole, then the last solve) is always available to a running routine.
         var plateSolver = _solverFactory.GetPlateSolver(settings);
         var imageSolver = _solverFactory.GetImageSolver(plateSolver, blindFailover ? _solverFactory.GetBlindSolver(settings) : plateSolver);
 

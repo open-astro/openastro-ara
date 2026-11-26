@@ -4,12 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/l10n/app_localizations.dart';
 import 'package:openastroara/models/polar_align.dart';
-import 'package:openastroara/models/server.dart';
 import 'package:openastroara/screens/settings/panels/imaging_polar_panel.dart';
-import 'package:openastroara/services/polar_align_api.dart';
-import 'package:openastroara/state/polar_align/polar_align_motor_direction_state.dart';
-import 'package:openastroara/state/polar_align/polar_align_state.dart';
-import 'package:openastroara/state/saved_server_state.dart';
 import 'package:openastroara/state/settings/loaded_section.dart'
     show SectionNotLoadedException;
 import 'package:openastroara/state/settings/migrated_sections.dart';
@@ -38,83 +33,25 @@ Future<FakePolarAlignSection> _pump(
   return section;
 }
 
-/// #2081 the rig's saved RA motor direction, with no HTTP.
-class _DirectionRig implements PolarAlignMotorDirectionClient {
-  _DirectionRig(this.state);
-  PolarAlignMotorDirectionState? state;
-  int retests = 0;
-
-  @override
-  Future<PolarAlignMotorDirectionState?> get() async => state;
-
-  @override
-  Future<void> retest() async {
-    retests++;
-    state = PolarAlignMotorDirectionState(
-      matchesConnectedMount: state?.matchesConnectedMount == null ? null : false,
-    );
-  }
-
-  @override
-  void close() {}
-}
-
-/// The live Polar Align view, set by the test (no WebSocket).
-class _FakeLive extends PolarAlignLiveNotifier {
-  @override
-  PolarAlignLive build() => const PolarAlignLive();
-
-  void set(PolarAlignLive value) => state = value;
-}
-
-Future<FakePolarAlignSection> _pumpWithDirection(
-  WidgetTester tester,
-  _DirectionRig direction, {
-  FakePolarAlignSection? rig,
-  _FakeLive? live,
-}) async {
-  // Tall enough that the whole panel is built (the list is lazy).
-  tester.view.physicalSize = const Size(1200, 3200);
-  tester.view.devicePixelRatio = 1;
-  addTearDown(tester.view.reset);
-  final section = rig ?? FakePolarAlignSection();
-  await tester.pumpWidget(
-    ProviderScope(
-      overrides: [
-        ...polarAlignSectionOverrides(section),
-        activeServerProvider.overrideWithValue(const AraServer(hostname: 'rig', port: 1)),
-        polarAlignMotorDirectionApiFactoryProvider.overrideWithValue((_) => direction),
-        if (live != null) polarAlignLiveProvider.overrideWith(() => live),
-      ],
-      child: MaterialApp(
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
-        supportedLocales: AppLocalizations.supportedLocales,
-        home: const Scaffold(body: ImagingPolarPanel()),
-      ),
-    ),
-  );
-  await tester.pumpAndSettle();
-  return section;
-}
-
 void main() {
-  testWidgets('there is no Home switch: polar align never sends the mount Home (#2048)', (
+  testWidgets("the only switch is the Polar Aligner's: no Home switch, no stop-tracking switch", (
     tester,
   ) async {
     await _pump(tester);
     expect(find.textContaining('Home'), findsNothing);
-    expect(find.byType(Switch), findsNWidgets(2), reason: 'the Polar Aligner and stop-tracking switches only');
+    expect(find.textContaining('tracking'), findsNothing);
+    expect(find.byType(Switch), findsOneWidget);
   });
 
   testWidgets(
-    'the turn, verify step, rough exposure and tolerance each save their own field (#1736)',
+    'the turn, main camera exposure and tolerance each save their own field (#1736)',
     (tester) async {
       final api = await _pump(tester);
       final fields = find.byType(TextField);
-      expect(fields, findsNWidgets(5), reason: 'and frames per point (#2082)');
-      // Row order: tolerance, turn, verify step, rough exposure.
-      final entered = ['2', '25', '20', '7.5'];
-      for (var i = 0; i < 4; i++) {
+      expect(fields, findsNWidgets(4), reason: 'and frames per point (#2082)');
+      // Row order: tolerance, turn, main camera exposure.
+      final entered = ['2', '25', '7.5'];
+      for (var i = 0; i < 3; i++) {
         await tester.enterText(fields.at(i), entered[i]);
         await tester.testTextInput.receiveAction(TextInputAction.done);
         await tester.pumpAndSettle();
@@ -122,7 +59,6 @@ void main() {
       final last = api.puts.last;
       expect(last.targetToleranceArcmin, 2.0);
       expect(last.seedRotationDeg, 25.0);
-      expect(last.checkStepDeg, 20.0);
       expect(last.coarseExposureSeconds, 7.5);
     },
   );
@@ -140,7 +76,7 @@ void main() {
       rig.initial = rigPolarAlign;
       await tester.tap(find.byKey(const Key('section-retry')));
       await tester.pumpAndSettle();
-      expect(find.byType(TextField), findsNWidgets(5));
+      expect(find.byType(TextField), findsNWidgets(4));
     },
   );
 
@@ -177,7 +113,7 @@ void main() {
     (tester) async {
       final api = await _pump(tester);
       final fields = find.byType(TextField);
-      // Row order: tolerance, turn, verify step, rough exposure.
+      // Row order: tolerance, turn, check step, main camera exposure.
       await tester.enterText(fields.at(1), '200');
       await tester.testTextInput.receiveAction(TextInputAction.done);
       await tester.pumpAndSettle();
@@ -200,7 +136,7 @@ void main() {
         'Tolerance',
         'Turn',
         'Check step',
-        'Rough step exposure',
+        'Main camera exposure',
         'Stop tracking when polar align ends',
         'Frames per point',
         'Guide camera',
@@ -215,7 +151,7 @@ void main() {
     'the Polar Aligner switch shows the profile value and saves polar_aligner_auto, keeping the other fields (#1971)',
     (tester) async {
       final rig = FakePolarAlignSection(
-        initial: rigPolarAlign.copyWith(exposureSeconds: 4, checkStepDeg: 15, polarAlignerAuto: false),
+        initial: rigPolarAlign.copyWith(exposureSeconds: 4, seedRotationDeg: 15, polarAlignerAuto: false),
       );
       await _pump(tester, rig: rig);
       expect(find.text("Correct with the Polar Aligner's motors"), findsOneWidget);
@@ -226,30 +162,9 @@ void main() {
       await tester.pumpAndSettle();
       final saved = rig.puts.single;
       expect(saved.polarAlignerAuto, isTrue);
-      expect((saved.exposureSeconds, saved.checkStepDeg), (4.0, 15.0), reason: 'saved over the loaded section');
+      expect((saved.exposureSeconds, saved.seedRotationDeg), (4.0, 15.0), reason: 'saved over the loaded section');
       expect(
         find.text('On a rig with a Polar Aligner, Polar align turns its motors after each measurement'),
-        findsOneWidget,
-      );
-    },
-  );
-
-  testWidgets(
-    'the stop-tracking switch shows the profile value and saves stop_tracking_when_done, keeping the other fields (#2048)',
-    (tester) async {
-      final rig = FakePolarAlignSection(initial: rigPolarAlign.copyWith(exposureSeconds: 4, checkStepDeg: 15));
-      await _pump(tester, rig: rig);
-      expect(find.text('Stop tracking when polar align ends'), findsOneWidget);
-      expect(find.text('Every end of a run turns tracking off'), findsOneWidget);
-      final stopTracking = find.byType(Switch).at(1);
-      expect(tester.widget<Switch>(stopTracking).value, isTrue);
-      await tester.tap(stopTracking);
-      await tester.pumpAndSettle();
-      final saved = rig.puts.single;
-      expect(saved.stopTrackingWhenDone, isFalse);
-      expect((saved.exposureSeconds, saved.checkStepDeg), (4.0, 15.0), reason: 'saved over the loaded section');
-      expect(
-        find.text('Off: a run that finishes gives back the tracking it found. A Stop always leaves tracking off'),
         findsOneWidget,
       );
     },
@@ -259,7 +174,7 @@ void main() {
     'Polar align: a load that fails after a rig change shows not loaded, and nothing is sent (ADR 0015)',
     (tester) async {
       final rig = await _pump(tester);
-      expect(find.byType(Switch), findsNWidgets(2));
+      expect(find.byType(Switch), findsOneWidget);
       // A different rig or profile: every section back to not loaded, and
       // this one's next load fails.
       rig.initial = null;
@@ -295,17 +210,17 @@ void main() {
           statusCode: 412,
         ),
       );
-      final stopTracking = find.byType(Switch).at(1);
-      await tester.tap(stopTracking);
+      final aligner = find.byType(Switch);
+      await tester.tap(aligner);
       await tester.pumpAndSettle();
       expect(rig.puts, isEmpty);
-      expect(tester.widget<Switch>(find.byType(Switch).at(1)).value, isFalse, reason: 'the change stays on screen');
+      expect(tester.widget<Switch>(aligner).value, isFalse, reason: 'the change stays on screen');
       expect(find.byKey(const Key('section-reload')), findsOneWidget);
 
       rig.refuse = null;
       await tester.tap(find.byKey(const Key('section-reload')));
       await tester.pumpAndSettle();
-      expect(tester.widget<Switch>(find.byType(Switch).at(1)).value, isTrue, reason: "the rig's copy again");
+      expect(tester.widget<Switch>(aligner).value, isTrue, reason: "the rig's copy again");
       expect(find.byKey(const Key('section-reload')), findsNothing);
     },
   );
@@ -313,17 +228,20 @@ void main() {
   testWidgets(
     'the turn direction saves east, west or automatic, keeping the other fields (#2081)',
     (tester) async {
-      final rig = await _pumpWithDirection(
+      // Tall enough that the whole panel is built (the list is lazy).
+      tester.view.physicalSize = const Size(1200, 3200);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      final rig = await _pump(
         tester,
-        _DirectionRig(null),
-        rig: FakePolarAlignSection(initial: rigPolarAlign.copyWith(checkStepDeg: 15)),
+        rig: FakePolarAlignSection(initial: rigPolarAlign.copyWith(seedRotationDeg: 15)),
       );
       expect(find.text('Automatic'), findsOneWidget);
       await tester.tap(find.byKey(const Key('polar-knob-east-direction')));
       await tester.pumpAndSettle();
       await tester.tap(find.text('West').last);
       await tester.pumpAndSettle();
-      expect((rig.puts.last.eastDirection, rig.puts.last.checkStepDeg), (false, 15.0));
+      expect((rig.puts.last.eastDirection, rig.puts.last.seedRotationDeg), (false, 15.0));
       expect(rig.puts.last.toJson()['east_direction'], false);
 
       await tester.tap(find.byKey(const Key('polar-knob-east-direction')));
@@ -333,137 +251,6 @@ void main() {
       expect(rig.puts, hasLength(2));
       expect(rig.puts.last.eastDirection, isNull, reason: 'automatic is null on the wire, the hemisphere picks');
       expect(rig.puts.last.toJson().containsKey('east_direction'), isTrue, reason: 'sent, so the rig clears it');
-    },
-  );
-
-  testWidgets(
-    'the saved RA motor direction shows with its driver, and Test direction again forgets it (#2081)',
-    (tester) async {
-      final direction = _DirectionRig(
-        PolarAlignMotorDirectionState(
-          saved: PolarAlignMotorDirection(sign: -1, mountKey: 'hae29c-unique-id', driverInfo: '', driverVersion: '6.0.0', testedUtc: DateTime.utc(2026, 11, 21)),
-          matchesConnectedMount: true,
-        ),
-      );
-      await _pumpWithDirection(tester, direction);
-      expect(
-        find.text('Tested on hae29c-unique-id, driver 6.0.0: the motor\'s positive speed turns RA west.'),
-        findsOneWidget,
-      );
-
-      await tester.tap(find.byKey(const Key('polar-motor-direction-retest')));
-      await tester.pumpAndSettle();
-      expect(direction.retests, 1);
-      expect(find.text('Not tested yet: the next start first turns the mount 0.5° to learn it.'), findsOneWidget);
-      expect(find.text('The next start tests the motor direction again.'), findsOneWidget);
-      final retest = tester.widget<ButtonStyleButton>(find.byKey(const Key('polar-motor-direction-retest')));
-      expect(retest.onPressed, isNull, reason: 'nothing saved to forget');
-    },
-  );
-
-  testWidgets(
-    'the motor direction reads again when a run ends, so the test a first run saved shows without reopening the panel (#2081)',
-    (tester) async {
-      final direction = _DirectionRig(const PolarAlignMotorDirectionState(matchesConnectedMount: true));
-      final live = _FakeLive();
-      await _pumpWithDirection(tester, direction, live: live);
-      expect(find.text('Not tested yet: the next start first turns the mount 0.5° to learn it.'), findsOneWidget);
-
-      live.set(const PolarAlignLive(phase: PolarAlignStates.adjusting));
-      await tester.pumpAndSettle();
-      // The run's 0.5° test saved a sign on the rig.
-      direction.state = PolarAlignMotorDirectionState(
-        saved: PolarAlignMotorDirection(sign: 1, mountKey: 'hae29c-unique-id', driverInfo: '', driverVersion: '6.0.0', testedUtc: DateTime.utc(2026, 11, 21)),
-        matchesConnectedMount: true,
-      );
-      live.set(const PolarAlignLive(phase: PolarAlignStates.stopped));
-      await tester.pumpAndSettle();
-      expect(
-        find.text('Tested on hae29c-unique-id, driver 6.0.0: the motor\'s positive speed turns RA east.'),
-        findsOneWidget,
-      );
-    },
-  );
-
-  testWidgets(
-    'Test direction again is off while a run is going, and on again when it ends (#2081)',
-    (tester) async {
-      final direction = _DirectionRig(
-        PolarAlignMotorDirectionState(
-          saved: PolarAlignMotorDirection(sign: 1, mountKey: 'hae29c-unique-id', driverInfo: '', driverVersion: '6.0.0', testedUtc: DateTime.utc(2026, 11, 21)),
-          matchesConnectedMount: true,
-        ),
-      );
-      final live = _FakeLive();
-      await _pumpWithDirection(tester, direction, live: live);
-      ButtonStyleButton retest() =>
-          tester.widget<ButtonStyleButton>(find.byKey(const Key('polar-motor-direction-retest')));
-      expect(retest().onPressed, isNotNull);
-
-      live.set(const PolarAlignLive(phase: PolarAlignStates.adjusting));
-      await tester.pumpAndSettle();
-      expect(retest().onPressed, isNull, reason: 'its own test could save a direction right after a forget');
-      await tester.tap(find.byKey(const Key('polar-motor-direction-retest')), warnIfMissed: false);
-      await tester.pumpAndSettle();
-      expect(direction.retests, 0);
-
-      live.set(const PolarAlignLive(phase: PolarAlignStates.stopped));
-      await tester.pumpAndSettle();
-      expect(retest().onPressed, isNotNull);
-    },
-  );
-
-  testWidgets(
-    'the saved motor direction names the mount it was keyed to, and a driver version only when one was reported (#2167)',
-    (tester) async {
-      final direction = _DirectionRig(
-        PolarAlignMotorDirectionState(
-          saved: PolarAlignMotorDirection(sign: 1, mountKey: 'iOptron HAE29C', driverInfo: '', driverVersion: '', testedUtc: DateTime.utc(2026, 11, 21)),
-          matchesConnectedMount: true,
-        ),
-      );
-      await _pumpWithDirection(tester, direction);
-      expect(
-        find.text('Tested on iOptron HAE29C: the motor\'s positive speed turns RA east.'),
-        findsOneWidget,
-        reason: 'no driver version: the mount alone, never a blank pair',
-      );
-    },
-  );
-
-  testWidgets(
-    'the saved motor direction names the driver it was tested on (#2167)',
-    (tester) async {
-      final direction = _DirectionRig(
-        PolarAlignMotorDirectionState(
-          saved: PolarAlignMotorDirection(sign: 1, mountKey: 'hae29c-unique-id', driverInfo: 'AlpacaBridge iOptron', driverVersion: '6.0.0', testedUtc: DateTime.utc(2026, 11, 21)),
-          matchesConnectedMount: true,
-        ),
-      );
-      await _pumpWithDirection(tester, direction);
-      expect(
-        find.text('Tested on hae29c-unique-id, driver AlpacaBridge iOptron 6.0.0: the motor\'s positive speed turns RA east.'),
-        findsOneWidget,
-      );
-    },
-  );
-
-  testWidgets(
-    'a saved direction for another driver says the next start tests again (#2081)',
-    (tester) async {
-      await _pumpWithDirection(
-        tester,
-        _DirectionRig(
-          PolarAlignMotorDirectionState(
-            saved: PolarAlignMotorDirection(sign: 1, mountKey: 'hae29c-unique-id', driverInfo: '', driverVersion: '5.0.0', testedUtc: DateTime.utc(2026, 11, 21)),
-            matchesConnectedMount: false,
-          ),
-        ),
-      );
-      expect(
-        find.text('Tested on another mount or driver (hae29c-unique-id, driver 5.0.0): the next start tests it again with a 0.5° turn.'),
-        findsOneWidget,
-      );
     },
   );
 }

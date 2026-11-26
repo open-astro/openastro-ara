@@ -101,7 +101,7 @@ void main() {
         polarAlignStepState(
           const PolarAlignLive(
             phase: PolarAlignStates.stopped,
-            stage: PolarAlignStages.fine,
+            stage: PolarAlignStages.align,
             totalErrorArcmin: 18,
             zone: 'yellow',
           ),
@@ -114,7 +114,7 @@ void main() {
         polarAlignStepState(
           const PolarAlignLive(
             phase: PolarAlignStates.stopped,
-            stage: PolarAlignStages.fine,
+            stage: PolarAlignStages.align,
           ),
           last: last(4, tonight),
           now: now,
@@ -200,20 +200,9 @@ void main() {
           SetupStepState.done);
     });
 
-    test("the rough stage's green zone is not done yet", () {
-      // Rough is a first pass on the main camera; fine and check are still ahead.
-      const rough = PolarAlignLive(
-          phase: PolarAlignStates.adjusting, stage: PolarAlignStages.coarse, zone: 'green');
-      expect(polarAlignStepState(rough), SetupStepState.inProgress);
-      // A fine-stage green is the fine stage's own (a new stage starts with no
-      // readout), so it counts.
-      expect(polarAlignStepState(rough.copyWith(stage: PolarAlignStages.fine)),
-          SetupStepState.done);
-    });
-
     test('a finished check outside the green zone needs work', () {
       const checked = PolarAlignLive(
-          phase: PolarAlignStates.checked, stage: PolarAlignStages.check, zone: 'yellow');
+          phase: PolarAlignStates.checked, stage: PolarAlignStages.verify, zone: 'yellow');
       expect(polarAlignStepState(checked), SetupStepState.problem);
       expect(polarAlignStepState(checked.copyWith(zone: 'green')), SetupStepState.done);
     });

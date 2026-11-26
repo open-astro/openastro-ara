@@ -479,25 +479,6 @@ namespace OpenAstroAra.Test.PolarAlign {
             Assert.That(mount.Stops.Select(s => s.Honoured), Is.EqualTo(HonouredThenIgnored));
         }
 
-        [Test]
-        public async Task FakeGemMount_fresh_read_takes_its_time_on_the_manual_clock() {
-            var (mount, clock) = At(-4.0, 85.0);
-            mount.FreshReadTakes = TimeSpan.FromMilliseconds(10);
-            var ha0 = mount.TruePose.MechHaDeg;
-            var t0 = clock.GetUtcNow();
-            await mount.MoveAxisAsync(0, 10.0, leaseMs: null, CancellationToken.None);
-            for (var i = 0; i < 5; i++) {
-                await mount.ReadPointingNowAsync(CancellationToken.None);
-            }
-            await mount.ReadSlewingNowAsync(CancellationToken.None);
-            await mount.ReadNowAsync(CancellationToken.None);
-
-            Assert.That(clock.GetUtcNow() - t0, Is.EqualTo(TimeSpan.FromMilliseconds(70)), "seven reads of 10 ms");
-            Assert.That(GemGeometry.Wrap180(mount.TruePose.MechHaDeg - ha0), Is.EqualTo(-0.7).Within(1e-9), "10°/s for the 70 ms they took");
-            Assert.That(mount.GetCurrentPosition(), Is.Not.Null);
-            Assert.That(clock.GetUtcNow() - t0, Is.EqualTo(TimeSpan.FromMilliseconds(70)), "a cached read takes no time");
-        }
-
         [TestCase(1)]
         [TestCase(3)]
         public async Task FakeGemMount_moveaxis_stop_ignored_n_ignores_exactly_n_stops(int n) {

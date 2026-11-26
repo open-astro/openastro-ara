@@ -14,7 +14,9 @@
 
 using OpenAstroAra.Core.Enums;
 using System;
+using System.Collections.Generic;
 using System.Threading;
+using System.Threading.Tasks;
 
 namespace OpenAstroAra.Test.PolarAlign {
 
@@ -213,12 +215,32 @@ namespace OpenAstroAra.Test.PolarAlign {
     /// travel (degrees, both axes, tracking excluded).</summary>
     internal sealed record PoseSample(TimeSpan At, GemPose Pose, double PhiDeg, PierSide Side, bool Tracking, double MotorTravelDeg);
 
-    /// <summary>A clock a test moves by hand, for the fake's own unit tests. Its monotonic timestamp
-    /// (<see cref="GetTimestamp"/>, what <see cref="TimeProvider.GetElapsedTime(long)"/> measures) moves with it.</summary>
+    /// <summary>A clock a test moves by hand. Its monotonic timestamp (<see cref="GetTimestamp"/>, what
+    /// <see cref="TimeProvider.GetElapsedTime(long)"/> measures) and its timers move with it: a
+    /// <c>Task.Delay(span, clock)</c> ends when <see cref="Advance"/> takes the clock past it. With
+    /// <see cref="AutoAdvance"/> a timer's wait passes at once: the clock jumps to the timer's due time as it is set, so a
+    /// routine that times a turn on this clock runs through it without real time passing.</summary>
     internal sealed class ManualMountClock : TimeProvider {
         private readonly object _lock = new();
+        private readonly List<ManualTimer> _timers = new();
         private DateTimeOffset _now = new(2026, 11, 20, 3, 0, 0, TimeSpan.Zero);
         private long _ticks;
+
+        /// <summary>A timer's wait passes as soon as it is set (the clock jumps to its due time).</summary>
+        public bool AutoAdvance { get; set; }
+
+        /// <summary>Completes when the next timer is set on a clock that does not advance by itself: a routine waits on
+        /// this clock (a turn's motor runs), and a test can act in the middle of that wait.</summary>
+        public TaskCompletionSource TimerSet { get; private set; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        /// <summary>How many timers wait on the clock: the waits a test's next <see cref="Advance"/> can end.</summary>
+        public int PendingTimers {
+            get {
+                lock (_lock) {
+                    return _timers.Count;
+                }
+            }
+        }
 
         public override DateTimeOffset GetUtcNow() {
             lock (_lock) {
@@ -235,24 +257,67 @@ namespace OpenAstroAra.Test.PolarAlign {
         }
 
         public void Advance(TimeSpan by) {
+            List<ManualTimer> due;
             lock (_lock) {
                 _now += by;
                 _ticks += by.Ticks;
+                due = _timers.FindAll(t => t.DueTicks <= _ticks);
+                _timers.RemoveAll(t => t.DueTicks <= _ticks);
+            }
+            foreach (var timer in due) {
+                timer.Fire();
             }
         }
-    }
 
-    /// <summary>#2067 — <paramref name="inner"/> with a wall clock a test can step (chrony's makestep, a UTCDate write that
-    /// steps the Pi's clock) while its monotonic timestamp runs on untouched.</summary>
-    internal sealed class SteppedWallClock(TimeProvider inner) : TimeProvider {
-        private long _offsetTicks;
+        public override ITimer CreateTimer(TimerCallback callback, object? state, TimeSpan dueTime, TimeSpan period) {
+            var timer = new ManualTimer(this, callback, state);
+            timer.Change(dueTime, period);
+            return timer;
+        }
 
-        public void Step(TimeSpan by) => Interlocked.Add(ref _offsetTicks, by.Ticks);
+        private void Set(ManualTimer timer, TimeSpan dueTime) {
+            TaskCompletionSource? set = null;
+            lock (_lock) {
+                _timers.Remove(timer);
+                if (dueTime == Timeout.InfiniteTimeSpan) {
+                    return;
+                }
+                timer.DueTicks = _ticks + dueTime.Ticks;
+                _timers.Add(timer);
+                if (!AutoAdvance) {
+                    set = TimerSet;
+                    TimerSet = new(TaskCreationOptions.RunContinuationsAsynchronously);
+                }
+            }
+            set?.TrySetResult();
+            if (AutoAdvance) {
+                Advance(dueTime);
+            }
+        }
 
-        public override DateTimeOffset GetUtcNow() => inner.GetUtcNow() + TimeSpan.FromTicks(Interlocked.Read(ref _offsetTicks));
+        private void Drop(ManualTimer timer) {
+            lock (_lock) {
+                _timers.Remove(timer);
+            }
+        }
 
-        public override long TimestampFrequency => inner.TimestampFrequency;
+        /// <summary>A one-shot timer on the manual clock (a period is not modelled: <c>Task.Delay</c> sets none).</summary>
+        private sealed class ManualTimer(ManualMountClock clock, TimerCallback callback, object? state) : ITimer {
+            public long DueTicks { get; set; }
 
-        public override long GetTimestamp() => inner.GetTimestamp();
+            public void Fire() => callback(state);
+
+            public bool Change(TimeSpan dueTime, TimeSpan period) {
+                clock.Set(this, dueTime);
+                return true;
+            }
+
+            public void Dispose() => clock.Drop(this);
+
+            public ValueTask DisposeAsync() {
+                Dispose();
+                return ValueTask.CompletedTask;
+            }
+        }
     }
 }

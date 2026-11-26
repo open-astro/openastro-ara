@@ -8,7 +8,6 @@ import '../services/guider_api.dart' show GuideStartFailed;
 import '../services/profile_api.dart' show SectionVersionMissingException;
 import '../services/refusal.dart';
 import 'gps_site_fill.dart' show clientPlatform, thisDeviceLabel;
-import 'polar_reach_text.dart';
 
 /// Turns whatever went wrong into a sentence a person can act on.
 ///
@@ -125,31 +124,11 @@ String? _refusalWords(AppLocalizations l, Refusal r) {
         _ => l.refusalMountPositionUnverified,
       },
     RefusalCause.polarAlignMountParked => l.refusalPolarAlignMountParked,
-    RefusalCause.polarAlignUnconfirmed => l.refusalPolarAlignUnconfirmed,
-    RefusalCause.polarAlignSweepLimit => l.refusalPolarAlignSweepLimit(
-      _unsignedWholeDegrees(r.parameters['offset_deg']),
-    ),
+    RefusalCause.polarAlignNotHome => l.refusalPolarAlignNotHome,
     RefusalCause.polarAlignMovingMount => l.refusalPolarAlignMovingMount,
-    RefusalCause.polarAlignOnAxis => l.refusalPolarAlignOnAxis,
-    RefusalCause.polarAlignPointingUnknown => l.refusalPolarAlignPointingUnknown,
-    RefusalCause.polarAlignPoseAmbiguous => l.refusalPolarAlignPoseAmbiguous,
     RefusalCause.polarAlignMountBusy => l.refusalPolarAlignMountBusy,
     RefusalCause.firstFlipNotCompleted => l.refusalFirstFlipNotCompleted,
     RefusalCause.mountClockNotVerified => l.refusalMountClockNotVerified,
-    RefusalCause.polarAlignAlreadyRunning => l.refusalPolarAlignAlreadyRunning,
-    RefusalCause.polarAlignClearanceNotConfirmed =>
-      l.refusalPolarAlignClearanceNotConfirmed(
-        polarReachText(r.parameters['reach_deg'], l.localeName),
-      ),
-    RefusalCause.polarAlignSiteNotSet => l.refusalPolarAlignSiteNotSet,
-    RefusalCause.polarAlignAltAzMount => l.refusalPolarAlignAltAzMount,
-    RefusalCause.polarAlignCannotMoveAxis => l.refusalPolarAlignCannotMoveAxis,
-    RefusalCause.polarAlignRunActive => l.refusalPolarAlignRunActive,
-    RefusalCause.polarAlignCannotMoveDec => l.refusalPolarAlignCannotMoveDec,
-    RefusalCause.polarAlignMoveToStartNotNeeded =>
-      l.refusalPolarAlignMoveToStartNotNeeded,
-    RefusalCause.polarAlignMoveNotConfirmed =>
-      l.refusalPolarAlignMoveNotConfirmed,
     RefusalCause.poseCheckNotNeeded => l.refusalPoseCheckNotNeeded,
     RefusalCause.poseSyncNotOffered => l.refusalPoseSyncNotOffered,
     RefusalCause.mountNotConnected => l.refusalMountNotConnected,
@@ -166,10 +145,6 @@ String _wholeDegrees(Object? value) =>
 
 /// A refusal's hour angle in hours, one decimal; "?" when absent.
 String _hours(Object? value) => value is num ? value.toStringAsFixed(1) : '?';
-
-/// A refusal's angle in whole degrees, unsigned; "?" when absent.
-String _unsignedWholeDegrees(Object? value) =>
-    value is num ? value.abs().toStringAsFixed(0) : '?';
 
 String? _firstLine(String? text) {
   final line = text?.trim().split('\n').first.trim();

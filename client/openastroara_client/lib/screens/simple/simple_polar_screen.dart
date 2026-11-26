@@ -11,8 +11,8 @@ import '../../util/polar_align_error_text.dart';
 import 'simple_polar_panel.dart';
 import 'simple_screen.dart';
 
-/// Polar align: the routine's settings, its shutter, exposure and Loop/Single
-/// on the chip.
+/// Polar align: the flow's panel, its shutter, exposure and Loop/Single on
+/// the chip.
 class SimplePolarScreen extends SimpleScreen {
   const SimplePolarScreen();
 
@@ -37,7 +37,7 @@ class SimplePolarScreen extends SimpleScreen {
   /// The routine's own camera frames while it runs.
   @override
   Widget? frame(WidgetRef ref) =>
-      simplePolarActive(ref.watch(polarAlignLiveProvider))
+      ref.watch(polarAlignLiveProvider.select((l) => l.isActive))
       ? const SimplePolarFrame()
       : null;
 

@@ -22,7 +22,8 @@ namespace OpenAstroAra.Server.Services;
 /// <summary>
 /// #2066 (ARA-2), #2065 (ARA-7) — the mount's single motion owner. A routine that drives the motors itself (Polar Align)
 /// holds it for its whole run; meanwhile every mediator GoTo, park and Find Home (the sequencer's, Center's, the meridian
-/// flip's, an end-of-sequence park, a failed flip's safe rest) fails here, a sync is not sent (it shifts the readings the
+/// flip's, an end-of-sequence park, a failed flip's safe rest) fails here (the holder's own move, sent under
+/// <see cref="ActAsHolder"/>, passes), a sync is not sent (it shifts the readings the
 /// routine steers and measures by), and the REST GoTo, sync, Center, Park and Home endpoints refuse with
 /// <c>polar-align-moving-mount</c> (<c>EquipmentEndpoints.ThrowIfPolarAlignMovesTheMount</c>). The owner check and the
 /// send are one step: a move is counted while it is being sent (<see cref="TryBeginMotionDispatch"/>), so a REST GoTo or
@@ -44,6 +45,8 @@ public sealed partial class TelescopeService {
     // owner check to its send, a REST Park or Find Home from the end of its checks to its send, a mediator GoTo, park, Find
     // Home or sync while it is sent. Never the safety and fault parks. Guarded by _ownerGate.
     private int _dispatching;
+    // The hold the current flow acts for (ActAsHolder): its own moves pass the owner check while that hold is live.
+    private static readonly AsyncLocal<object?> s_actingHold = new();
 
     /// <inheritdoc />
     public string? MotionOwner {
@@ -70,6 +73,20 @@ public sealed partial class TelescopeService {
             LogMotionOwnerTaken(owner);
             return hold;
         }
+    }
+
+    /// <inheritdoc />
+    /// <remarks>The scope flows into every task started inside it (an <see cref="AsyncLocal{T}"/>): wrap only the one
+    /// call that sends the holder's own move, never a longer stretch of work.</remarks>
+    public IDisposable ActAsHolder(IDisposable hold) {
+        ArgumentNullException.ThrowIfNull(hold);
+        var prior = s_actingHold.Value;
+        s_actingHold.Value = hold;
+        return new ActingScope(prior);
+    }
+
+    private sealed class ActingScope(object? prior) : IDisposable {
+        public void Dispose() => s_actingHold.Value = prior;
     }
 
     private void Release(Hold hold) {
@@ -113,7 +130,7 @@ public sealed partial class TelescopeService {
     private Dispatch? TryBeginMotionDispatch(out string? owner) {
         lock (_ownerGate) {
             owner = _holdOwner;
-            if (owner is not null) {
+            if (owner is not null && !(s_actingHold.Value is { } acting && ReferenceEquals(acting, _holdToken))) {
                 return null;
             }
             _dispatching++;

@@ -1481,8 +1481,8 @@ const List<Setting> settingsRegistry = [
     id: 'img.polar.target_tolerance_arcmin',
     tier: SettingTier.advanced,
     label: 'Polar align tolerance (arcmin)',
-    description: 'How close to the pole counts as aligned. Done turns on once the error is inside it, in the rough step as well as the fine step.',
-    keywords: ['polar', 'alignment', 'tolerance', 'done', 'arcmin', 'error'],
+    description: 'How close to the pole counts as aligned. A Polar Aligner\'s motors stop once the error is inside it. Done does not wait for it: that is your call.',
+    keywords: ['polar', 'alignment', 'tolerance', 'arcmin', 'error', 'polar aligner', 'motors'],
     path: ['Settings', 'Imaging', 'Polar align'],
     type: SettingType.doubleRange(min: 0.1, max: 10.0, step: 0.1),
     defaultValue: null,
@@ -1500,17 +1500,6 @@ const List<Setting> settingsRegistry = [
     profilePath: 'polar_align.polar_aligner_auto',
   ),
   Setting(
-    id: 'img.polar.stop_tracking_when_done',
-    tier: SettingTier.advanced,
-    label: 'Stop tracking when polar align ends',
-    description: 'Every end of a polar align run turns tracking off, as NINA does by default, so the mount cannot track into the pier while nobody watches. Off: a run that finishes gives back the tracking it found. A Stop or a failure always leaves tracking off.',
-    keywords: ['polar', 'alignment', 'tracking', 'stop', 'pier', 'collision', 'nina'],
-    path: ['Settings', 'Imaging', 'Polar align'],
-    type: SettingType.bool(),
-    defaultValue: null,
-    profilePath: 'polar_align.stop_tracking_when_done',
-  ),
-  Setting(
     id: 'img.polar.seed_rotation_deg',
     tier: SettingTier.advanced,
     label: 'Polar align turn (°)',
@@ -1522,26 +1511,13 @@ const List<Setting> settingsRegistry = [
     profilePath: 'polar_align.seed_rotation_deg',
   ),
   Setting(
-    id: 'img.polar.check_step_deg',
-    tier: SettingTier.advanced,
-    label: 'Check step (°)',
-    description: 'The RA turn between the three frames of a Check, which turns the mount 2 × this step. Kept between 5° and 30°.',
-    keywords: ['polar', 'alignment', 'verify', 'check', 'three point', 'step'],
-    path: ['Settings', 'Imaging', 'Polar align'],
-    type: SettingType.doubleRange(min: 5, max: 30, step: 5),
-    defaultValue: null,
-    profilePath: 'polar_align.check_step_deg',
-  ),
-  Setting(
     id: 'img.polar.coarse_exposure_seconds',
     tier: SettingTier.advanced,
-    label: 'Rough step exposure (s)',
-    description: 'The main camera\'s exposure in the rough step, and in every measurement when Polar align\'s camera is the main camera. The pole field is sparse, so it is longer than a guide frame; a slow camera wants more.',
+    label: 'Main camera exposure (s)',
+    description: 'The main camera\'s exposure in every measurement when Polar align\'s camera is the main camera. The pole field is sparse, so it is longer than a guide frame; a slow camera wants more.',
     keywords: [
       'polar',
       'alignment',
-      'rough',
-      'coarse',
       'exposure',
       'main camera',
     ],
@@ -1554,7 +1530,7 @@ const List<Setting> settingsRegistry = [
     id: 'img.polar.camera',
     tier: SettingTier.advanced,
     label: 'Polar align camera',
-    description: 'The camera that measures the RA axis, runs the live readout and takes the Check: the guide camera (the default), or the main camera with its own plate solver at the rough step exposure. Rough first always uses the main camera.',
+    description: 'The camera that measures the RA axis, runs the live readout and takes the solves after Done: the guide camera (the default), or the main camera with its own plate solver at the main camera exposure.',
     keywords: ['polar', 'alignment', 'camera', 'guide camera', 'main camera', 'solver'],
     path: ['Settings', 'Imaging', 'Polar align'],
     type: SettingType.enumValue(['guide', 'main']),
@@ -1572,28 +1548,13 @@ const List<Setting> settingsRegistry = [
     defaultValue: null,
     profilePath: 'polar_align.frames_per_point',
   ),
-  // #2068 per mount (profile `polar_align.mount_clearance`, keyed by the
-  // mount): the clearance confirmation, set in the clearance dialog, for the
-  // run's reach (#2165). No Polar align motor motion until it is confirmed.
-  Setting(
-    id: 'img.polar.clearance_confirmed',
-    tier: SettingTier.advanced,
-    label: 'Clearance confirmed',
-    description: 'You said there is room for this mount\'s tube, counterweight and cables to move as far as Polar align turns it: up to the turn size twice each way, plus 0.5° the first time it learns the RA motor\'s direction. Polar align does not start on a mount until its clearance is confirmed. A bigger turn size asks again; Take back withdraws it. Kept for each mount.',
-    keywords: ['polar', 'alignment', 'clearance', 'confirm', 'counterweight', 'cables', 'pier', 'safety', 'room', 'reach'],
-    path: ['Settings', 'Imaging', 'Polar align'],
-    type: SettingType.bool(),
-    defaultValue: null,
-    profilePath: 'polar_align.mount_clearance',
-  ),
-  // #2081 the turn direction of a new start pose (NINA's East direction) and
-  // the RA motor direction the 0.5° test saved for this mount.
+  // #2081 the way a run turns the RA axis (NINA's East direction).
   Setting(
     id: 'img.polar.east_direction',
     tier: SettingTier.advanced,
     label: 'Polar align turn direction',
-    description: 'Which way RA turns when Polar align starts from a new pose: east or west, or automatic (east in the north, west in the south, as NINA). Later starts in the same session turn back toward that start, so repeated starts never walk the mount one way. The confirm step shows the way before the mount moves.',
-    keywords: ['polar', 'alignment', 'east', 'west', 'direction', 'turn', 'ra', 'nina', 'meridian'],
+    description: 'Which way RA turns in a Polar align run: east or west, or automatic (east in the north, west in the south, as NINA).',
+    keywords: ['polar', 'alignment', 'east', 'west', 'direction', 'turn', 'ra', 'nina'],
     path: ['Settings', 'Imaging', 'Polar align'],
     // The choices as the panel shows them (as storage.compression and
     // phd2.guider_setup_type list theirs); the profile value is null (auto),
@@ -1601,16 +1562,6 @@ const List<Setting> settingsRegistry = [
     type: SettingType.enumValue(['auto', 'east', 'west']),
     defaultValue: null,
     profilePath: 'polar_align.east_direction',
-  ),
-  Setting(
-    id: 'img.polar.motor_direction',
-    tier: SettingTier.advanced,
-    label: 'RA motor direction',
-    description: 'Which way the mount\'s RA motor really turns for a positive speed, as Polar align tested it with a 0.5° turn and saved for this mount and driver. A new driver or version is tested again. Test direction again makes the next start test it.',
-    keywords: ['polar', 'alignment', 'motor', 'direction', 'sign', 'test', 'reverse', 'driver', 'wrong way'],
-    path: ['Settings', 'Imaging', 'Polar align'],
-    type: SettingType.complex(),
-    defaultValue: null,
   ),
   // #1264 Imaging → Unguided — the probe / guard / re-centre knobs on a rig
   // without a guider. State lives in `unguidedSettingsProvider` (profile

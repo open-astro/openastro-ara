@@ -132,22 +132,6 @@ public class ProfileShareServiceTest {
     }
 
     [Test]
-    public async Task Export_strips_the_donors_polar_align_mount_clearance_and_keeps_its_tuning() {
-        // #2068 — the clearance names the donor's mounts and confirms the donor's own pier and cables.
-        var donor = DonorSnapshot() with {
-            PolarAlign = new PolarAlignSettingsDto(ExposureSeconds: 7, MountClearance: new Dictionary<string, PolarAlignMountClearanceDto> {
-                ["DONOR-MOUNT-DO-NOT-LEAK"] = new(ConfirmedReachDeg: 45),
-            }),
-        };
-        using var repo = new FakeRepo(donor);
-        var share = await new ProfileShareService(repo).ExportAsync(ProfileId, CancellationToken.None);
-        var polarAlign = share!.Manifest.GetProperty("settings").GetProperty("polar_align");
-        polarAlign.GetProperty("mount_clearance").ValueKind.Should().Be(JsonValueKind.Null);
-        polarAlign.GetProperty("exposure_seconds").GetDouble().Should().Be(7, "the tuning is kept");
-        share.Manifest.GetRawText().Should().NotContain("DONOR-MOUNT-DO-NOT-LEAK");
-    }
-
-    [Test]
     public async Task Export_strips_the_donors_cooling_fan_designation() {
         using var repo = new FakeRepo(DonorSnapshot());
         var share = await new ProfileShareService(repo).ExportAsync(ProfileId, CancellationToken.None);

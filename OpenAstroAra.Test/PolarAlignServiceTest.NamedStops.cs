@@ -36,7 +36,7 @@ namespace OpenAstroAra.Test {
 
         /// <summary>A mount that ignores every stop: AbortSlew and MoveAxis 0 both (the RA axis runs on).</summary>
         private static FakeGemMount IgnoresEveryStop() {
-            var mount = FakeGemMount.CounterweightDownAt(-4.0, 85.0, lstHours: 20.0);
+            var mount = GemAt(-4.0, 85.0, lstHours: 20.0);
             mount.AbortIgnored = int.MaxValue;
             mount.MoveAxisStopIgnored = int.MaxValue;
             return mount;
@@ -58,7 +58,7 @@ namespace OpenAstroAra.Test {
 
         private static async Task<RefusalException> StartRefusedAsync(PolarAlignService svc) {
             try {
-                await svc.StartConfirmedAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+                await svc.StartAsync(null, CancellationToken.None).ConfigureAwait(false);
             } catch (RefusalException refusal) {
                 return refusal;
             }
@@ -74,7 +74,7 @@ namespace OpenAstroAra.Test {
         [TestCase(MountStopReasons.PoseUnverified, "safety reaction")]
         [TestCase(MountStopReasons.PadStop, "direction pad")]
         public async Task A_stop_from_outside_is_named_in_the_error_by_the_reason_it_was_counted_with(string by, string named) {
-            var mount = FakeGemMount.CounterweightDownAt(-4.0, 85.0, lstHours: 20.0);
+            var mount = GemAt(-4.0, 85.0, lstHours: 20.0);
             var ws = new WsRecorder();
             using var svc = await InFirstGemTurnAsync(mount, ws).ConfigureAwait(false);
 
@@ -169,13 +169,13 @@ namespace OpenAstroAra.Test {
         // session), that check cannot confirm the stop, and the stop path flags the pose itself.
         [Test]
         public async Task A_stuck_run_whose_stop_path_cannot_confirm_the_stop_leaves_the_pose_unverified() {
-            var mount = FakeGemMount.CounterweightDownAt(-4.0, 85.0, lstHours: 20.0);
+            var mount = GemAt(-4.0, 85.0, lstHours: 20.0);
             var ws = new WsRecorder();
             var solver = new StuckSolver();
             using var svc = NewServiceOn(NewFake(), solver, mount, ws, TenDegreeStore());
             svc.RunUnwindGrace = TimeSpan.FromMilliseconds(300);
             svc.StopVerifyWindow = TimeSpan.FromSeconds(1.5);
-            await svc.StartConfirmedAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            await svc.StartAsync(null, CancellationToken.None).ConfigureAwait(false);
             await solver.Entered.Task.WaitAsync(SignalTimeout).ConfigureAwait(false);
             var session = mount.SessionEpoch;
 
@@ -341,10 +341,9 @@ namespace OpenAstroAra.Test {
                     endReporting.Task.Wait(SignalTimeout);
                 }
             };
-            // The exit's next driver read after its finding is recorded (where it notes where it left the mount): a fresh
-            // ReadNowAsync through the seam since #2066's fresh reads, so its kind is "now".
-            mount.OnFreshRead = kind => {
-                if (kind == "now" && endReporting.Task.IsCompleted) {
+            // The exit's tracking-off write comes right after its finding is recorded.
+            mount.OnTrackingWrite = on => {
+                if (!on && endReporting.Task.IsCompleted) {
                     exitRecorded.TrySetResult();
                 }
             };

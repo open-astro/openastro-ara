@@ -1,7 +1,9 @@
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/state/setup/setup_readiness.dart';
 import 'package:openastroara/models/polar_align.dart';
 import 'package:openastroara/models/ws_event.dart';
+import 'package:openastroara/state/polar_align/polar_align_flow_state.dart';
 import 'package:openastroara/state/polar_align/polar_align_state.dart';
 
 WsEvent _event(String type, [Map<String, dynamic> payload = const {}]) =>
@@ -326,79 +328,65 @@ void main() {
     test('started carries the stage and opening state', () {
       final folded = foldPolarAlignEvent(
         const PolarAlignLive(),
-        _event(PolarAlignWsEvents.started, {'state': 'homing', 'stage': 'coarse'}),
+        _event(PolarAlignWsEvents.started, {'state': 'seeding', 'stage': 'align'}),
       )!;
-      expect(folded.phase, PolarAlignStates.homing);
-      expect(folded.stage, PolarAlignStages.coarse);
+      expect(folded.phase, PolarAlignStates.seeding);
+      expect(folded.stage, PolarAlignStages.align);
       expect(folded.isActive, isTrue);
-    });
-
-    test('needs_home parks the view on the user; stage clears it', () {
-      final waiting = foldPolarAlignEvent(
-        const PolarAlignLive(phase: PolarAlignStates.homing, stage: PolarAlignStages.coarse),
-        _event(PolarAlignWsEvents.needsHome, {'message': 'put it at Home'}),
-      )!;
-      expect(waiting.waitingForHome, isTrue);
-      final moved = foldPolarAlignEvent(
-        waiting,
-        _event(PolarAlignWsEvents.stage, {'stage': 'fine', 'state': 'seeding', 'check_solves_done': 0}),
-      )!;
-      expect(moved.waitingForHome, isFalse);
-      expect(moved.stage, PolarAlignStages.fine);
-      expect(moved.phase, PolarAlignStates.seeding);
+      expect(
+        foldPolarAlignEvent(const PolarAlignLive(), _event(PolarAlignWsEvents.started))!.stage,
+        PolarAlignStages.align,
+        reason: 'every run opens with the align stage',
+      );
     });
 
     test('a new stage clears the readout of the stage before it', () {
-      // Rough reached green; the hand-off to fine must not carry that green
-      // through the fine stage's homing and seeding (or a Stop from them).
+      // The adjust loop reached green; the verify stage that follows Done must
+      // not carry that green through its own solves (or a Stop from them).
       final folded = foldPolarAlignEvent(
         const PolarAlignLive(
-            stage: PolarAlignStages.coarse,
+            stage: PolarAlignStages.align,
             phase: PolarAlignStates.adjusting,
             altErrorArcmin: 0.3,
             azErrorArcmin: -0.2,
             totalErrorArcmin: 0.36,
             zone: 'green'),
-        _event(PolarAlignWsEvents.stage, {'stage': 'fine', 'state': 'homing'}),
+        _event(PolarAlignWsEvents.stage, {'stage': 'verify', 'state': 'homing'}),
       )!;
-      expect(folded.stage, PolarAlignStages.fine);
+      expect(folded.stage, PolarAlignStages.verify);
+      expect(folded.phase, PolarAlignStates.homing);
       expect(folded.zone, isNull);
       expect(folded.totalErrorArcmin, isNull);
       expect(folded.altErrorArcmin, isNull);
       // The same stage's own state changes keep the readout.
       final same = foldPolarAlignEvent(
-        const PolarAlignLive(stage: PolarAlignStages.check, phase: PolarAlignStates.homing, zone: 'green'),
-        _event(PolarAlignWsEvents.stage, {'stage': 'check', 'state': 'checking'}),
+        const PolarAlignLive(stage: PolarAlignStages.verify, phase: PolarAlignStates.homing, zone: 'green'),
+        _event(PolarAlignWsEvents.stage, {'stage': 'verify', 'state': 'checking'}),
       )!;
       expect(same.zone, 'green');
     });
 
     test('stage counts the check solves', () {
       final folded = foldPolarAlignEvent(
-        const PolarAlignLive(stage: PolarAlignStages.check, phase: PolarAlignStates.checking),
-        _event(PolarAlignWsEvents.stage, {'stage': 'check', 'state': 'checking', 'check_solves_done': 2}),
+        const PolarAlignLive(stage: PolarAlignStages.verify, phase: PolarAlignStates.checking),
+        _event(PolarAlignWsEvents.stage, {'stage': 'verify', 'state': 'checking', 'check_solves_done': 2}),
       )!;
       expect(folded.checkSolvesDone, 2);
     });
 
     test('checked is terminal and carries the result into the error fields', () {
       final folded = foldPolarAlignEvent(
-        const PolarAlignLive(stage: PolarAlignStages.check, phase: PolarAlignStates.checking),
+        const PolarAlignLive(stage: PolarAlignStages.verify, phase: PolarAlignStates.checking),
         _event(PolarAlignWsEvents.checked, {
           'altitude_error_arcmin': -0.9,
           'azimuth_error_arcmin': 0.4,
           'total_error_arcmin': 0.98,
-          'cone_half_angle_deg': 5.0,
-          'turn_mismatch_deg': 0.01,
-          'fine_error_arcmin': 1.5,
-          'fine_delta_arcmin': 0.52,
           'verdict': 'excellent',
         }),
       )!;
       expect(folded.phase, PolarAlignStates.checked);
       expect(folded.isActive, isFalse);
       expect(folded.checkResult!.verdict, 'excellent');
-      expect(folded.checkResult!.fineDeltaArcmin, 0.52);
       expect(folded.totalErrorArcmin, 0.98);
       expect(folded.zone, 'green');
       expect(polarAlignStepState(folded), SetupStepState.done);
@@ -406,12 +394,12 @@ void main() {
 
     test('a checked event and a status check result carry the noisy flag (#2082)', () {
       final noisy = foldPolarAlignEvent(
-        const PolarAlignLive(stage: PolarAlignStages.check, phase: PolarAlignStates.checking),
+        const PolarAlignLive(stage: PolarAlignStages.verify, phase: PolarAlignStates.checking),
         _event(PolarAlignWsEvents.checked, {'total_error_arcmin': 0.98, 'verdict': 'excellent', 'noisy': true}),
       )!;
       expect(noisy.checkResult!.noisy, isTrue);
       final steady = foldPolarAlignEvent(
-        const PolarAlignLive(stage: PolarAlignStages.check, phase: PolarAlignStates.checking),
+        const PolarAlignLive(stage: PolarAlignStages.verify, phase: PolarAlignStates.checking),
         _event(PolarAlignWsEvents.checked, {'total_error_arcmin': 0.98, 'verdict': 'excellent'}),
       )!;
       expect(steady.checkResult!.noisy, isFalse, reason: 'an older daemon sends no key');
@@ -423,11 +411,11 @@ void main() {
     });
 
     test('progress carries the stage; an older daemon leaves it null', () {
-      final coarse = foldPolarAlignEvent(
+      final fine = foldPolarAlignEvent(
         const PolarAlignLive(),
-        _event(PolarAlignWsEvents.progress, {'stage': 'coarse', 'total_error_arcmin': 70.0}),
+        _event(PolarAlignWsEvents.progress, {'stage': 'align', 'total_error_arcmin': 70.0}),
       )!;
-      expect(coarse.stage, PolarAlignStages.coarse);
+      expect(fine.stage, PolarAlignStages.align);
       final old = foldPolarAlignEvent(
         const PolarAlignLive(),
         _event(PolarAlignWsEvents.progress, {'total_error_arcmin': 70.0}),
@@ -460,40 +448,135 @@ void main() {
       expect(liveFromStatus(PolarAlignStatus.fromJson(const {'state': 'adjusting'})).readoutCaution, isNull);
     });
 
-    test('each progress event says the Dec-spread warning afresh; a snapshot and a verdict carry it too (#2081)', () {
-      final spread = foldPolarAlignEvent(
-        const PolarAlignLive(phase: PolarAlignStates.seeding),
-        _event(PolarAlignWsEvents.progress, {'total_error_arcmin': 4.0, 'dec_spread_arcsec': 3.1}),
-      )!;
-      expect(spread.decSpreadArcsec, 3.1);
-      final held = foldPolarAlignEvent(
-        spread,
-        _event(PolarAlignWsEvents.progress, {'total_error_arcmin': 2.0, 'dec_spread_arcsec': null}),
-      )!;
-      expect(held.decSpreadArcsec, isNull, reason: 'a new seed whose Dec held clears it');
-      expect(liveFromStatus(PolarAlignStatus.fromJson(const {'state': 'adjusting', 'dec_spread_arcsec': 2.6})).decSpreadArcsec, 2.6);
-      expect(
-        PolarAlignCheckResult.fromJson(const {'total_error_arcmin': 1.0, 'dec_spread_arcsec': 4.2}).decSpreadArcsec,
-        4.2,
-      );
-      expect(PolarAlignCheckResult.fromJson(const {'total_error_arcmin': 1.0}).decSpreadArcsec, isNull);
-    });
-
-    test('the status snapshot hydrates stage, home wait, solves and the check result', () {
+    test('the status snapshot hydrates stage, solves and the check result', () {
       final live = liveFromStatus(PolarAlignStatus.fromJson(const {
         'state': 'checked',
-        'stage': 'check',
-        'waiting_for_home': false,
+        'stage': 'verify',
         'check_solves_done': 3,
         'current_error_arcmin': 0.98,
         'check_result': {'total_error_arcmin': 0.98, 'verdict': 'excellent'},
       }));
-      expect(live.stage, PolarAlignStages.check);
+      expect(live.stage, PolarAlignStages.verify);
       expect(live.checkSolvesDone, 3);
       expect(live.checkResult!.verdict, 'excellent');
-      final homing = liveFromStatus(PolarAlignStatus.fromJson(const {'state': 'homing', 'waiting_for_home': true}));
-      expect(homing.waitingForHome, isTrue);
+      final homing = liveFromStatus(PolarAlignStatus.fromJson(const {'state': 'homing'}));
       expect(homing.isActive, isTrue);
+    });
+
+    test('a stage event carries the verify verdict as soon as the rig has it, with the mount still going Home', () {
+      const checking = PolarAlignLive(
+          stage: PolarAlignStages.verify, phase: PolarAlignStates.checking, checkSolvesDone: 2);
+      final folded = foldPolarAlignEvent(
+        checking,
+        _event(PolarAlignWsEvents.stage, {
+          'stage': 'verify',
+          'state': 'homing',
+          'check_solves_done': 3,
+          'check_solves_total': 3,
+          'check_result': {
+            'altitude_error_arcmin': -0.4,
+            'azimuth_error_arcmin': 0.3,
+            'total_error_arcmin': 0.5,
+            'total_sigma_arcmin': 0.2,
+            'verdict': 'excellent',
+          },
+        }),
+      )!;
+      expect(folded.phase, PolarAlignStates.homing);
+      expect(folded.isActive, isTrue, reason: 'the mount is still on its way Home');
+      expect(folded.checkResult!.totalErrorArcmin, 0.5);
+      expect(folded.checkResult!.verdict, 'excellent');
+      expect((folded.altErrorArcmin, folded.azErrorArcmin, folded.totalErrorArcmin), (-0.4, 0.3, 0.5));
+      expect(folded.totalSigmaArcmin, 0.2);
+      expect(folded.zone, 'green');
+      expect(polarFlowStep(folded), PolarFlowStep.returningHome);
+      // A later stage event without the verdict keeps it.
+      final still = foldPolarAlignEvent(
+        folded,
+        _event(PolarAlignWsEvents.stage, {'stage': 'verify', 'state': 'homing', 'check_solves_done': 3}),
+      )!;
+      expect(still.checkResult!.verdict, 'excellent');
+      expect(still.totalErrorArcmin, 0.5);
+    });
+
+    test('before the verdict, going Home after Done has no result and no readout', () {
+      final folded = foldPolarAlignEvent(
+        const PolarAlignLive(
+            stage: PolarAlignStages.align, phase: PolarAlignStates.adjusting, totalErrorArcmin: 0.4, zone: 'green'),
+        _event(PolarAlignWsEvents.stage, {'stage': 'verify', 'state': 'homing', 'check_solves_done': 0}),
+      )!;
+      expect(folded.checkResult, isNull);
+      expect(folded.totalErrorArcmin, isNull);
+      expect(polarFlowStep(folded), PolarFlowStep.goingHome);
+    });
+
+    test('checked ends the run with the mount back Home: the verdict stays, nothing runs', () {
+      const returning = PolarAlignLive(
+        stage: PolarAlignStages.verify,
+        phase: PolarAlignStates.homing,
+        checkSolvesDone: 3,
+        checkResult: PolarAlignCheckResult(altErrorArcmin: -0.4, azErrorArcmin: 0.3, totalErrorArcmin: 0.5),
+      );
+      final folded = foldPolarAlignEvent(
+        returning,
+        _event(PolarAlignWsEvents.checked, {
+          'altitude_error_arcmin': -0.4,
+          'azimuth_error_arcmin': 0.3,
+          'total_error_arcmin': 0.5,
+          'verdict': 'excellent',
+        }),
+      )!;
+      expect(folded.phase, PolarAlignStates.checked);
+      expect(folded.isActive, isFalse);
+      expect(folded.checkResult!.verdict, 'excellent');
+      expect(polarFlowStep(folded), PolarFlowStep.result);
+    });
+
+    test('a seed frame says which point of the measurement is being taken; a new run forgets it', () {
+      expect(polarMeasuringPoint('seed-a-1'), 1);
+      expect(polarMeasuringPoint('seed-b-2'), 2);
+      expect(polarMeasuringPoint('seed-c'), 3);
+      expect(polarMeasuringPoint('live-4'), isNull);
+      expect(polarMeasuringPoint('check-2-1'), isNull);
+      expect(polarMeasuringPoint(null), isNull);
+      final second = foldPolarAlignEvent(
+        const PolarAlignLive(phase: PolarAlignStates.seeding),
+        _event(PolarAlignWsEvents.frameStarted, {'frame_id': 'seed-b-1', 'exposure_seconds': 1.0}),
+      )!;
+      expect(second.measuringPoint, 2);
+      expect(foldPolarAlignEvent(second, _event(PolarAlignWsEvents.started))!.measuringPoint, isNull);
+      final hydrated = liveFromStatus(PolarAlignStatus.fromJson(const {'state': 'seeding', 'last_frame_id': 'seed-a-1'}));
+      expect(hydrated.measuringPoint, 1);
+    });
+
+    test('Done on the result leaves it until a new run or another result', () {
+      final c = ProviderContainer();
+      addTearDown(c.dispose);
+      final live = c.read(polarAlignLiveProvider.notifier);
+      PolarAlignStatus checked(double total) => PolarAlignStatus.fromJson({
+            'state': 'checked',
+            'stage': 'verify',
+            'current_error_arcmin': total,
+            'check_result': {'total_error_arcmin': total, 'verdict': 'excellent'},
+          });
+      live.hydrateFromStatus(checked(0.5));
+      expect(polarFlowStep(c.read(polarAlignLiveProvider)), PolarFlowStep.result);
+
+      live.dismissResult();
+      expect(polarFlowStep(c.read(polarAlignLiveProvider)), PolarFlowStep.ready);
+      expect(c.read(polarAlignLiveProvider).checkResult, isNotNull, reason: 'the Setup checklist still reads it');
+      expect(polarAlignStepState(c.read(polarAlignLiveProvider)), SetupStepState.done);
+
+      // The panel opens again and reads the same result from the rig: still left.
+      live.hydrateFromStatus(checked(0.5));
+      expect(polarFlowStep(c.read(polarAlignLiveProvider)), PolarFlowStep.ready);
+      // A result this screen has not shown: shown.
+      live.hydrateFromStatus(checked(0.8));
+      expect(polarFlowStep(c.read(polarAlignLiveProvider)), PolarFlowStep.result);
+      // Dismissing does nothing outside a result.
+      live.hydrateFromStatus(PolarAlignStatus.fromJson(const {'state': 'adjusting'}));
+      live.dismissResult();
+      expect(c.read(polarAlignLiveProvider).resultDismissed, isFalse);
     });
   });
 }

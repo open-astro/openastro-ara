@@ -131,24 +131,6 @@ namespace OpenAstroAra.Test {
             Assert.That(OpenAstroAra.Server.Contracts.Refusals.RefusalCatalog.All.Select(c => c.Token), Does.Contain(reason));
         }
 
-        /// <summary>#2081 — "Test direction again" over the real route: the saved RA motor direction is forgotten, so the
-        /// next Polar Align start tests it again. The service tests clear the store directly, so they stay green if the
-        /// route stops clearing it or is mapped elsewhere.</summary>
-        [Test]
-        public async Task Test_direction_again_over_HTTP_forgets_the_saved_RA_motor_direction() {
-            var store = app.Services.GetRequiredService<IProfileStore>();
-            store.PutPolarAlignMotorDirection(new OpenAstroAra.Server.Contracts.PolarAlignMotorDirectionDto(
-                -1, "hae29c-unique-id", string.Empty, "6.0.0", DateTimeOffset.UtcNow));
-            using var before = await http.GetAsync(new Uri("/api/v1/equipment/polaralign/motor-direction", UriKind.Relative));
-            Assert.That(await before.Content.ReadAsStringAsync(), Does.Contain("\"sign\":-1"), "the saved direction reads back");
-
-            using var content = new StringContent("", Encoding.UTF8, "application/json");
-            using var response = await http.PostAsync(new Uri("/api/v1/equipment/polaralign/motor-direction/retest", UriKind.Relative), content);
-
-            Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.NoContent), await response.Content.ReadAsStringAsync());
-            Assert.That(store.GetPolarAlignMotorDirection(), Is.Null, "the next start tests the direction again");
-        }
-
         /// <summary>Subscribes on the calling thread before the request starts, sends the request, and
         /// returns the payload of the first event of <paramref name="type"/> (empty when none arrives
         /// within 10 s). ReadAllAsync registers the subscriber at call time, so an event published

@@ -267,7 +267,7 @@ namespace OpenAstroAra.Server.Services {
         // once the run has unwound, and whether the run reported it itself. Guarded by _gate.
         private (RunEnd End, bool ToldByRun)? _alignerNotStoppedEnd;
 
-        // Run task, on every exit: a run that moved the motors (or owes a Stop) stops them and verifies it (#2069). A
+        // Run task, at Done and on every exit: a run that moved the motors (or owes a Stop) stops them and verifies it (#2069). A
         // newer run's state is not touched. Started off the run task's thread so the mount's exit is not held behind it.
         // True when the device is confirmed still, or nothing was owed it.
         private Task<bool> EndAlignerRunAsync(AlignerRun? run) =>
@@ -278,9 +278,8 @@ namespace OpenAstroAra.Server.Services {
             lock (_gate) {
                 owed = run.StopOwed;
             }
-            // A Stop owed from before the run (the Stop route, Emergency Stop, an earlier run's end) is sent again at its end
-            // too: a run that never resent it (the check takes no aligner step) does not end checked or stopped on a device
-            // that may still move.
+            // A Stop owed from before the run (the Stop route, Emergency Stop, an earlier run's end) is sent again here
+            // too: a run does not go on to its verify measurement, or end stopped, on a device that may still move.
             owed |= _alignerSource?.StopOwed == true;
             // An owed Stop goes to the device that answers now: after a reconnect that is a new object.
             var device = owed ? _alignerSource?.Current() ?? run.Device : run.Device;
@@ -305,7 +304,7 @@ namespace OpenAstroAra.Server.Services {
 
         // Run task, after its end's aligner stop: an unconfirmed one is told. The stop path reports it when it has not yet
         // told the client the run ended; when it already has, it is this run's to report. Not when the run reported its own
-        // end with the sentence (a failure, the check's verdict), nor once a newer run owns the client's view.
+        // end with the sentence (a failure), nor once a newer run owns the client's view.
         private async Task NoteAlignerEndAsync(RunEnd end, bool confirmed, bool reportedByRun) {
             if (confirmed) {
                 return;

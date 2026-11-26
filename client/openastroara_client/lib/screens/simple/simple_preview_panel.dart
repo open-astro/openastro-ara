@@ -49,6 +49,7 @@ import '../../widgets/focus/guide_focus_card.dart'
 import '../../widgets/status_indicator.dart'
     show StatusBlink, StatusDot, StatusLevel;
 import '../../state/equipment/camera_state.dart';
+import '../../state/equipment/mount_home_state.dart';
 import '../../state/equipment/filter_wheel_state.dart';
 import '../../state/equipment/focuser_state.dart';
 import '../../state/equipment/dome_state.dart';
@@ -64,6 +65,7 @@ import '../../state/equipment/switch_state.dart';
 import '../../widgets/imaging/exposure_controls_panel.dart' show FilterDropdown;
 import '../../widgets/imaging/histogram_strip.dart' show frameHistogramProvider;
 import '../../widgets/imaging/polar_aligner_block.dart' show polarAlignerStatusLine;
+import '../../widgets/imaging/polar_flow.dart' show polarFlowLine;
 import '../../state/settings/site_settings_state.dart';
 import '../imaging_actions.dart';
 import 'simple_guide_panel.dart'
@@ -73,7 +75,6 @@ import 'simple_guide_panel.dart'
         simpleGuiderExposureText,
         simpleGuiderPendingProvider;
 import 'simple_plan_panel.dart' show simpleRunProvider;
-import 'simple_polar_panel.dart' show simplePolarActive, simplePolarPhase;
 import 'simple_device_windows.dart'
     show
         SimpleGainSlider,
@@ -83,7 +84,6 @@ import 'simple_device_windows.dart'
         simpleDomeAskLabel,
         simpleDomeAskProvider,
         simpleWeatherBreaches,
-        simpleMountHomeProvider,
         simpleMountMotionProvider,
         simpleSwitchSettingProvider;
 import 'simple_mount_controls.dart'
@@ -1815,7 +1815,7 @@ class _SimpleStatusPillState extends ConsumerState<SimpleStatusPill>
     // A park or unpark asked for in Simple Mode, until the mount gets there.
     final parking = ref.watch(simpleMountMotionProvider);
     // Home asked in the Mount window, from the tap (#1649).
-    final homing = ref.watch(simpleMountHomeProvider);
+    final homing = ref.watch(mountHomeProvider);
     // The Mount window's Check or Center under way: the main camera takes a
     // frame for it, so it has a pill as any frame does (#1650).
     final pointing = ref.watch(simplePointingProvider.select((p) => p.phase));
@@ -2286,11 +2286,11 @@ class _SimpleStatusPillState extends ConsumerState<SimpleStatusPill>
           AraColors.accentConnected,
           working: true,
         ),
-      if (simplePolarActive(polar))
+      if (polarFlowLine(l10n, polar) case final line?)
         _PillData(
           SimpleStatusOrigin.polar,
           l10n.shellModePolarAlign,
-          simplePolarPhase(polar, l10n),
+          line,
           AraColors.accentInfo,
           ring: true,
         ),

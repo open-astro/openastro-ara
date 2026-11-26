@@ -19,13 +19,10 @@ const rigPolarAlign = PolarAlignSettings(
   loopCadenceMs: 1000,
   settleSeconds: 2.0,
   loopMode: PolarAlignLoopModes.loop,
-  checkStepDeg: 10.0,
   coarseExposureSeconds: 3.0,
   polarAlignerAuto: true,
-  stopTrackingWhenDone: true,
   camera: PolarAlignCameras.guide,
   framesPerPoint: 3,
-  mountClearance: {},
   eastDirection: null,
 );
 

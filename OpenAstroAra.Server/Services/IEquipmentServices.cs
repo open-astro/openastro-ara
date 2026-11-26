@@ -474,54 +474,23 @@ public interface IPolarAlignService {
     /// that a new stage outgrows.</summary>
     bool IsActive { get; }
     Task<PolarAlignStateDto> GetStatusAsync(CancellationToken ct);
-    /// <summary>#2048 — what a start at <paramref name="stage"/> would do, for the confirm step: the RA turn direction
-    /// from the mount's current pointing, the step and the most the run turns the RA axis from where it starts. Refuses
-    /// like <see cref="StartAsync"/> does before any motion: a mount not connected, a parked mount
-    /// (<c>polar-align-mount-parked</c>), no site latitude, a pointing within 3° of the pole (<c>polar-align-on-axis</c>),
-    /// turns past the session's sweep limit (<c>polar-align-sweep-limit</c>); #2068: on the first failing check of
-    /// <see cref="GetPreflightAsync"/> (the mount's clock, the clearance not confirmed among them). A null stage plans the
-    /// fine measurement.</summary>
-    Task<PolarAlignStartPlanDto> GetStartPlanAsync(string? stage, CancellationToken ct);
-    /// <summary>#2068 (ARA-18) — the pre-flight list for a start at <paramref name="stage"/> (null = fine): every check a
-    /// start makes, in its order, with what the start would do. Never refuses: a check that fails is listed as
-    /// <c>fail</c>, and <see cref="StartAsync"/> and <see cref="GetStartPlanAsync"/> refuse on the first one. Throws
-    /// <see cref="ArgumentException"/> for an unknown stage only.</summary>
-    Task<PolarAlignPreflightDto> GetPreflightAsync(string? stage, CancellationToken ct);
-    /// <summary>#2166 — "Move to start position": the scope points within 3° of the pole, so move its Dec axis alone (no
-    /// GoTo, the counterweights stay down) to 4° from the site's pole, with the guards of every Polar Align turn, then
-    /// read the pointing again. Refuses before anything moves (409) with the pre-flight list's cause: a run going
-    /// (<c>polar-align-run-active</c>), another motion owner (<c>polar-align-mount-busy</c>), a parked mount, an unverified
-    /// position, a clearance not confirmed for the move's reach, an alt-az mount, CanMoveAxis(Secondary) false
-    /// (<c>polar-align-cannot-move-dec</c>), or a scope not within 3° of the pole (<c>polar-align-move-to-start-not-needed</c>).
-    /// Once it moved, answers with the outcome and the fresh list; Stop (<see cref="StopAsync"/>) ends it. Nothing moves
-    /// without the user's <paramref name="confirmation"/> of the offer's numbers as they are now (else
-    /// <c>polar-align-move-not-confirmed</c>).</summary>
-    Task<PolarAlignMoveToStartResultDto> MoveToStartAsync(PolarAlignMoveToStartConfirmation? confirmation, CancellationToken ct) =>
-        throw new InvalidOperationException("this daemon cannot move the mount to the polar-align start position");
-    /// <summary>Begin ONE measurement (#2082) at <paramref name="stage"/> (<see cref="PolarAlignStages"/>; null =
-    /// fine), from where the mount points now: no stage sends the mount Home or slews it (#2048), and none leads into
-    /// another. The mount moves only with a <paramref name="confirmation"/> whose direction is the one the run would
-    /// turn now (else the <c>polar-align-unconfirmed</c> Refusal); a parked mount is refused
-    /// (<c>polar-align-mount-parked</c>) and never unparked; a pointing within 3° of the pole is refused
-    /// (<c>polar-align-on-axis</c>); #2068: it refuses on the first failing check of <see cref="GetPreflightAsync"/>, so no
-    /// motion until the mount's clearance is confirmed (<c>polar-align-clearance-not-confirmed</c>). A <c>check</c> while
-    /// the routine adjusts ends the loop like Stop once the check's
-    /// plan and confirmation hold (the adjust screen's Check). Throws <see cref="ArgumentException"/> for an unknown
-    /// stage (the endpoint answers 400 before calling) and <see cref="InvalidOperationException"/> (→ 409) for a
-    /// failed preflight.</summary>
-    Task<OperationAcceptedDto> StartAsync(string? stage, PolarAlignStartConfirmation? confirmation, string? idempotencyKey, CancellationToken ct);
-    /// <summary>Retired (#2082): a Start makes one measurement and never leads into another. Always throws
-    /// <see cref="InvalidOperationException"/> (→ 409).</summary>
-    Task<OperationAcceptedDto> NextAsync(string? idempotencyKey, CancellationToken ct);
+    /// <summary>Begin a run from the mount's Home position: the three-point measurement, then the live adjust loop until
+    /// <see cref="CompleteAsync"/> or <see cref="StopAsync"/>. A mount that can find Home by itself and is not there is
+    /// refused (<c>polar-align-not-home</c>); a parked mount is refused (<c>polar-align-mount-parked</c>) and never
+    /// unparked; so is a start while the guider guides or another routine moves the mount
+    /// (<c>polar-align-mount-busy</c>), before the mount's clock is verified (<c>mount-clock-not-verified</c>), or while
+    /// its position is unverified (<c>mount-position-unverified</c>). A start while a run is active is a no-op accept.
+    /// Throws <see cref="InvalidOperationException"/> (→ 409) for a refused start.</summary>
+    Task<OperationAcceptedDto> StartAsync(string? idempotencyKey, CancellationToken ct);
     /// <summary>#1971 — stop the Polar Aligner's motors; the routine carries on by hand. Throws
     /// <see cref="InvalidOperationException"/> (→ 409) when no routine is running with a Polar Aligner.</summary>
     Task<OperationAcceptedDto> StopAlignerAsync(string? idempotencyKey, CancellationToken ct);
     /// <summary>#1971 — after a stop, correct with the motors again (a new probe first). Throws
     /// <see cref="InvalidOperationException"/> (→ 409) when the Polar Aligner is not stopped.</summary>
     Task<OperationAcceptedDto> ResumeAlignerAsync(string? idempotencyKey, CancellationToken ct);
-    /// <summary>Abort: same unwind as complete, logged with outcome <c>aborted</c> (§45 step 10 —
-    /// the mount stops where it is: AbortSlew and MoveAxis 0 go out before any wait, the stop is
-    /// confirmed, and tracking is left off, #2048).</summary>
+    /// <summary>Stop, at any moment of a run, the mount's trips Home included: logged with outcome <c>aborted</c>, state
+    /// <c>stopped</c>. The mount stops where it is (AbortSlew and MoveAxis 0 go out before any wait, so a Find Home in
+    /// flight is aborted), the stop is confirmed, and tracking is left off.</summary>
     Task<OperationAcceptedDto> StopAsync(string? idempotencyKey, CancellationToken ct);
     /// <summary>A sequence run starts over an open routine: the same unwind as <see cref="StopAsync"/>
     /// (state <c>stopped</c>), but no measured result is stored (no last result, no session row).</summary>
@@ -531,11 +500,16 @@ public interface IPolarAlignService {
     /// no stop of its own, does not confirm one and writes no tracking. The caller stops and checks the mount itself, or
     /// parks it. Bounded by the run's unwind, not by the stop's confirmation.</summary>
     Task<OperationAcceptedDto> StopForTakeoverAsync(string by, CancellationToken ct) => StopAsync(null, ct);
-    /// <summary>#2066 — a run's motor move is under way, or its stop is not confirmed yet: the telescope endpoints answer
-    /// GoTo, pad moves, Home and Park with the <c>polar-align-moving-mount</c> Refusal meanwhile.</summary>
+    /// <summary>#2066 — a run's motor move or its own Find Home is under way, or its stop is not confirmed yet: the
+    /// telescope endpoints answer GoTo, pad moves, Home and Park with the <c>polar-align-moving-mount</c> Refusal
+    /// meanwhile.</summary>
     bool IsMovingMount => false;
-    /// <summary>§45 step 9 — the user marks alignment done; the achieved error is logged with
-    /// outcome <c>complete</c> (§45.13).</summary>
+    /// <summary>Done: the user is satisfied with the adjust loop's readout. Answers at once; the run then carries on by
+    /// itself. The achieved error is logged with outcome <c>complete</c> (§45.13), the mount is stopped and goes Home
+    /// (state <c>homing</c>), the alignment is verified with a second three-point measurement (<c>checking</c>), and the
+    /// mount goes Home again (<c>homing</c>, then the terminal <c>checked</c>). A mount that cannot find Home makes no
+    /// Home trip: the verify measurement turns it back to where the run started. Acts only while the run adjusts
+    /// (<c>adjusting</c> or <c>paused</c>); at any other moment, and with no run active, it is a no-op accept.</summary>
     Task<OperationAcceptedDto> CompleteAsync(string? idempotencyKey, CancellationToken ct);
     /// <summary>Single-frame mode: take the next adjust frame now. A request made while a frame is
     /// already exposing queues exactly one more frame after it (requests do not stack). Throws

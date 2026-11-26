@@ -28,4 +28,30 @@ void main() {
       throwsA(isA<FormatException>()),
     );
   });
+
+  test('a profile that still carries check_step_deg and stop_tracking_when_done reads, and a save sends neither', () async {
+    final rig = FakeSectionRig({
+      'polar-align': {
+        ...rigDefaults['polar-align']!,
+        'check_step_deg': 15.0,
+        'stop_tracking_when_done': false,
+        'seed_rotation_deg': 20.0,
+      },
+    });
+    final api = rig.api();
+    final read = await api.getPolarAlignSection();
+    expect(read.value.seedRotationDeg, 20.0);
+
+    await api.putPolarAlignSection(read.value, ifMatch: read.etag);
+    final sent = rig.puts.single.body! as Map;
+    expect(sent.containsKey('check_step_deg'), isFalse);
+    expect(sent.containsKey('stop_tracking_when_done'), isFalse);
+    expect(sent['seed_rotation_deg'], 20.0);
+  });
+
+  test('a profile from the rig without check_step_deg and stop_tracking_when_done reads', () async {
+    final read = await FakeSectionRig({'polar-align': {...rigDefaults['polar-align']!}}).api().getPolarAlignSection();
+    expect(read.value.loopMode, 'loop');
+    expect(read.value.toJson().keys, isNot(contains('check_step_deg')));
+  });
 }

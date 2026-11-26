@@ -150,8 +150,10 @@ public static class WsEventCatalog {
     public static readonly WsEvent PolarAlignFrameComplete = new("polar_align.frame_complete");
     public static readonly WsEvent PolarAlignPaused = new("polar_align.paused");
     public static readonly WsEvent PolarAlignError = new("polar_align.error");
-    // Stages: stage when the routine moves to a new stage ({stage, state}); checked when the three-point check has its
-    // result (the PolarAlignCheckResultDto fields). needs_home was retired by #2048: the routine never sends the mount Home.
+    // Stages: stage on every chain state change ({stage, state, check_solves_done, check_solves_total, check_result once
+    // known}); after Done the chain is homing, checking, homing on a mount that finds Home (checking alone on one that does
+    // not). checked is terminal, sent once the mount is back Home (the PolarAlignCheckResultDto fields). needs_home was
+    // retired by #2048.
     // started and progress also carry {stage}.
     public static readonly WsEvent PolarAlignStage = new("polar_align.stage");
     public static readonly WsEvent PolarAlignChecked = new("polar_align.checked");
