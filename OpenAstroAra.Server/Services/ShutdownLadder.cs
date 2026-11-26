@@ -47,7 +47,7 @@ public enum AncillaryDevice { FilterWheel, Focuser, Rotator, FlatPanel }
 
 /// <summary>
 /// §58.12 — the steps that put a rig to bed, shared by <see cref="UnattendedShutdownService"/> and
-/// <see cref="EndNightService"/>: stop the guider, park the mount (or stop tracking), disconnect the
+/// End Night (#1901): stop the guider, park the mount (or stop tracking), disconnect the
 /// filter wheel, focuser, rotator and flat panel, warm the cooler and switch it off, then disconnect
 /// the camera. Each step is best-effort: it never throws and says in its <see cref="LadderStep"/> how
 /// it ended. The caller owns the order, the boundaries between steps and the summary.
@@ -68,6 +68,8 @@ public sealed partial class ShutdownLadder {
     private readonly IRotatorService? _rotator;
     private readonly IFlatDeviceService? _flatDevice;
     private readonly RigOccupancy? _occupancy;
+    // #2143 — the routine this ladder runs for (End Night's ladder): its own step does not stop it.
+    private readonly string? _routine;
     private readonly ILogger _logger;
 
     // ─── test seams (the ClientSessionService knob pattern) ───
@@ -96,7 +98,8 @@ public sealed partial class ShutdownLadder {
             IRotatorService? rotator = null,
             IFlatDeviceService? flatDevice = null,
             ILogger? logger = null,
-            RigOccupancy? occupancy = null) {
+            RigOccupancy? occupancy = null,
+            string? routine = null) {
         _profiles = profiles;
         _guider = guider;
         _telescope = telescope;
@@ -106,6 +109,7 @@ public sealed partial class ShutdownLadder {
         _rotator = rotator;
         _flatDevice = flatDevice;
         _occupancy = occupancy;
+        _routine = routine;
         _logger = logger ?? NullLogger.Instance;
     }
 
@@ -118,7 +122,7 @@ public sealed partial class ShutdownLadder {
         if (_occupancy is null) {
             return;
         }
-        foreach (var stop in await _occupancy.StopAsync(RigHolding.Any, MountStopReasons.Shutdown, RoutineStopTimeout).ConfigureAwait(false)) {
+        foreach (var stop in await _occupancy.StopAsync(RigHolding.Any, MountStopReasons.Shutdown, RoutineStopTimeout, except: _routine).ConfigureAwait(false)) {
             if (!stop.Stopped) {
                 LogStepFailed(stop.FailedRung, stop.Fault!);
             }

@@ -353,6 +353,7 @@ public partial class Program {
             .RegisterSession(sp.GetRequiredService<ActiveRunSessionRegistry>(), () => sp.GetService<ISequencerService>())
             .RegisterPolarAlign(() => sp.GetService<IPolarAlignService>())
             .RegisterCenter(() => sp.GetService<ICenteringService>())
+            .RegisterEndNight(() => sp.GetService<EndNightService>())
             .RegisterFilterOffsetCalibration(() => sp.GetService<FilterOffsetCalibrationService>())
             .RegisterAutofocus(() => sp.GetService<AutofocusRunTracker>())
             .RegisterBahtinov(() => sp.GetService<IBahtinovFocusService>())
@@ -998,8 +999,10 @@ public partial class Program {
             sp.GetService<IRotatorService>(),
             sp.GetService<IFlatDeviceService>(),
             sp.GetService<ILogger<ShutdownLadder>>(),
-            // #2066, #2142 — every routine on the rig ends before the Find Home and park.
-            sp.GetService<RigOccupancy>()));
+            // #2066, #2142 — every routine on the rig ends before the Find Home and park; #2143 — but End Night, whose
+            // ladder this is.
+            sp.GetService<RigOccupancy>(),
+            RigOccupancy.EndNight));
         builder.Services.AddSingleton<IHostPoweroffStarter>(_ => new SystemctlHostPoweroffStarter(ServerUpdateService.RunAsync));
         builder.Services.AddSingleton(sp => new EndNightService(
             sp.GetRequiredService<ShutdownLadder>(),

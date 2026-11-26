@@ -53,6 +53,9 @@ public sealed class RigOccupancy {
     /// <summary>The Session's name in a busy reason ("a sequence is running").</summary>
     public const string Session = "a sequence";
 
+    /// <summary>End Night's name: its own shutdown ladder stops every routine but this one (#2143).</summary>
+    public const string EndNight = "End Night";
+
     private sealed record Routine(string Name, RigHolding Holds, Func<bool> IsRunning,
         Func<string, CancellationToken, Task>? Stop, string FailedRung);
 
@@ -151,6 +154,15 @@ public sealed class RigOccupancy {
             (_, ct) => CancelThenWaitAsync(() => copy()?.Cancel(), () => copy()?.IsRunning == true, ct),
             failedRung: "stop_storage_copy");
 
+    /// <summary>#2143 — End Night: it stops guiding, parks the mount, disconnects the focuser and the other devices and
+    /// warms the camera. Its stop cancels it at its next step and waits for it to end; its own shutdown ladder leaves it
+    /// alone (<see cref="EndNight"/>).</summary>
+    public RigOccupancy RegisterEndNight(Func<EndNightService?> endNight) =>
+        Register(EndNight, RigHolding.Mount | RigHolding.MainCamera | RigHolding.GuideCamera | RigHolding.Focuser,
+            () => endNight()?.IsRunning == true,
+            (_, ct) => endNight()?.StopAsync(ct) ?? Task.CompletedTask,
+            failedRung: "stop_end_night");
+
     /// <summary>A stop for a routine whose cancel only asks: ask, then wait until its reading says it ended.</summary>
     private static async Task CancelThenWaitAsync(Action cancel, Func<bool> isRunning, CancellationToken ct) {
         cancel();
@@ -173,10 +185,11 @@ public sealed class RigOccupancy {
     /// next routine is still stopped. Never throws. Returns one entry per routine it stopped, in order: whether its stop
     /// returned in time.</summary>
     /// <param name="by">The ladder, for the routine's log (a <see cref="MountStopReasons"/> value).</param>
-    public async Task<IReadOnlyList<RoutineStop>> StopAsync(RigHolding holding, string by, TimeSpan bound) {
+    /// <param name="except">#2143 — the routine the ladder runs for, which its own step must not stop (End Night).</param>
+    public async Task<IReadOnlyList<RoutineStop>> StopAsync(RigHolding holding, string by, TimeSpan bound, string? except = null) {
         var stops = new List<RoutineStop>();
         var running = _routines
-            .Where(r => r.Stop is not null && (r.Holds & holding) != 0 && IsRunningQuietly(r))
+            .Where(r => r.Stop is not null && r.Name != except && (r.Holds & holding) != 0 && IsRunningQuietly(r))
             .OrderBy(r => (r.Holds & RigHolding.Mount) == 0)
             .ToList();
         foreach (var routine in running) {
