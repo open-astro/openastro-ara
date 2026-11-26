@@ -620,8 +620,10 @@ namespace OpenAstroAra.Server.Services {
         /// <summary>A reading the stop's confirmation must not count (a disconnected, failed or earlier read is "not
         /// confirmed", never "stopped"): none, the (0, 0) placeholder the daemon answers after a failed status poll, or one
         /// the mount sampled (<see cref="MountReading.ReadAtUtc"/>) before the stop it would confirm had gone out
-        /// (<paramref name="stopSentUtc"/>). How long a reading took to arrive plays no part: on a link whose replies stall
-        /// for seconds, a late reading of the stopped mount is as good as a prompt one.</summary>
+        /// (<paramref name="stopSentUtc"/>). Its age plays no part: a reading the mount sampled after the stop counts
+        /// however old it is by the time it is judged. Each read is still bounded by <see cref="StopCommandTimeout"/>
+        /// (<see cref="ReadStillnessAsync"/>): a reply that takes longer is "not confirmed", and the loop reads again
+        /// within <see cref="StopVerifyWindow"/>.</summary>
         internal static bool UntrustedForStillness([NotNullWhen(false)] MountReading? r, DateTimeOffset stopSentUtc) =>
             r is null || (r.RaHours == 0.0 && r.DecDegrees == 0.0) || r.ReadAtUtc < stopSentUtc;
 
