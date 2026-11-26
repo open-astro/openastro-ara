@@ -174,6 +174,23 @@ namespace OpenAstroAra.Test {
             Assert.That(occupancy.Holder(), Is.Null);
         }
 
+        private static readonly string[] ComposedRoutines = {
+            RigOccupancy.Session, "polar alignment", "centering", RigOccupancy.EndNight, "filter-offset calibration", "autofocus",
+            "the Bahtinov focus readout", "guide-camera focus", "the rotation readout", "Live View", "a disk-to-disk copy",
+        };
+
+        // #2143 — every routine is registered once, in this order: the Session first (it names a refusal during a run),
+        // and filter-offset calibration before autofocus (a stop ends the job before it starts its next run).
+        [Test]
+        public void The_composed_rig_occupancy_registers_every_routine_in_order() {
+            var routines = (System.Array)typeof(RigOccupancy)
+                .GetField("_routines", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
+                .GetValue(app.Services.GetRequiredService<RigOccupancy>())!;
+            var names = routines.Cast<object>().Select(r => (string)r.GetType().GetProperty("Name")!.GetValue(r)!).ToArray();
+
+            Assert.That(names, Is.EqualTo(ComposedRoutines));
+        }
+
         // #2142 — every composed stop ladder ends routines through the one register: Emergency Stop, the safety and fault
         // parks, End Night's ladder and the unattended shutdown's own ladder. A ladder composed without it stops no routine.
         [Test]
@@ -192,6 +209,8 @@ namespace OpenAstroAra.Test {
                 foreach (var (name, ladder) in ladders) {
                     Assert.That(Field(ladder, "_occupancy"), Is.SameAs(occupancy), name);
                 }
+                // #2143 — End Night's ladder runs for End Night, so its own step leaves End Night alone.
+                Assert.That(Field(ladders["end night"], "_routine"), Is.EqualTo(RigOccupancy.EndNight), "end night's routine");
             });
 
             // The composed Center has a stop: a ladder that asks for the mount reaches it (held gate: it never ends here).

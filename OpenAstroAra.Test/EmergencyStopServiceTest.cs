@@ -120,7 +120,7 @@ namespace OpenAstroAra.Test {
             var result = await new EmergencyStopService(
                 camera.Object, () => sequencer.Object, guider.Object,
                 telescope.Object, flat.Object, notifications.Object, ws.Object,
-                guideFocus: focus.Object).ExecuteAsync();
+                occupancy: new RigOccupancy().RegisterGuideFocus(() => focus.Object)).ExecuteAsync();
 
             focus.Verify(f => f.StopAsync(), Times.Once);
             Assert.That(result.FailedRungs, Is.Empty);
@@ -135,7 +135,7 @@ namespace OpenAstroAra.Test {
             var result = await new EmergencyStopService(
                 camera.Object, () => sequencer.Object, guider.Object,
                 telescope.Object, flat.Object, notifications.Object, ws.Object,
-                bahtinov: bahtinov.Object).ExecuteAsync();
+                occupancy: new RigOccupancy().RegisterBahtinov(() => bahtinov.Object)).ExecuteAsync();
 
             bahtinov.Verify(b => b.StopAsync(), Times.Once);
             Assert.That(result.FailedRungs, Is.Empty);
@@ -143,14 +143,16 @@ namespace OpenAstroAra.Test {
 
         [Test]
         public async Task Execute_CancelsARunningAutofocus() {
+            // #2143 — autofocus is a Rig Occupancy routine: the run ends when its token is cancelled, as the sweep does.
             var tracker = new AutofocusRunTracker();
             using var run = new CancellationTokenSource();
             tracker.Begin("classic", 100, 5, null, null, run);
+            run.Token.Register(() => tracker.Cancel(restoredPosition: 100));
 
             var result = await new EmergencyStopService(
                 camera.Object, () => sequencer.Object, guider.Object,
                 telescope.Object, flat.Object, notifications.Object, ws.Object,
-                autofocus: tracker).ExecuteAsync();
+                occupancy: new RigOccupancy().RegisterAutofocus(() => tracker)).ExecuteAsync();
 
             Assert.That(run.IsCancellationRequested, Is.True);
             Assert.That(result.FailedRungs, Is.Empty);
@@ -221,7 +223,7 @@ namespace OpenAstroAra.Test {
             await new EmergencyStopService(
                 camera.Object, () => sequencer.Object, guider.Object,
                 telescope.Object, flat.Object, notifications.Object, ws.Object,
-                guideFocus: focus.Object).ExecuteAsync();
+                occupancy: new RigOccupancy().RegisterGuideFocus(() => focus.Object)).ExecuteAsync();
 
             focus.Verify(f => f.StopAsync(), Times.Never);
         }

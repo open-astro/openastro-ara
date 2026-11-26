@@ -36,6 +36,9 @@ public class RotationAssistNotReadyException : InvalidOperationException {
 /// <summary>The readout's control surface: what the REST endpoints need.</summary>
 public interface IRotationAssistService {
     bool IsActive { get; }
+    /// <summary>#2143 — the readout holds the camera: its loop runs, or Confirm takes its frame. Its reading in
+    /// <see cref="RigOccupancy"/>.</summary>
+    bool IsBusy { get; }
     Task StartAsync(RotationAssistStartRequestDto request, CancellationToken ct);
     /// <summary>Stop the readout (idempotent; waits for the in-flight solve to drain).</summary>
     Task StopAsync();
@@ -116,7 +119,7 @@ public sealed partial class RotationAssistService : IRotationAssistService, IDis
         }
     }
 
-    private bool IsBusy {
+    public bool IsBusy {
         get {
             lock (_gate) {
                 return _state is "running" or "confirming";

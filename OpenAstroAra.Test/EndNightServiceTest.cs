@@ -159,9 +159,10 @@ namespace OpenAstroAra.Test {
             foreach (var sut in created) sut.Dispose();
         }
 
-        private EndNightService CreateSUT(double warmTimeScale = 6000) {
+        private EndNightService CreateSUT(double warmTimeScale = 6000, RigOccupancy? occupancy = null) {
+            // #2143 — composed like Program.cs: End Night's ladder leaves End Night alone.
             var ladder = new ShutdownLadder(profiles.Object, guider.Object, telescope.Object, camera.Object,
-                filterWheel.Object, focuser.Object, rotator.Object, flatDevice.Object) {
+                filterWheel.Object, focuser.Object, rotator.Object, flatDevice.Object, occupancy: occupancy, routine: RigOccupancy.EndNight) {
                 WarmTimeScale = warmTimeScale, // 6000: 1 "minute" = 10 ms
                 WarmHardCap = TimeSpan.FromSeconds(5),
                 ParkTimeout = TimeSpan.FromSeconds(2),
@@ -285,6 +286,46 @@ namespace OpenAstroAra.Test {
             Assert.That(Calls(), Does.Contain("park"));
             Assert.That(StepState(sut.GetStatus(), EndNightStepIds.HostPoweroff), Is.EqualTo(EndNightStepStates.Skipped));
             Assert.That(sut.GetStatus().State, Is.EqualTo(EndNightStates.Complete));
+        }
+
+        // #2143 — End Night is a Rig Occupancy routine, and its ladder stops every routine first: never End Night itself.
+        [Test]
+        public async Task End_Night_in_the_register_is_not_stopped_by_its_own_ladder() {
+            EndNightService? sut = null;
+            var occupancy = new RigOccupancy().RegisterEndNight(() => sut);
+            sut = CreateSUT(occupancy: occupancy);
+
+            sut.Start(shutDownHost: true);
+            await FinishedAsync(sut);
+
+            Assert.That(Calls(), Is.EqualTo(DocumentedOrder));
+            Assert.That(sut.GetStatus().State, Is.EqualTo(EndNightStates.Complete));
+        }
+
+        // #2143 — Emergency Stop ends End Night at its next step: the park it had started does not lead to more moves.
+        [Test]
+        public async Task Emergency_Stop_ends_End_Night_at_its_next_step() {
+            var parking = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+            telescope.Setup(t => t.ParkTelescope(It.IsAny<IProgress<ApplicationStatus>>(), It.IsAny<CancellationToken>()))
+                .Returns(async () => { Log("park"); await parking.Task; return true; });
+            EndNightService? sut = null;
+            var occupancy = new RigOccupancy().RegisterEndNight(() => sut);
+            sut = CreateSUT(occupancy: occupancy);
+            sut.Start(shutDownHost: true);
+            await WaitUntilAsync(() => Calls().Contains("park"), "the park step is in flight");
+            Assert.That(occupancy.Holder(RigHolding.Mount), Is.EqualTo(RigOccupancy.EndNight), "End Night holds the mount");
+
+            var stop = new EmergencyStopService(occupancy: occupancy).ExecuteAsync();
+            await WaitUntilAsync(() => sut.GetStatus().CancelRequested, "Emergency Stop cancelled End Night");
+            parking.SetResult(true);
+            var result = await stop.WaitAsync(TimeSpan.FromSeconds(10));
+            await FinishedAsync(sut);
+
+            Assert.Multiple(() => {
+                Assert.That(result.FailedRungs, Is.Empty);
+                Assert.That(sut.GetStatus().State, Is.EqualTo(EndNightStates.Cancelled));
+                Assert.That(Calls(), Does.Not.Contain("poweroff"));
+            });
         }
 
         [Test]

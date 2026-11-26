@@ -360,7 +360,6 @@ public static class SystemEndpoints {
                 RigOccupancy occupancy,
                 ICameraService camera,
                 CaptureScanService scan,
-                IStorageCopyService copy,
                 // A class, not an interface: without the attribute a host that doesn't register it infers a body.
                 [FromServices] StorageEraseLog erased,
                 CancellationToken ct) => {
@@ -371,11 +370,6 @@ public static class SystemEndpoints {
                 // nor from under a one-off REST capture, which the run
                 // registry doesn't track but which is writing a frame all the
                 // same.
-                if (copy.IsRunning) {
-                    return Results.Problem(
-                        "a disk-to-disk copy is running — wait for it to finish or cancel it before changing the storage drive",
-                        statusCode: StatusCodes.Status409Conflict);
-                }
                 if (occupancy.Holder(RigHolding.Disk) is { } writer) {
                     return Results.Problem(
                         $"{writer} is running — stop it before changing the storage drive",
@@ -450,18 +444,12 @@ public static class SystemEndpoints {
                 RigOccupancy occupancy,
                 ICameraService camera,
                 CaptureScanService scan,
-                IStorageCopyService copy,
                 CancellationToken ct) => {
                 if (string.IsNullOrWhiteSpace(request.Uuid)) {
                     return Results.Problem("uuid is required", statusCode: StatusCodes.Status400BadRequest);
                 }
                 // Same exclusions as configure: never yank the store out from
                 // under a run, an in-flight exposure, or a capture scan.
-                if (copy.IsRunning) {
-                    return Results.Problem(
-                        "a disk-to-disk copy is running — wait for it to finish or cancel it before checking the storage drive",
-                        statusCode: StatusCodes.Status409Conflict);
-                }
                 if (occupancy.Holder(RigHolding.Disk) is { } writer) {
                     return Results.Problem(
                         $"{writer} is running — stop it before checking the storage drive",
@@ -503,15 +491,9 @@ public static class SystemEndpoints {
                 RigOccupancy occupancy,
                 ICameraService camera,
                 CaptureScanService scan,
-                IStorageCopyService copy,
                 CancellationToken ct) => {
                 if (string.IsNullOrWhiteSpace(request.Uuid)) {
                     return Results.Problem("uuid is required", statusCode: StatusCodes.Status400BadRequest);
-                }
-                if (copy.IsRunning) {
-                    return Results.Problem(
-                        "a disk-to-disk copy is running — wait for it to finish or cancel it before ejecting the storage drive",
-                        statusCode: StatusCodes.Status409Conflict);
                 }
                 if (occupancy.Holder(RigHolding.Disk) is { } writer) {
                     return Results.Problem(
@@ -554,7 +536,9 @@ public static class SystemEndpoints {
                 RigOccupancy occupancy) => {
                 // The run's frames would land on the store mid-walk and be missed; copy in
                 // the morning, or re-run the copy afterwards (it only adds what is new).
-                if (occupancy.Holder(RigHolding.Disk) is { } writer) {
+                // #2143 — a copy is itself a disk holder: a second copy gets the copy's own
+                // copy_running refusal from Start, which the client words.
+                if (!copy.IsRunning && occupancy.Holder(RigHolding.Disk) is { } writer) {
                     return Results.Problem(
                         $"{writer} is running — stop it before copying the storage drive",
                         statusCode: StatusCodes.Status409Conflict);

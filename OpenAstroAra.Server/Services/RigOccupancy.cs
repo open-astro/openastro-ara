@@ -53,6 +53,9 @@ public sealed class RigOccupancy {
     /// <summary>The Session's name in a busy reason ("a sequence is running").</summary>
     public const string Session = "a sequence";
 
+    /// <summary>End Night's name: its own shutdown ladder stops every routine but this one (#2143).</summary>
+    public const string EndNight = "End Night";
+
     private sealed record Routine(string Name, RigHolding Holds, Func<bool> IsRunning,
         Func<string, CancellationToken, Task>? Stop, string FailedRung);
 
@@ -94,6 +97,81 @@ public sealed class RigOccupancy {
             () => centering()?.IsCentering == true,
             (_, ct) => centering()?.StopAsync(ct) ?? Task.CompletedTask);
 
+    /// <summary>#2143 — filter-offset calibration: a background job of autofocus runs on the main camera and the focuser.
+    /// Register it before autofocus: a stop then ends the job before it starts its next run, and a refusal during the job
+    /// names the calibration. Its stop cancels the job and waits for it to end.</summary>
+    public RigOccupancy RegisterFilterOffsetCalibration(Func<FilterOffsetCalibrationService?> calibration) =>
+        Register("filter-offset calibration", RigHolding.MainCamera | RigHolding.Focuser,
+            () => calibration()?.IsRunning == true,
+            (_, ct) => CancelThenWaitAsync(() => calibration()?.TryCancel(), () => calibration()?.IsRunning == true, ct),
+            failedRung: "stop_filter_offset_calibration");
+
+    /// <summary>#2143 — autofocus: a run in progress. Its stop cancels the run and waits for it to end (the run puts the
+    /// focuser back where it started first).</summary>
+    public RigOccupancy RegisterAutofocus(Func<AutofocusRunTracker?> autofocus) =>
+        Register("autofocus", RigHolding.MainCamera | RigHolding.Focuser,
+            () => autofocus()?.IsRunning == true,
+            (_, ct) => CancelThenWaitAsync(() => autofocus()?.TryCancel(), () => autofocus()?.IsRunning == true, ct),
+            failedRung: "cancel_autofocus");
+
+    /// <summary>#2143 — the Bahtinov focus readout: a camera loop on the main camera. Its stop waits for the frame in
+    /// flight to drain.</summary>
+    public RigOccupancy RegisterBahtinov(Func<IBahtinovFocusService?> bahtinov) =>
+        Register("the Bahtinov focus readout", RigHolding.MainCamera,
+            () => bahtinov()?.IsActive == true,
+            (_, _) => bahtinov()?.StopAsync() ?? Task.CompletedTask,
+            failedRung: "stop_bahtinov");
+
+    /// <summary>#2143 — Guide Focus: a camera loop on the Guide Camera (its frames come through the guider, so stopping
+    /// guiding does not end it). Its stop waits for the loop to end.</summary>
+    public RigOccupancy RegisterGuideFocus(Func<IGuideFocusService?> guideFocus) =>
+        Register("guide-camera focus", RigHolding.GuideCamera,
+            () => guideFocus()?.IsActive == true,
+            (_, _) => guideFocus()?.StopAsync() ?? Task.CompletedTask,
+            failedRung: "stop_guide_focus");
+
+    /// <summary>#2143 — the rotation readout: a camera loop on the main camera, or its Confirm frame. Its stop waits
+    /// for the solve in flight to drain.</summary>
+    public RigOccupancy RegisterRotationAssist(Func<IRotationAssistService?> rotation) =>
+        Register("the rotation readout", RigHolding.MainCamera,
+            () => rotation()?.IsBusy == true,
+            (_, _) => rotation()?.StopAsync() ?? Task.CompletedTask,
+            failedRung: "stop_rotation_assist");
+
+    /// <summary>#2143 — Live View: a camera loop on the main camera, and nothing else. Its stop waits for the loop to
+    /// end.</summary>
+    public RigOccupancy RegisterLiveView(Func<ICameraService?> camera) =>
+        Register("Live View", RigHolding.MainCamera,
+            () => camera()?.GetLiveViewStatus().Active == true,
+            (_, _) => camera()?.StopLiveViewAsync() ?? Task.CompletedTask,
+            failedRung: "stop_live_view");
+
+    /// <summary>#2143 — a disk-to-disk storage copy: it holds the disk. Its stop cancels the copy and waits for it to
+    /// end (the copy releases its target first).</summary>
+    public RigOccupancy RegisterStorageCopy(Func<IStorageCopyService?> copy) =>
+        Register("a disk-to-disk copy", RigHolding.Disk,
+            () => copy()?.IsRunning == true,
+            (_, ct) => CancelThenWaitAsync(() => copy()?.Cancel(), () => copy()?.IsRunning == true, ct),
+            failedRung: "stop_storage_copy");
+
+    /// <summary>#2143 — End Night: it stops guiding, parks the mount, disconnects the focuser and the other devices and
+    /// warms the camera. Its stop cancels it at its next step and waits for it to end; its own shutdown ladder leaves it
+    /// alone (<see cref="EndNight"/>).</summary>
+    public RigOccupancy RegisterEndNight(Func<EndNightService?> endNight) =>
+        Register(EndNight, RigHolding.Mount | RigHolding.MainCamera | RigHolding.GuideCamera | RigHolding.Focuser,
+            () => endNight()?.IsRunning == true,
+            // Cancel ends it at its next step; a host poweroff under way cannot be cancelled, so that stop runs out its bound.
+            (_, ct) => CancelThenWaitAsync(() => endNight()?.Cancel(), () => endNight()?.IsRunning == true, ct),
+            failedRung: "stop_end_night");
+
+    /// <summary>A stop for a routine whose cancel only asks: ask, then wait until its reading says it ended.</summary>
+    private static async Task CancelThenWaitAsync(Action cancel, Func<bool> isRunning, CancellationToken ct) {
+        cancel();
+        while (isRunning()) {
+            await Task.Delay(20, ct).ConfigureAwait(false);
+        }
+    }
+
     /// <summary>The name of the first running routine that holds any of <paramref name="holding"/>, or null when
     /// none does.</summary>
     public string? Holder(RigHolding holding = RigHolding.Any) {
@@ -108,10 +186,11 @@ public sealed class RigOccupancy {
     /// next routine is still stopped. Never throws. Returns one entry per routine it stopped, in order: whether its stop
     /// returned in time.</summary>
     /// <param name="by">The ladder, for the routine's log (a <see cref="MountStopReasons"/> value).</param>
-    public async Task<IReadOnlyList<RoutineStop>> StopAsync(RigHolding holding, string by, TimeSpan bound) {
+    /// <param name="except">#2143 — the routine the ladder runs for, which its own step must not stop (End Night).</param>
+    public async Task<IReadOnlyList<RoutineStop>> StopAsync(RigHolding holding, string by, TimeSpan bound, string? except = null) {
         var stops = new List<RoutineStop>();
         var running = _routines
-            .Where(r => r.Stop is not null && (r.Holds & holding) != 0 && IsRunningQuietly(r))
+            .Where(r => r.Stop is not null && r.Name != except && (r.Holds & holding) != 0 && IsRunningQuietly(r))
             .OrderBy(r => (r.Holds & RigHolding.Mount) == 0)
             .ToList();
         foreach (var routine in running) {

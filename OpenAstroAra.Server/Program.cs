@@ -352,7 +352,15 @@ public partial class Program {
         builder.Services.AddSingleton(sp => new RigOccupancy()
             .RegisterSession(sp.GetRequiredService<ActiveRunSessionRegistry>(), () => sp.GetService<ISequencerService>())
             .RegisterPolarAlign(() => sp.GetService<IPolarAlignService>())
-            .RegisterCenter(() => sp.GetService<ICenteringService>()));
+            .RegisterCenter(() => sp.GetService<ICenteringService>())
+            .RegisterEndNight(() => sp.GetService<EndNightService>())
+            .RegisterFilterOffsetCalibration(() => sp.GetService<FilterOffsetCalibrationService>())
+            .RegisterAutofocus(() => sp.GetService<AutofocusRunTracker>())
+            .RegisterBahtinov(() => sp.GetService<IBahtinovFocusService>())
+            .RegisterGuideFocus(() => sp.GetService<IGuideFocusService>())
+            .RegisterRotationAssist(() => sp.GetService<IRotationAssistService>())
+            .RegisterLiveView(() => sp.GetService<ICameraService>())
+            .RegisterStorageCopy(() => sp.GetService<IStorageCopyService>()));
         // Singleton on purpose: the service sweeps stale request/result files from the storage
         // exchange in its constructor (#1135), which is only safe because exactly one instance is
         // built — resolved eagerly after Build() below, so the sweep really runs at boot and
@@ -991,8 +999,10 @@ public partial class Program {
             sp.GetService<IRotatorService>(),
             sp.GetService<IFlatDeviceService>(),
             sp.GetService<ILogger<ShutdownLadder>>(),
-            // #2066, #2142 — every routine on the rig ends before the Find Home and park.
-            sp.GetService<RigOccupancy>()));
+            // #2066, #2142 — every routine on the rig ends before the Find Home and park; #2143 — but End Night, whose
+            // ladder this is.
+            sp.GetService<RigOccupancy>(),
+            RigOccupancy.EndNight));
         builder.Services.AddSingleton<IHostPoweroffStarter>(_ => new SystemctlHostPoweroffStarter(ServerUpdateService.RunAsync));
         builder.Services.AddSingleton(sp => new EndNightService(
             sp.GetRequiredService<ShutdownLadder>(),
@@ -1125,7 +1135,7 @@ public partial class Program {
         builder.Services.AddHostedService(sp => sp.GetRequiredService<FaultReactionService>());
 
         // §35.3 — emergency stop (abort runs → stop mount where it is → halt rotator → abort exposure →
-        // stop focus/Bahtinov/autofocus → stop every Rig Occupancy routine → stop guiding → stop mount again if a
+        // stop every Rig Occupancy routine → stop guiding → stop mount again if a
         // mount holder ran → flat light off → cooler off), behind POST /api/v1/server/emergency-stop.
         // Same optional-dep + sequencer-resolver pattern as the reaction engine.
         builder.Services.AddSingleton<EmergencyStopService>(sp =>
@@ -1139,9 +1149,6 @@ public partial class Program {
                 sp.GetService<IWsBroadcaster>(),
                 sp.GetService<ILogger<EmergencyStopService>>(),
                 sp.GetService<IRotatorService>(),
-                sp.GetService<IGuideFocusService>(),
-                sp.GetService<IBahtinovFocusService>(),
-                sp.GetService<AutofocusRunTracker>(),
                 sp.GetService<RigOccupancy>(),
                 () => sp.GetService<DomeFollower>(),
                 sp.GetService<IPolarAlignerService>()));
@@ -1355,9 +1362,7 @@ public partial class Program {
                     ? new SyntheticBahtinovFrameSource(sp.GetRequiredService<OpenAstroAra.Equipment.Interfaces.Mediator.IFocuserMediator>(), sky)
                     : sp.GetRequiredService<IAnalysisFrameSource>(),
                 () => BahtinovOpticsFor(sp.GetRequiredService<IProfileStore>()),
-                () => sp.GetRequiredService<AutofocusRunTracker>().IsRunning ? "an autofocus run is in progress"
-                    : sp.GetRequiredService<RigOccupancy>().Holder(RigHolding.MainCamera) is { } holder ? $"{holder} is running"
-                    : null,
+                () => sp.GetRequiredService<RigOccupancy>().Holder(RigHolding.MainCamera) is { } holder ? $"{holder} is running" : null,
                 sp.GetRequiredService<ILogger<BahtinovFocusService>>(),
                 // The AF exposure stands in when a start leaves its own out.
                 defaultExposure: () => sp.GetRequiredService<IProfileStore>().GetAutofocusSettings().ExposureSeconds));

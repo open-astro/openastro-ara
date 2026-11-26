@@ -51,8 +51,6 @@ public sealed class FilterOffsetCalibrationService {
     private readonly IProfileStore _profiles;
     private readonly IProfileService _profile;
     private readonly RigOccupancy _occupancy;
-    private readonly IBahtinovFocusService _bahtinov;
-    private readonly IGuideFocusService _guideFocus;
 
     private readonly object _gate = new();
     private Run? _run;
@@ -68,9 +66,7 @@ public sealed class FilterOffsetCalibrationService {
             IFilterWheelMediator wheelMediator,
             IProfileStore profiles,
             IProfileService profile,
-            RigOccupancy occupancy,
-            IBahtinovFocusService bahtinov,
-            IGuideFocusService guideFocus) {
+            RigOccupancy occupancy) {
         _autofocus = autofocus;
         _tracker = tracker;
         _jobs = jobs;
@@ -82,8 +78,6 @@ public sealed class FilterOffsetCalibrationService {
         _profiles = profiles;
         _profile = profile;
         _occupancy = occupancy;
-        _bahtinov = bahtinov;
-        _guideFocus = guideFocus;
     }
 
     public bool IsRunning {
@@ -99,10 +93,8 @@ public sealed class FilterOffsetCalibrationService {
     /// <see cref="ArgumentOutOfRangeException"/> for a slot the wheel does not have (400).</summary>
     public async Task<BatchJobDto> StartAsync(IReadOnlyList<int>? positions, CancellationToken ct) {
         var busy = IsRunning ? "an offset calibration is already running"
-            : _tracker.IsRunning ? "an autofocus run is in progress"
-            : _bahtinov.IsActive ? "the Bahtinov focus readout is running"
-            : _guideFocus.IsActive ? "guide-camera focus is running"
-            : _occupancy.Holder(RigHolding.MainCamera | RigHolding.Focuser) is { } holder ? $"{holder} is running"
+            // #1675 — one focus routine at a time: guide-camera focus too, though it shares no device with this.
+            : _occupancy.Holder(RigHolding.MainCamera | RigHolding.Focuser | RigHolding.GuideCamera) is { } holder ? $"{holder} is running"
             : null;
         if (busy is not null) {
             throw new InvalidOperationException($"Focus offsets can't be calibrated while {busy}.");

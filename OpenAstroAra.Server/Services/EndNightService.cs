@@ -107,6 +107,11 @@ public sealed partial class EndNightService : IDisposable {
 
     private bool CancellableLocked() => _state == EndNightStates.Running && !_poweroffStarted;
 
+    /// <summary>#2143 — End Night's reading in <see cref="RigOccupancy"/>.</summary>
+    public bool IsRunning {
+        get { lock (_lock) { return _state == EndNightStates.Running; } }
+    }
+
     /// <summary>Start the action and return its status at once. Refused while one runs.</summary>
     public EndNightStatusDto Start(bool shutDownHost) {
         Guid runId;
