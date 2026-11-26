@@ -379,8 +379,9 @@ namespace OpenAstroAra.Test {
             var (svc, device) = await UnverifiedAsync();
             using var _ = svc;
             device.ReportsArrival = true;
-            Assert.That(await svc.ParkTelescope(new Progress<ApplicationStatus>(), MoveAsker.Session, CancellationToken.None), Is.True);
+            // Home first: a home from a parked mount is refused (#2140).
             Assert.That(await svc.FindHome(new Progress<ApplicationStatus>(), MoveAsker.Session, CancellationToken.None), Is.True);
+            Assert.That(await svc.ParkTelescope(new Progress<ApplicationStatus>(), MoveAsker.Session, CancellationToken.None), Is.True);
             Assert.That((device.Parks, device.Homes), Is.EqualTo((1, 1)));
         }
 

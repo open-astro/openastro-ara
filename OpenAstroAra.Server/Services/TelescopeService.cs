@@ -149,13 +149,14 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
     public TelescopeService(ILogger<TelescopeService>? logger = null, EquipmentEventPublisher? events = null,
             IEquipmentFaultSink? faults = null, IWsBroadcaster? ws = null, IProfileService? profileService = null,
             Func<IGuiderMediator?>? guiderResolver = null, IProfileStore? profileStore = null, IMountPoseStore? poseStore = null,
-            Func<ITimeSyncService?>? timeSyncResolver = null, Func<ISequencerService?>? sequencerResolver = null,
-            Func<IPolarAlignService?>? polarAlignResolver = null) {
+            Func<ITimeSyncService?>? timeSyncResolver = null, Func<RigOccupancy?>? occupancyResolver = null,
+            Func<IPolarAlignService?>? polarAlignResolver = null, Func<INotificationService?>? notificationResolver = null) {
         _profileStore = profileStore;
-        // #2139 — Move Admission's person rules: the active runs (run_in_progress) and Polar Align turning the mount, both
-        // resolved lazily (built after the mount).
-        _sequencerResolver = sequencerResolver;
+        // #2139, #2140 — Move Admission's person rules: what holds the mount (Rig Occupancy) and Polar Align turning it; and
+        // the notice a GoTo refused by a position limit posts. All resolved lazily (built after the mount).
+        _occupancyResolver = occupancyResolver;
         _polarAlignResolver = polarAlignResolver;
+        _notificationResolver = notificationResolver;
         _poseStore = poseStore;
         // #2071 — the time-sync service, resolved lazily like the guider. Without it the mount-clock gate is off.
         _timeSyncResolver = timeSyncResolver;
@@ -233,12 +234,13 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
         ForgetMountClockLocked(); // #2071 — every session sets and checks the mount's clock again
     }
 
-    private readonly Func<ISequencerService?>? _sequencerResolver;
+    private readonly Func<RigOccupancy?>? _occupancyResolver;
     private readonly Func<IPolarAlignService?>? _polarAlignResolver;
+    private readonly Func<INotificationService?>? _notificationResolver;
 
     /// <summary>A person's GoTo or sync (the REST endpoint). #2139 — a GoTo is checked by Move Admission's person row
     /// (record 0026), in the order the endpoint and this service checked it before: Polar Align moving and the motion
-    /// owner, a run active (<see cref="RunInProgressException"/>), the range, the horizon, the counterweight, then the
+    /// owner, the mount held (<see cref="RunInProgressException"/>), the range, the horizon, the counterweight, then the
     /// connection, the clock and the position. A sync is not a move: it keeps its own checks (the range, the clock; the
     /// endpoint checks Polar Align and the owner for it).</summary>
     public Task<OperationAcceptedDto> SlewAsync(SlewRequestDto request, string? idempotencyKey, CancellationToken ct) {
@@ -248,29 +250,23 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
             // and the send drops it if a routine took the mount since.
             return SlewAdmittedAsync(request, idempotencyKey, ct);
         }
-        ThrowUnlessPersonAdmitted(MoveKind.Slew, "slew");
-        // The run check reads the sequencer, which answers asynchronously; without one there is no run to refuse for.
-        if (MoveAdmission.Binds(MoveAsker.Person, MoveKind.Slew, MoveRule.RunActive) && _sequencerResolver?.Invoke() is { } sequencer) {
-            return SlewUnlessRunActiveAsync(sequencer, request, idempotencyKey, ct);
-        }
+        ThrowUnlessPersonAdmitted(MoveKind.Slew, "slew", forced: request.Force == true);
         return SlewAdmittedAsync(request, idempotencyKey, ct);
     }
 
-    private async Task<OperationAcceptedDto> SlewUnlessRunActiveAsync(ISequencerService sequencer, SlewRequestDto request, string? idempotencyKey, CancellationToken ct) {
-        if (MoveAdmission.RunActiveRefusal(request, (await sequencer.ActiveRunIdsAsync(ct).ConfigureAwait(false)).Count) is { } busy) {
-            throw new RunInProgressException(busy);
-        }
-        return await SlewAdmittedAsync(request, idempotencyKey, ct).ConfigureAwait(false);
-    }
-
-    /// <summary>#2139 — a person's park, home or GoTo: Polar Align turning the mount, then a routine holding its motion
-    /// owner, where the person row binds them (before the connection check, as the endpoint did).</summary>
-    private void ThrowUnlessPersonAdmitted(MoveKind kind, string what) {
+    /// <summary>#2139, #2140 — a person's park, home or GoTo: Polar Align turning the mount, a routine holding its motion
+    /// owner, then anything that holds the mount in Rig Occupancy (record 0025; <paramref name="forced"/> skips only a
+    /// Session, for a GoTo), where the person row binds them, before the connection check.</summary>
+    private void ThrowUnlessPersonAdmitted(MoveKind kind, string what, bool forced = false) {
         if (MoveAdmission.Binds(MoveAsker.Person, kind, MoveRule.PolarAlignMoving)) {
             MoveAdmission.ThrowIfPolarAlignMovesTheMount(_polarAlignResolver?.Invoke(), what);
         }
         if (MoveAdmission.Binds(MoveAsker.Person, kind, MoveRule.MotionOwner)) {
             MoveAdmission.ThrowIfPolarAlignMovesTheMount(null, what, this);
+        }
+        if (MoveAdmission.Binds(MoveAsker.Person, kind, MoveRule.MountHeld)
+                && MoveAdmission.MountHeldRefusal(_occupancyResolver?.Invoke()?.Holders(RigHolding.Mount) ?? [], forced, kind) is { } held) {
+            throw new RunInProgressException(held);
         }
     }
 
@@ -291,11 +287,8 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
         if (!sync && !IsCoordinateOutOfRange(request.RightAscensionHours, request.DeclinationDegrees)) {
             // #2044, #2073 — the target's limits, after its range (an out-of-range target keeps the range answer).
             var target = new Coordinates(request.RightAscensionHours, request.DeclinationDegrees, Epoch.J2000, Coordinates.RAType.Hours);
-            if (Binds(MoveRule.Horizon)) {
-                MoveAdmission.ThrowIfBelowHorizon(_profileStore, target, _logger);
-            }
-            if (Binds(MoveRule.Counterweight)) {
-                MoveAdmission.ThrowIfPastCounterweight(_profileStore, target, MountAlignmentMode, _logger);
+            if (MoveAdmission.LimitRefusal(MoveAsker.Person, _profileStore, target, MountAlignmentMode, _logger) is { } limit) {
+                throw limit;
             }
         }
         if (client is null) {
@@ -534,6 +527,11 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
     public Task<OperationAcceptedDto> FindHomeAsync(string? idempotencyKey, CancellationToken ct) {
         ThrowUnlessPersonAdmitted(MoveKind.Home, "home");
         var client = RequireConnectedClient(); // synchronous throw when not connected / disposed, as before
+        // #2140 — a park on a parked mount does nothing; a Find Home from it is refused (the mount would throw).
+        if (MoveAdmission.Binds(MoveAsker.Person, MoveKind.Home, MoveRule.Parked) && IsParkedNow()) {
+            LogMountOpRejectedParked("telescope.findhome");
+            throw new MountParkedException("The mount is parked: unpark it before Find Home.");
+        }
         var (motion, abortEpoch) = NoteMotionRequested(); // #2066 — read at the request, and a move from here on, as Park does
         return FindHomeAfterGuidingStoppedAsync(client, idempotencyKey, abortEpoch, motion, ct);
     }

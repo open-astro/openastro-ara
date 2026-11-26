@@ -497,7 +497,7 @@ namespace OpenAstroAra.Test {
             guider.Verify(g => g.StopGuiding(It.IsAny<CancellationToken>()), Times.Never);
             Assert.That(published, Has.Count.EqualTo(1));
             Assert.That(published[0].Severity, Is.EqualTo(NotificationSeverity.Critical));
-            Assert.That(published[0].Message, Does.Contain("horizon floor"));
+            Assert.That(published[0].Message, Does.Contain("below the 20.0° horizon limit").And.Contain("below-horizon-limit")); // #2140 — Move Admission answers it
         }
 
         [Test]

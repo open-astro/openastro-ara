@@ -15,11 +15,11 @@
 using Microsoft.Extensions.Logging;
 using OpenAstroAra.Astrometry;
 using OpenAstroAra.Equipment.Interfaces.Mediator;
-using OpenAstroAra.Server.Contracts;
 using OpenAstroAra.Server.Contracts.Refusals;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Linq;
 
 namespace OpenAstroAra.Server.Services;
 
@@ -42,20 +42,29 @@ public enum MoveRule {
     MotionOwner = 16,
     /// <summary>Polar Align is not turning the mount, and its stop is confirmed (#2066).</summary>
     PolarAlignMoving = 32,
-    /// <summary>No sequence run is active (not finished, not aborting); <c>force</c> skips it (<c>run_in_progress</c>).</summary>
-    RunActive = 64,
-    /// <summary>The target is above the profile's lowest altitude (#2044).</summary>
+    /// <summary>#2140 — nothing holds the mount in Rig Occupancy (record 0025: a Session, polar alignment, Center; End
+    /// Night once #2143 registers it); <c>force</c> skips only a Session, for a GoTo (<c>run_in_progress</c>).</summary>
+    MountHeld = 64,
+    /// <summary>A position limit: the target is above the profile's lowest altitude (#2044).</summary>
     Horizon = 128,
-    /// <summary>The target does not put the counterweight up (#2073).</summary>
+    /// <summary>A position limit: the target does not put the counterweight up (#2073).</summary>
     Counterweight = 256,
 }
 
-/// <summary>A person's GoTo refused while a sequence run is active (#2139: the <c>run_in_progress</c> rule, as before).
-/// The REST endpoint answers it as the 409 Problem <c>run_in_progress</c>.</summary>
+/// <summary>A person's move refused while something holds the mount (#2140: Rig Occupancy). The REST endpoints answer it
+/// as the 409 Problem <c>run_in_progress</c>; its text names the holder.</summary>
 public sealed class RunInProgressException : InvalidOperationException {
     public RunInProgressException() { }
     public RunInProgressException(string message) : base(message) { }
     public RunInProgressException(string message, Exception innerException) : base(message, innerException) { }
+}
+
+/// <summary>#2140 — a Find Home asked of a parked mount. The REST endpoint answers it as the 409 Problem
+/// <c>mount_parked</c>; a park on a parked mount is allowed (it does nothing).</summary>
+public sealed class MountParkedException : InvalidOperationException {
+    public MountParkedException() { }
+    public MountParkedException(string message) : base(message) { }
+    public MountParkedException(string message, Exception innerException) : base(message, innerException) { }
 }
 
 /// <summary>
@@ -67,17 +76,21 @@ public sealed class RunInProgressException : InvalidOperationException {
 public static class MoveAdmission {
 
     /// <summary>
-    /// The one table: the rules each asker's move is checked for. This slice reproduces what each asker was checked for
-    /// before the module (record 0026); #2140 changes the policy here, and only here. An asker with no row for a kind
-    /// cannot ask for it (a programming error, not a refusal).
+    /// The one table: the rules each asker's move is checked for (record 0026). #2140: the position limits (horizon,
+    /// counterweight) bind every asker's GoTo but the safety moves, which have no GoTo; a park and a home are the way out
+    /// of a bad pose, so no position limit binds them, only the motion owner, a person's "the mount is held", the position
+    /// (#2070) and, for a home, parked. An asker with no row for a kind cannot ask for it (a programming error, not a
+    /// refusal).
     /// </summary>
     public static MoveRule RulesFor(MoveAsker asker, MoveKind kind) => (asker, kind) switch {
         (MoveAsker.Person, MoveKind.Slew) => MoveRule.Range | MoveRule.Clock | MoveRule.Pose | MoveRule.MotionOwner
-            | MoveRule.PolarAlignMoving | MoveRule.RunActive | MoveRule.Horizon | MoveRule.Counterweight,
-        (MoveAsker.Person, MoveKind.Park or MoveKind.Home) => MoveRule.Pose | MoveRule.MotionOwner | MoveRule.PolarAlignMoving,
+            | MoveRule.PolarAlignMoving | MoveRule.MountHeld | MoveRule.Horizon | MoveRule.Counterweight,
+        (MoveAsker.Person, MoveKind.Park) => MoveRule.Pose | MoveRule.MotionOwner | MoveRule.PolarAlignMoving | MoveRule.MountHeld,
+        (MoveAsker.Person, MoveKind.Home) => MoveRule.Pose | MoveRule.MotionOwner | MoveRule.PolarAlignMoving | MoveRule.MountHeld | MoveRule.Parked,
         (MoveAsker.Session or MoveAsker.Center or MoveAsker.MeridianFlip, MoveKind.Slew) =>
-            MoveRule.Range | MoveRule.Parked | MoveRule.Clock | MoveRule.Pose | MoveRule.MotionOwner,
-        (MoveAsker.Session or MoveAsker.Shutdown or MoveAsker.MeridianFlip, MoveKind.Park or MoveKind.Home) => MoveRule.Pose | MoveRule.MotionOwner,
+            MoveRule.Range | MoveRule.Parked | MoveRule.Clock | MoveRule.Pose | MoveRule.MotionOwner | MoveRule.Horizon | MoveRule.Counterweight,
+        (MoveAsker.Session or MoveAsker.Shutdown or MoveAsker.MeridianFlip, MoveKind.Park) => MoveRule.Pose | MoveRule.MotionOwner,
+        (MoveAsker.Session or MoveAsker.Shutdown or MoveAsker.MeridianFlip, MoveKind.Home) => MoveRule.Pose | MoveRule.MotionOwner | MoveRule.Parked,
         (MoveAsker.SafetyPark, MoveKind.Park) => MoveRule.Pose,
         (MoveAsker.TargetRecenter or MoveAsker.ResumeRefinement, MoveKind.Slew) => MoveRule.Horizon,
         _ => throw new ArgumentOutOfRangeException(nameof(asker), $"{asker} has no Move Admission row for a {kind}."),
@@ -86,35 +99,48 @@ public static class MoveAdmission {
     /// <summary>Whether <paramref name="rule"/> binds <paramref name="asker"/>'s <paramref name="kind"/>.</summary>
     public static bool Binds(MoveAsker asker, MoveKind kind, MoveRule rule) => (RulesFor(asker, kind) & rule) != 0;
 
-    /// <summary>The <c>run_in_progress</c> text for a person's slew while runs are active, or null when it may go ahead:
-    /// no run, a sync (the mount does not move), or the person forced it.</summary>
-    internal static string? RunActiveRefusal(SlewRequestDto request, int activeRuns) {
-        ArgumentNullException.ThrowIfNull(request);
-        if (activeRuns == 0 || request.Sync == true || request.Force == true) {
+    /// <summary>#2140 — the <c>run_in_progress</c> text for a person's move while <paramref name="holders"/> (the
+    /// <see cref="RigOccupancy"/> names of what holds the mount, in registration order) are running, or null when it may go
+    /// ahead: nothing holds it, or the person forced a GoTo and only a Session holds it (<paramref name="forced"/>; nothing
+    /// else can be forced). The text names the holder: a routine beside the Session before the Session.</summary>
+    internal static string? MountHeldRefusal(IEnumerable<string> holders, bool forced, MoveKind kind) {
+        ArgumentNullException.ThrowIfNull(holders);
+        var held = holders.ToList();
+        if (held.FirstOrDefault(h => h != RigOccupancy.Session) is { } other) {
+            var what = kind switch { MoveKind.Slew => "GoTo", MoveKind.Park => "park", _ => "Find Home" };
+            return $"{other} is running and holds the mount, so the {what} was not sent. Stop it first.";
+        }
+        if (held.Count == 0) {
             return null;
         }
-        return activeRuns == 1
-            ? "a sequence run is in progress: slewing now stops guiding and pauses the run awaiting you. Repeat with force to slew anyway."
-            : $"{activeRuns} sequence runs are in progress: slewing now stops guiding and pauses them awaiting you. Repeat with force to slew anyway.";
+        return kind switch {
+            MoveKind.Slew when forced => null,
+            MoveKind.Slew => "a sequence is running: slewing now stops guiding and pauses the run awaiting you. Repeat with force to slew anyway.",
+            MoveKind.Park => "a sequence is running: stop it before you park the mount.",
+            _ => "a sequence is running: stop it before you send the mount home.",
+        };
     }
 
-    /// <summary>The <c>below-horizon-limit</c> Refusal (#2044) when the target is under the profile's lowest altitude.</summary>
-    internal static void ThrowIfBelowHorizon(IProfileStore? profiles, Coordinates target, ILogger? logger) {
-        if (HorizonGuard.TargetBelowHorizon(profiles, target, logger) is { } low) {
-            throw new RefusalException(RefusalCatalog.BelowHorizonLimit,
+    /// <summary>#2140 — the position-limit Refusal for <paramref name="asker"/>'s GoTo to <paramref name="target"/>, or
+    /// null: <c>below-horizon-limit</c> (#2044) when the target is under the profile's lowest altitude, then
+    /// <c>counterweight-limit</c> (#2073) for a target below the pole near the lower meridian on a German equatorial mount
+    /// (or one whose type is unknown), each where the table binds the asker. <paramref name="atUtc"/> is when the move
+    /// lands (the flip asks for the flip time); null is now.</summary>
+    public static RefusalException? LimitRefusal(MoveAsker asker, IProfileStore? profiles, Coordinates target,
+            ASCOM.Common.DeviceInterfaces.AlignmentMode? alignmentMode, ILogger? logger, DateTimeOffset? atUtc = null) {
+        ArgumentNullException.ThrowIfNull(target);
+        if (Binds(asker, MoveKind.Slew, MoveRule.Horizon) && HorizonGuard.TargetBelowHorizon(profiles, target, logger, atUtc) is { } low) {
+            return new RefusalException(RefusalCatalog.BelowHorizonLimit,
                 string.Create(CultureInfo.InvariantCulture, $"The target is at {low.AltitudeDeg:F1}°, below the {low.LimitDeg:F1}° horizon limit."),
                 new Dictionary<string, object?> { ["altitude_deg"] = low.AltitudeDeg, ["limit_deg"] = low.LimitDeg });
         }
-    }
-
-    /// <summary>The <c>counterweight-limit</c> Refusal (#2073) for a target below the pole near the lower meridian on a
-    /// German equatorial mount (or one whose type is unknown).</summary>
-    internal static void ThrowIfPastCounterweight(IProfileStore? profiles, Coordinates target, ASCOM.Common.DeviceInterfaces.AlignmentMode? alignmentMode, ILogger? logger) {
-        if (CounterweightGuard.TargetPastCounterweightLimit(profiles, target, DateTimeOffset.UtcNow, alignmentMode, logger) is { } cw) {
-            throw new RefusalException(RefusalCatalog.CounterweightLimit,
+        if (Binds(asker, MoveKind.Slew, MoveRule.Counterweight)
+                && CounterweightGuard.TargetPastCounterweightLimit(profiles, target, atUtc ?? DateTimeOffset.UtcNow, alignmentMode, logger) is { } cw) {
+            return new RefusalException(RefusalCatalog.CounterweightLimit,
                 string.Create(CultureInfo.InvariantCulture, $"The target is below the pole at hour angle {cw.HourAngleHours:F1} h: the counterweight would be {cw.CounterweightAngleDeg:F0}° from down, past the {cw.LimitDeg:F0}° limit."),
                 new Dictionary<string, object?> { ["hour_angle_hours"] = cw.HourAngleHours, ["counterweight_angle_deg"] = cw.CounterweightAngleDeg, ["limit_deg"] = cw.LimitDeg });
         }
+        return null;
     }
 
     /// <summary>#2066 — the <c>polar-align-moving-mount</c> Refusal while Polar Align turns the mount or its stop is not
