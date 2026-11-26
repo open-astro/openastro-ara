@@ -45,4 +45,9 @@ public interface ICenteringService {
 
     /// <summary>A centering is under way (#2141): Center's reading in <see cref="RigOccupancy"/>.</summary>
     bool IsCentering { get; }
+
+    /// <summary>#2142 — Center's stop in <see cref="RigOccupancy"/>: ends the centering under way and any queued behind
+    /// it (each ends cancelled, so its next attempt does not slew), then returns once none is under way, or when
+    /// <paramref name="ct"/> is cancelled. A Center started after the call is not stopped.</summary>
+    Task StopAsync(CancellationToken ct);
 }

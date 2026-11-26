@@ -16,6 +16,10 @@ using Moq;
 using NUnit.Framework;
 using OpenAstroAra.Server.Services;
 using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace OpenAstroAra.Test {
 
@@ -51,6 +55,86 @@ namespace OpenAstroAra.Test {
             Assert.That(occupancy.Holder(RigHolding.Mount), Is.EqualTo(RigOccupancy.Session), "an open catalog session counts");
             runs.Exit(session);
             Assert.That(occupancy.Holder(), Is.Null);
+        }
+
+        private static readonly string[] MountHolderFirst = { "centering", "camera loop" };
+
+        // #2142 — a stop ladder asks the register: every running routine that holds what must be free and has a stop,
+        // the mount's holders first; a routine that does not hold it, or has ended, is left alone.
+        [Test]
+        public async Task A_stop_ends_the_running_holders_mount_first_and_leaves_the_rest_alone() {
+            var stopped = new List<string>();
+            var loopRuns = true;
+            var centerRuns = true;
+            var occupancy = new RigOccupancy()
+                .Register("camera loop", RigHolding.MainCamera, () => loopRuns, (_, _) => { stopped.Add("camera loop"); loopRuns = false; return Task.CompletedTask; })
+                .Register("centering", RigHolding.Mount | RigHolding.MainCamera, () => centerRuns, (_, _) => { stopped.Add("centering"); centerRuns = false; return Task.CompletedTask; })
+                .Register("disk writer", RigHolding.Disk, () => true, (_, _) => { stopped.Add("disk writer"); return Task.CompletedTask; })
+                .Register("ended", RigHolding.Any, () => false, (_, _) => { stopped.Add("ended"); return Task.CompletedTask; });
+
+            var stops = await occupancy.StopAsync(RigHolding.Mount | RigHolding.MainCamera, MountStopReasons.EmergencyStop, TimeSpan.FromSeconds(5));
+
+            Assert.Multiple(() => {
+                Assert.That(stopped, Is.EqualTo(MountHolderFirst));
+                Assert.That(stops.Select(s => s.Name), Is.EqualTo(MountHolderFirst));
+                Assert.That(stops.All(s => s.Stopped), Is.True);
+            });
+        }
+
+        private static readonly (string, bool)[] HungDeafOther = { ("hung", false), ("deaf", false), ("other", true) };
+
+        // #2142 — a routine whose stop never returns, or throws, is reported; the next one still stops.
+        [Test]
+        public async Task A_routine_that_does_not_stop_is_reported_and_the_next_one_still_stops() {
+            var otherRuns = true;
+            var occupancy = new RigOccupancy()
+                .Register("hung", RigHolding.Mount, () => true, (_, _) => new TaskCompletionSource().Task)
+                .Register("deaf", RigHolding.Mount, () => true, (_, _) => throw new InvalidOperationException("driver refused"), failedRung: "stop_deaf")
+                .Register("other", RigHolding.Mount, () => otherRuns, (_, _) => { otherRuns = false; return Task.CompletedTask; });
+
+            var stops = await occupancy.StopAsync(RigHolding.Mount, MountStopReasons.SafetyPark, TimeSpan.FromMilliseconds(100))
+                .WaitAsync(TimeSpan.FromSeconds(10));
+
+            Assert.Multiple(() => {
+                Assert.That(stops.Select(s => (s.Name, s.Stopped)), Is.EqualTo(HungDeafOther));
+                Assert.That(stops[0].Fault, Is.InstanceOf<TimeoutException>());
+                Assert.That(stops[0].FailedRung, Is.EqualTo("stop_hung"));
+                Assert.That(stops[1].FailedRung, Is.EqualTo("stop_deaf"));
+                Assert.That(stops[1].Fault, Is.InstanceOf<InvalidOperationException>());
+            });
+        }
+
+        // #2142 — the Session registers no stop: a ladder ends or pauses runs in its own step, so a safety park that asks
+        // for the mount does not abort the run it should pause.
+        [Test]
+        public async Task The_session_is_not_stopped_through_the_register() {
+            var sequencer = new Mock<ISequencerService>();
+            sequencer.SetupGet(s => s.HasUnfinishedRun).Returns(true);
+            var occupancy = new RigOccupancy().RegisterSession(new ActiveRunSessionRegistry(), () => sequencer.Object);
+
+            var stops = await occupancy.StopAsync(RigHolding.Any, MountStopReasons.SafetyPark, TimeSpan.FromSeconds(1));
+
+            Assert.That(stops, Is.Empty);
+            sequencer.Verify(s => s.AbortActiveRunsAsync(It.IsAny<CancellationToken>()), Times.Never);
+            sequencer.Verify(s => s.PauseActiveRunsAsync(It.IsAny<CancellationToken>()), Times.Never);
+        }
+
+        // #2142 — the Polar Align Routine's stop is its takeover, named for the ladder, and the takeover's return confirms it.
+        [Test]
+        public async Task Polar_alignment_stops_by_its_takeover_and_is_confirmed_by_its_return() {
+            var runs = true;
+            var polar = new Mock<IPolarAlignService>();
+            polar.SetupGet(p => p.IsActive).Returns(() => runs);
+            polar.Setup(p => p.StopForTakeoverAsync(MountStopReasons.Shutdown, It.IsAny<CancellationToken>()))
+                .Callback(() => runs = false).ReturnsAsync(new OpenAstroAra.Server.Contracts.OperationAcceptedDto(Guid.NewGuid(), "polar-align.stop", DateTimeOffset.UtcNow, null));
+            var occupancy = new RigOccupancy().RegisterPolarAlign(() => polar.Object);
+
+            var stops = await occupancy.StopAsync(RigHolding.Mount, MountStopReasons.Shutdown, TimeSpan.FromSeconds(1));
+
+            Assert.That(runs, Is.False, "the takeover ended the run");
+            polar.Verify(p => p.StopAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Never, "not the Stop that confirms its own mount stop");
+            Assert.That(stops.Single(), Is.EqualTo(new RoutineStop("polar alignment",
+                RigHolding.Mount | RigHolding.MainCamera | RigHolding.GuideCamera, true, "stop_polar_align", null)));
         }
     }
 }

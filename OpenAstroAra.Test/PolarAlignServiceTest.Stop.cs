@@ -480,8 +480,8 @@ namespace OpenAstroAra.Test {
             var margin = TimeSpan.FromSeconds(1);
 
             Assert.Multiple(() => {
-                Assert.That(svc.TakeoverStopBound + margin, Is.LessThanOrEqualTo(safety.StopPolarAlignBeforeParkTimeout), "the safety park");
-                Assert.That(svc.TakeoverStopBound + margin, Is.LessThanOrEqualTo(fault.StopPolarAlignBeforeParkTimeout), "the fault park");
+                Assert.That(svc.TakeoverStopBound + margin, Is.LessThanOrEqualTo(safety.StopRoutinesBeforeParkTimeout), "the safety park");
+                Assert.That(svc.TakeoverStopBound + margin, Is.LessThanOrEqualTo(fault.StopRoutinesBeforeParkTimeout), "the fault park");
                 Assert.That(svc.TakeoverStopBound + margin, Is.LessThanOrEqualTo(emergency.RungTimeout), "Emergency Stop's rung");
             });
         }

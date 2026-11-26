@@ -182,7 +182,7 @@ namespace OpenAstroAra.Test {
             service = new FaultReactionService(
                 hub: null, reconnector.Object, profiles.Object, () => sequencer.Object,
                 telescope.Object, notifications.Object, ws.Object,
-                polarAlignResolver: () => polar.Object, polarAligner: aligner.Object) {
+                occupancy: new RigOccupancy().RegisterPolarAlign(() => polar.Object), polarAligner: aligner.Object) {
                 DelayShaper = _ => TimeSpan.Zero,
             };
 
@@ -193,6 +193,28 @@ namespace OpenAstroAra.Test {
 
             Assert.That(calls, Is.EqualTo(PolarAlignThenAlignerThenPark));
             polar.Verify(p => p.StopAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Never, "not the Stop that confirms its own stop first");
+        }
+
+        // #2142 — the fault park ends a Center under way first: its next attempt does not slew against the park.
+        [Test]
+        public async Task A_fault_park_ends_a_center_under_way_first() {
+            using var center = await RunningCenter.StartAsync();
+            service.Dispose();
+            service = new FaultReactionService(
+                hub: null, reconnector.Object, profiles.Object, () => sequencer.Object,
+                telescope.Object, notifications.Object, ws.Object,
+                occupancy: new RigOccupancy().RegisterCenter(() => center.Service)) {
+                DelayShaper = _ => TimeSpan.Zero,
+            };
+
+            for (var i = 0; i < 3; i++) {
+                service.OnFault(Fault(DeviceType.Telescope, EquipmentFaultKind.StallTimeout));
+                await service.WhenIdleAsync();
+            }
+            await center.ReleaseNextAttemptAsync();
+
+            telescope.Verify(t => t.ParkAsync(It.IsAny<ParkRequestDto>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Once);
+            Assert.That(center.Slewed(), Is.False, "the Center slewed after the fault park");
         }
 
         // #2066 — a polar alignment that hangs on its stop must not hold the fault park back.
@@ -206,9 +228,9 @@ namespace OpenAstroAra.Test {
             service = new FaultReactionService(
                 hub: null, reconnector.Object, profiles.Object, () => sequencer.Object,
                 telescope.Object, notifications.Object, ws.Object,
-                polarAlignResolver: () => polar.Object) {
+                occupancy: new RigOccupancy().RegisterPolarAlign(() => polar.Object)) {
                 DelayShaper = _ => TimeSpan.Zero,
-                StopPolarAlignBeforeParkTimeout = TimeSpan.FromMilliseconds(50),
+                StopRoutinesBeforeParkTimeout = TimeSpan.FromMilliseconds(50),
             };
 
             for (var i = 0; i < 3; i++) {

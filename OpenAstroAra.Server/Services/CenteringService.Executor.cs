@@ -44,6 +44,8 @@ public sealed partial class CenteringService : ICenteringExecutor {
     /// <inheritdoc/>
     public async Task<CenteringResult> CenterAsync(Coordinates target, IProgress<ApplicationStatus> progress, CancellationToken token) {
         ArgumentNullException.ThrowIfNull(target);
+        using var stoppable = Stoppable(token);
+        token = stoppable.Token;
         await _centeringGate.WaitAsync(token);
         try {
             if (!await SlewToTargetAsync(target, token)) {
@@ -62,6 +64,8 @@ public sealed partial class CenteringService : ICenteringExecutor {
         ArgumentNullException.ThrowIfNull(target);
         var rotator = rotatorMediator ?? throw new PlateSolverConfigurationException(
             "Cannot rotate: no rotator mediator is wired into the centering service.");
+        using var stoppable = Stoppable(token);
+        token = stoppable.Token;
         await _centeringGate.WaitAsync(token);
         try {
             if (!await SlewToTargetAsync(target, token)) {

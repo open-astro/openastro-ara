@@ -57,6 +57,10 @@ public static class MountStopReasons {
     /// <summary>The equipment-fault park taking the mount from Polar Align (<see cref="IPolarAlignService.StopForTakeoverAsync"/>).</summary>
     public const string FaultPark = "fault_park";
 
+    /// <summary>End Night's and the unattended shutdown's ladder taking the mount from the routines on the rig (#2142;
+    /// the same text as before for Polar Align's log).</summary>
+    public const string Shutdown = "shutdown";
+
     /// <summary>Who stopped the mount, for an English sentence: "the mount was stopped (…)". Null or unknown reads as
     /// Stop Mount, the stop with no other name.</summary>
     public static string Describe(string? reason) => reason switch {

@@ -132,7 +132,7 @@ namespace OpenAstroAra.Test {
                 return runAbortGate.Task;
             });
             var es = new EmergencyStopService(sequencerResolver: () => sequencer.Object,
-                telescope: (ITelescopeService)mount.Mock.Object, polarAlign: svc);
+                telescope: (ITelescopeService)mount.Mock.Object, occupancy: new RigOccupancy().RegisterPolarAlign(() => svc));
 
             var at = mount.Count;
             var stop = es.ExecuteAsync();

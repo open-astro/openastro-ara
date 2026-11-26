@@ -9,6 +9,7 @@ using OpenAstroAra.Server.Contracts.WsEvents;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
+using System.Linq;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Threading;
@@ -24,10 +25,10 @@ namespace OpenAstroAra.Server.Services;
 /// turn the dome's follow-the-mount off (#1689), then abort active sequence runs (so a still-running instruction can't
 /// start a fresh exposure or slew behind the stop), then stop the mount where it is, stop the Polar Aligner, halt the rotator
 /// where it is (aborting a run only stops the sequencer waiting on its move,
-/// #1671), abort the in-flight exposure, stop the guide-camera focus loop, the Bahtinov readout,
-/// a running autofocus and polar alignment (told to leave the mount to this ladder: it confirms no stop of its own, which
-/// could outlast its rung), stop guiding, stop the mount and the Polar Aligner again if a polar alignment
-/// was running, switch the flat panel's light off, and switch the camera's cooler off. Every rung is best-effort — a
+/// #1671), abort the in-flight exposure, stop the guide-camera focus loop, the Bahtinov readout and
+/// a running autofocus, stop every routine in <see cref="RigOccupancy"/> (#2142: the mount's holders first — polar
+/// alignment, told to leave the mount to this ladder, and Center), stop guiding, stop the mount and the Polar Aligner
+/// again if a routine that holds the mount was running, switch the flat panel's light off, and switch the camera's cooler off. Every rung is best-effort — a
 /// dead device must never block the remaining rungs — and the result reports honestly what each rung did.
 /// The <c>safety.emergency_stop</c> WS event fires up-front so WILMA can
 /// show the stop banner while the daemon works.
@@ -44,7 +45,7 @@ public sealed partial class EmergencyStopService {
     private readonly IGuideFocusService? _guideFocus;
     private readonly IBahtinovFocusService? _bahtinov;
     private readonly AutofocusRunTracker? _autofocus;
-    private readonly IPolarAlignService? _polarAlign;
+    private readonly RigOccupancy? _occupancy;
     private readonly INotificationService? _notifications;
     private readonly IWsBroadcaster? _ws;
     // #1689 — Func<>: the follower is registered after this service.
@@ -61,8 +62,9 @@ public sealed partial class EmergencyStopService {
     // instead of stalling the ladder behind it and wedging the single-flight
     // gate for the rest of the session — abort_exposure in particular blocks
     // on the real Alpaca HTTP call, unlike the 202-style rungs. 10 s per rung
-    // puts the worst-case ladder at 17 rungs (abort runs, 12 single rungs, two
-    // mount passes of two), 170 s on a healthy pool.
+    // puts the worst-case ladder at 16 rungs plus one per Rig Occupancy routine
+    // (abort runs, 11 single rungs, two mount passes of two; #2142: polar
+    // alignment and Center today), 180 s on a healthy pool.
     // #1985 — the window covers the connected probe and the action's synchronous prefix too.
     // Both run on a dedicated thread, so a probe that never completes or a prefix that blocks
     // holds neither the caller nor the ladder, and a rung whose work completes synchronously
@@ -85,7 +87,7 @@ public sealed partial class EmergencyStopService {
             IGuideFocusService? guideFocus = null,
             IBahtinovFocusService? bahtinov = null,
             AutofocusRunTracker? autofocus = null,
-            IPolarAlignService? polarAlign = null,
+            RigOccupancy? occupancy = null,
             Func<DomeFollower?>? domeFollower = null,
             IPolarAlignerService? polarAligner = null) {
         _domeFollower = domeFollower;
@@ -99,7 +101,7 @@ public sealed partial class EmergencyStopService {
         _guideFocus = guideFocus;
         _bahtinov = bahtinov;
         _autofocus = autofocus;
-        _polarAlign = polarAlign;
+        _occupancy = occupancy;
         _notifications = notifications;
         _ws = ws;
         _logger = logger ?? NullLogger<EmergencyStopService>.Instance;
@@ -191,20 +193,21 @@ public sealed partial class EmergencyStopService {
             _autofocus is null ? null : () => Task.FromResult(_autofocus.IsRunning),
             _autofocus is null ? null : _ => { _autofocus.TryCancel(); return Task.CompletedTask; }).ConfigureAwait(false);
         if (autofocusOutcome is RungOutcome.Failed) { failedRungs.Add("cancel_autofocus"); }
-        // Only a routine that runs (homing, seeding, adjusting, paused or checking — the service's own
-        // IsActive, not a list of states a new stage can outgrow): a stray Stop would clear a finished
-        // alignment's result.
-        var polarOutcome = await RungAsync("stop polar alignment",
-            _polarAlign is null ? null : () => Task.FromResult(_polarAlign.IsActive),
-            _polarAlign is null ? null : async ct => await _polarAlign.StopForTakeoverAsync(MountStopReasons.EmergencyStop, ct).ConfigureAwait(false)).ConfigureAwait(false);
-        if (polarOutcome is RungOutcome.Failed) { failedRungs.Add("stop_polar_align"); }
+        // #2142 — every routine the register knows, by its own stop, each bounded like a rung. Only a routine that runs
+        // (its own reading): a stray Stop would clear a finished polar alignment's result.
+        var routineStops = await StopRoutinesQuietlyAsync().ConfigureAwait(false);
+        foreach (var stop in routineStops.Where(s => !s.Stopped)) {
+            LogRoutineNotStopped(stop.Name, stop.Fault);
+            if (!failedRungs.Contains(stop.FailedRung)) { failedRungs.Add(stop.FailedRung); }
+        }
         var guidingOutcome = await RungAsync("stop guiding",
             _guider is null ? null : async () => (await _guider.GetAsync(CancellationToken.None).ConfigureAwait(false))?.State == EquipmentConnectionState.Connected,
             _guider is null ? null : async ct => await _guider.StopGuidingAsync(null, ct).ConfigureAwait(false)).ConfigureAwait(false);
         if (guidingOutcome is RungOutcome.Failed) { failedRungs.Add("stop_guiding"); }
-        // Polar alignment can move the mount and turn tracking on until its Stop lands, and it drives the Polar Aligner: both
-        // are stopped again (#2066 — the routine leaves the mount's stop to this ladder).
-        if (polarOutcome is not RungOutcome.NotAvailable) {
+        // A routine that holds the mount (polar alignment, Center) can move it and turn tracking on until its stop lands, and
+        // polar alignment drives the Polar Aligner: both are stopped again (#2066 — the routine leaves the mount's stop to
+        // this ladder).
+        if (routineStops.Any(s => (s.Holds & RigHolding.Mount) != 0)) {
             await StopMountAsync("again").ConfigureAwait(false);
             var alignerAgain = await RungAsync("stop polar aligner (again)",
                 _polarAligner is null ? null : () => Task.FromResult(_polarAligner.IsPresent),
@@ -274,6 +277,20 @@ public sealed partial class EmergencyStopService {
             _telescope?.FenceMotion(MountStopReasons.EmergencyStop);
         } catch (Exception ex) {
             LogRungFailed("latch the stop", ex);
+        }
+    }
+
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Best-effort rung: the register never throws, but a fault here must not block the rungs behind it; logged, never rethrown.")]
+    private async Task<IReadOnlyList<RoutineStop>> StopRoutinesQuietlyAsync() {
+        if (_occupancy is null) {
+            return [];
+        }
+        try {
+            return await _occupancy.StopAsync(RigHolding.Any, MountStopReasons.EmergencyStop, RungTimeout).ConfigureAwait(false);
+        } catch (Exception ex) {
+            LogRungFailed("stop routines", ex);
+            return [];
         }
     }
 
@@ -417,6 +434,9 @@ public sealed partial class EmergencyStopService {
 
     [LoggerMessage(EventId = 3536, Level = LogLevel.Warning, Message = "§35.3 emergency stop rung '{Rung}' timed out after {TimeoutSeconds}s — treating as failed; the ladder continues")]
     private partial void LogRungTimedOut(string rung, double timeoutSeconds);
+
+    [LoggerMessage(EventId = 3537, Level = LogLevel.Warning, Message = "§35.3 emergency stop: {Routine} did not confirm its stop — the ladder continues")]
+    private partial void LogRoutineNotStopped(string routine, Exception? exception);
 
     [LoggerMessage(EventId = 3535, Level = LogLevel.Warning, Message = "§35.3 WS publish of {EventType} failed")]
     private partial void LogWsPublishFailed(string eventType, Exception exception);

@@ -38,6 +38,23 @@ public sealed partial class CenteringService : ICenteringService, IDisposable {
     // and nothing else takes it: a held gate is a centering under way.
     public bool IsCentering => _centeringGate.CurrentCount == 0;
 
+    // #2142 — every centering path links its token to this source; StopAsync cancels it and puts a fresh one in place,
+    // so a Center queued on the gate ends too and the next Center starts clean.
+    // shortcut: a replaced source is not disposed (it has no timer, so it holds nothing); disposing it could race a Center
+    // that is just linking to it.
+    private CancellationTokenSource _stop = new();
+
+    public async Task StopAsync(CancellationToken ct) {
+        await Interlocked.Exchange(ref _stop, new CancellationTokenSource()).CancelAsync().ConfigureAwait(false);
+        while (IsCentering) {
+            await Task.Delay(20, ct).ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>The caller's token, also cancelled by <see cref="StopAsync"/>.</summary>
+    private CancellationTokenSource Stoppable(CancellationToken token) =>
+        CancellationTokenSource.CreateLinkedTokenSource(token, Volatile.Read(ref _stop).Token);
+
     private readonly IProfileService profileService;
     private readonly IProfileStore? profileStore;
     private readonly IPlateSolverFactory plateSolverFactory;
@@ -73,6 +90,8 @@ public sealed partial class CenteringService : ICenteringService, IDisposable {
             IProgress<ApplicationStatus>? progress, CancellationToken token) {
         ArgumentNullException.ThrowIfNull(target);
 
+        using var stoppable = Stoppable(token);
+        token = stoppable.Token;
         await _centeringGate.WaitAsync(token);
         try {
             return await CenterCoreAsync(target, solveProgress, progress, token);
@@ -130,6 +149,7 @@ public sealed partial class CenteringService : ICenteringService, IDisposable {
 
     public void Dispose() {
         _centeringGate.Dispose();
+        _stop.Dispose();
         GC.SuppressFinalize(this);
     }
 }
