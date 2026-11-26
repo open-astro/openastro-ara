@@ -44,7 +44,6 @@ public sealed partial class EmergencyStopService {
     private readonly IRotatorService? _rotator;
     private readonly IGuideFocusService? _guideFocus;
     private readonly IBahtinovFocusService? _bahtinov;
-    private readonly AutofocusRunTracker? _autofocus;
     private readonly RigOccupancy? _occupancy;
     private readonly INotificationService? _notifications;
     private readonly IWsBroadcaster? _ws;
@@ -86,7 +85,6 @@ public sealed partial class EmergencyStopService {
             IRotatorService? rotator = null,
             IGuideFocusService? guideFocus = null,
             IBahtinovFocusService? bahtinov = null,
-            AutofocusRunTracker? autofocus = null,
             RigOccupancy? occupancy = null,
             Func<DomeFollower?>? domeFollower = null,
             IPolarAlignerService? polarAligner = null) {
@@ -100,7 +98,6 @@ public sealed partial class EmergencyStopService {
         _rotator = rotator;
         _guideFocus = guideFocus;
         _bahtinov = bahtinov;
-        _autofocus = autofocus;
         _occupancy = occupancy;
         _notifications = notifications;
         _ws = ws;
@@ -189,10 +186,6 @@ public sealed partial class EmergencyStopService {
             _bahtinov is null ? null : () => Task.FromResult(_bahtinov.IsActive),
             _bahtinov is null ? null : _ => _bahtinov.StopAsync()).ConfigureAwait(false);
         if (bahtinovOutcome is RungOutcome.Failed) { failedRungs.Add("stop_bahtinov"); }
-        var autofocusOutcome = await RungAsync("cancel autofocus",
-            _autofocus is null ? null : () => Task.FromResult(_autofocus.IsRunning),
-            _autofocus is null ? null : _ => { _autofocus.TryCancel(); return Task.CompletedTask; }).ConfigureAwait(false);
-        if (autofocusOutcome is RungOutcome.Failed) { failedRungs.Add("cancel_autofocus"); }
         // #2142 — every routine the register knows, by its own stop, each bounded like a rung. Only a routine that runs
         // (its own reading): a stray Stop would clear a finished polar alignment's result.
         var routineStops = await StopRoutinesQuietlyAsync().ConfigureAwait(false);

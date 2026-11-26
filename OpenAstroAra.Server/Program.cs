@@ -352,7 +352,8 @@ public partial class Program {
         builder.Services.AddSingleton(sp => new RigOccupancy()
             .RegisterSession(sp.GetRequiredService<ActiveRunSessionRegistry>(), () => sp.GetService<ISequencerService>())
             .RegisterPolarAlign(() => sp.GetService<IPolarAlignService>())
-            .RegisterCenter(() => sp.GetService<ICenteringService>()));
+            .RegisterCenter(() => sp.GetService<ICenteringService>())
+            .RegisterAutofocus(() => sp.GetService<AutofocusRunTracker>()));
         // Singleton on purpose: the service sweeps stale request/result files from the storage
         // exchange in its constructor (#1135), which is only safe because exactly one instance is
         // built — resolved eagerly after Build() below, so the sweep really runs at boot and
@@ -1141,7 +1142,6 @@ public partial class Program {
                 sp.GetService<IRotatorService>(),
                 sp.GetService<IGuideFocusService>(),
                 sp.GetService<IBahtinovFocusService>(),
-                sp.GetService<AutofocusRunTracker>(),
                 sp.GetService<RigOccupancy>(),
                 () => sp.GetService<DomeFollower>(),
                 sp.GetService<IPolarAlignerService>()));
@@ -1355,9 +1355,7 @@ public partial class Program {
                     ? new SyntheticBahtinovFrameSource(sp.GetRequiredService<OpenAstroAra.Equipment.Interfaces.Mediator.IFocuserMediator>(), sky)
                     : sp.GetRequiredService<IAnalysisFrameSource>(),
                 () => BahtinovOpticsFor(sp.GetRequiredService<IProfileStore>()),
-                () => sp.GetRequiredService<AutofocusRunTracker>().IsRunning ? "an autofocus run is in progress"
-                    : sp.GetRequiredService<RigOccupancy>().Holder(RigHolding.MainCamera) is { } holder ? $"{holder} is running"
-                    : null,
+                () => sp.GetRequiredService<RigOccupancy>().Holder(RigHolding.MainCamera) is { } holder ? $"{holder} is running" : null,
                 sp.GetRequiredService<ILogger<BahtinovFocusService>>(),
                 // The AF exposure stands in when a start leaves its own out.
                 defaultExposure: () => sp.GetRequiredService<IProfileStore>().GetAutofocusSettings().ExposureSeconds));

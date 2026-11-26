@@ -133,7 +133,8 @@ namespace OpenAstroAra.Test {
                 builder.Services.AddSingleton(profile.Object);
                 builder.Services.AddSingleton(Runs);
                 builder.Services.AddSingleton(new RigOccupancy().RegisterSession(Runs, () => null)
-                    .Register("polar alignment", RigHolding.Mount | RigHolding.MainCamera | RigHolding.GuideCamera, () => PolarAligning));
+                    .Register("polar alignment", RigHolding.Mount | RigHolding.MainCamera | RigHolding.GuideCamera, () => PolarAligning)
+                    .RegisterAutofocus(() => Tracker));
                 builder.Services.AddSingleton(Bahtinov.Object);
                 builder.Services.AddSingleton(GuideFocus.Object);
                 builder.Services.AddSingleton<FilterOffsetCalibrationService>();
@@ -354,7 +355,7 @@ namespace OpenAstroAra.Test {
 
         [TestCase("plan", "a sequence is running")]
         [TestCase("polar_align", "polar alignment is running")]
-        [TestCase("autofocus", "an autofocus run is in progress")]
+        [TestCase("autofocus", "autofocus is running")]
         [TestCase("bahtinov", "the Bahtinov focus readout is running")]
         [TestCase("guide_focus", "guide-camera focus is running")]
         [TestCase("calibration", "an offset calibration is already running")]

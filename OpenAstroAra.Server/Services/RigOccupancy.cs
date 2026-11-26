@@ -94,6 +94,22 @@ public sealed class RigOccupancy {
             () => centering()?.IsCentering == true,
             (_, ct) => centering()?.StopAsync(ct) ?? Task.CompletedTask);
 
+    /// <summary>#2143 — autofocus: a run in progress. Its stop cancels the run and waits for it to end (the run puts the
+    /// focuser back where it started first).</summary>
+    public RigOccupancy RegisterAutofocus(Func<AutofocusRunTracker?> autofocus) =>
+        Register("autofocus", RigHolding.MainCamera | RigHolding.Focuser,
+            () => autofocus()?.IsRunning == true,
+            (_, ct) => CancelThenWaitAsync(() => autofocus()?.TryCancel(), () => autofocus()?.IsRunning == true, ct),
+            failedRung: "cancel_autofocus");
+
+    /// <summary>A stop for a routine whose cancel only asks: ask, then wait until its reading says it ended.</summary>
+    private static async Task CancelThenWaitAsync(Action cancel, Func<bool> isRunning, CancellationToken ct) {
+        cancel();
+        while (isRunning()) {
+            await Task.Delay(20, ct).ConfigureAwait(false);
+        }
+    }
+
     /// <summary>The name of the first running routine that holds any of <paramref name="holding"/>, or null when
     /// none does.</summary>
     public string? Holder(RigHolding holding = RigHolding.Any) {
