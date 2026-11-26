@@ -50,6 +50,10 @@ _Avoid_: lease (the guider program's own word), lock
 What is running on the rig and what each routine holds (the mount, a camera, the focuser, the disk).
 _Avoid_: busy (a question asked of it), lock
 
+**Move Admission**:
+The rig's one answer to "may this asker move the mount there?": every slew to a target, park and home names who asks, and the Telescope service checks it for that asker's rules before anything reaches the mount.
+_Avoid_: guard (one rule of it), pre-check
+
 **Polar Align Routine**:
 The steps that measure the polar alignment error while the mount's polar axis is turned, by the person on the mount's bolts or by a Polar Aligner.
 _Avoid_: Polar Align session, Polar Align run
