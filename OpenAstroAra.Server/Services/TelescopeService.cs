@@ -240,7 +240,7 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
 
     /// <summary>A person's GoTo or sync (the REST endpoint). #2139 — a GoTo is checked by Move Admission's person row
     /// (record 0026), in the order the endpoint and this service checked it before: Polar Align moving and the motion
-    /// owner, the mount held (<see cref="RunInProgressException"/>), the range, the horizon, the counterweight, then the
+    /// owner, the mount held (<see cref="MountHeldException"/>), the range, the horizon, the counterweight, then the
     /// connection, the clock and the position. A sync is not a move: it keeps its own checks (the range, the clock; the
     /// endpoint checks Polar Align and the owner for it).</summary>
     public Task<OperationAcceptedDto> SlewAsync(SlewRequestDto request, string? idempotencyKey, CancellationToken ct) {
@@ -266,7 +266,7 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
         }
         if (MoveAdmission.Binds(MoveAsker.Person, kind, MoveRule.MountHeld)
                 && MoveAdmission.MountHeldRefusal(_occupancyResolver?.Invoke()?.Holders(RigHolding.Mount) ?? [], forced, kind) is { } held) {
-            throw new RunInProgressException(held);
+            throw held;
         }
     }
 

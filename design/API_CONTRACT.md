@@ -1205,7 +1205,7 @@ and dragged the fitted minimum up and sideways. Dropped probes stay in `probes` 
 
 **Reasoning:** rig night 2026-10-18: a Planning GoTo was accepted mid-dither, the guider stopped (stop-guiding-when-slewing) and the run parked awaiting the user, with nothing to say a run was active. Pausing is the safe outcome; the user should be told first.
 
-**Spec ref:** `OpenAstroAra.Server/openapi.yaml#/paths/~1api~1v1~1equipment~1telescope~1slew`; `Endpoints/EquipmentEndpoints.cs` (`SlewAsync`), `Services/MoveAdmission.cs` (`RunActiveRefusal`, #2139), `Services/SequencerService.cs` / `PlaceholderSequenceServices.cs` (`ActiveRunIdsAsync`); tests `EquipmentEndpointsSlewTest`, `SequencerServiceTest`, client `equipment_mount_panel_test`.
+**Spec ref:** `OpenAstroAra.Server/openapi.yaml#/paths/~1api~1v1~1equipment~1telescope~1slew`; `Endpoints/EquipmentEndpoints.cs` (`SlewAsync`), `Services/MoveAdmission.cs` (`MountHeldRefusal`, #2139/#2140), `Services/SequencerService.cs` / `PlaceholderSequenceServices.cs` (`ActiveRunIdsAsync`); tests `EquipmentEndpointsSlewTest`, `SequencerServiceTest`, client `equipment_mount_panel_test`.
 
 **Related:** CHANGELOG [Unreleased]; #1364 rig checklist.
 
@@ -1845,7 +1845,7 @@ The push applies the same limits to values already saved: a bad value is left ou
 
 **Reasoning:** a GoTo under the horizon points the telescope at the ground or a building. The check is the one the Resume refinement and the re-center already used (`HorizonGuard`), so the three callers cannot disagree about where the horizon is.
 
-**Spec ref:** `Services/HorizonGuard.cs`, `Services/MoveAdmission.cs` (`ThrowIfBelowHorizon`), `Services/TelescopeService.cs` (`SlewAdmittedAsync`; #2139), `Contracts/Refusals/RefusalCatalog.cs`. Tests `GotoHorizonRefusalTest`, `RefusalHandlerTest`; client `lib/services/refusal.dart`.
+**Spec ref:** `Services/HorizonGuard.cs`, `Services/MoveAdmission.cs` (`LimitRefusal`), `Services/TelescopeService.cs` (`SlewAdmittedAsync`; #2139), `Contracts/Refusals/RefusalCatalog.cs`. Tests `GotoHorizonRefusalTest`, `RefusalHandlerTest`; client `lib/services/refusal.dart`.
 
 **Related:** #2044, #1847, ADR 0022
 
@@ -1921,7 +1921,7 @@ The push applies the same limits to values already saved: a bad value is left ou
 
 **Reasoning:** on 2026-11-19 four GoTos from the Mount panel were refused by the mount ("SlewToCoordinatesAsync requires Tracking to be true") and Ara showed no reason. Two of them were at hour angle ≈ −11.1 h, counterweight-up on the HAE29C, and only the tracking refusal stopped them. Turning tracking on removes that accidental barrier, so the counterweight check ships with it. Above the pole a target near the meridian also has φ near 90°, but that is the normal meridian-flip zone, so only targets below the pole are checked.
 
-**Spec ref:** `Services/CounterweightGuard.cs`, `Services/TelescopeService.cs` (`SlewInBackground`), `Services/MoveAdmission.cs` (`ThrowIfPastCounterweight`), `Services/TelescopeService.cs` (`SlewAdmittedAsync`; #2139), `Contracts/Refusals/RefusalCatalog.cs`. Tests `GotoCounterweightRefusalTest`, `TelescopeRestGotoTrackingTest`, `RefusalHandlerTest`; client `lib/services/refusal.dart`.
+**Spec ref:** `Services/CounterweightGuard.cs`, `Services/TelescopeService.cs` (`SlewInBackground`), `Services/MoveAdmission.cs` (`LimitRefusal`), `Services/TelescopeService.cs` (`SlewAdmittedAsync`; #2139), `Contracts/Refusals/RefusalCatalog.cs`. Tests `GotoCounterweightRefusalTest`, `TelescopeRestGotoTrackingTest`, `RefusalHandlerTest`; client `lib/services/refusal.dart`.
 
 **Related:** #2073, #2048, #2070, ADR 0022
 
@@ -2139,9 +2139,9 @@ The push applies the same limits to values already saved: a bad value is left ou
 
 ## 2026-11-25 — #2140 position limits bind every asker; a person's move asks what holds the mount; `mount_parked`
 
-**Endpoint(s) or area:** `POST /api/v1/equipment/telescope/slew`, `/park`, `/home` (409 `run_in_progress`, new 409 `mount_parked` on `/home`); the sequencer's GoTo, Center and the meridian flip (no endpoint: the instruction fails, and a Warning notification in the Sequence category is posted).
+**Endpoint(s) or area:** `POST /api/v1/equipment/telescope/slew`, `/park`, `/home` (409 `run_in_progress`, new 409 `mount_held`, new 409 `mount_parked` on `/home`); the sequencer's GoTo, Center and the meridian flip (no endpoint: the instruction fails, and a Warning notification in the Sequence category is posted).
 
-**Decision:** the lowest altitude (`below-horizon-limit`) and the counterweight (`counterweight-limit`) now refuse a Session's GoTo, a Center and a meridian flip too, not only a person's GoTo: the instruction fails carrying the Refusal, a notice says why ("GoTo refused — the target is below the horizon limit" / "— past the counterweight limit"), and the flip's flight check refuses with the Refusal's text and cause token. The safety and fault parks, the shutdown park and Emergency Stop are never refused by a position limit; no position limit binds a park or a home. A person's GoTo, park and home answer `run_in_progress` while anything holds the mount in Rig Occupancy (a Session, a polar alignment, a Center, and End Night once #2143 registers it; not Live View or the camera routines); `force` skips only a Session, and only for a GoTo; the text names the holder ("a sequence is running: …", "centering is running and holds the mount, so the GoTo was not sent. Stop it first."). A person's Find Home from a parked mount answers 409 `mount_parked`; a park on a parked mount is accepted. The client keys on the titles, not the texts.
+**Decision:** the lowest altitude (`below-horizon-limit`) and the counterweight (`counterweight-limit`) now refuse a Session's GoTo, a Center and a meridian flip too, not only a person's GoTo: the instruction fails carrying the Refusal, a notice says why ("GoTo refused — the target is below the horizon limit" / "— past the counterweight limit"), and the flip's flight check refuses with the Refusal's text and cause token. The safety and fault parks, the shutdown park and Emergency Stop are never refused by a position limit; no position limit binds a park or a home. A person's GoTo, park and home are refused while anything holds the mount in Rig Occupancy (a Session, a polar alignment, a Center or End Night; not Live View or the camera routines): a Session answers `run_in_progress`, and `force` skips it, only for a GoTo; any other holder answers `mount_held`, which `force` does not skip, so the client does not offer to force it. The text names the holder ("a sequence is running: …", "centering is running and holds the mount, so the GoTo was not sent. Stop it first."). A person's Find Home from a parked mount answers 409 `mount_parked`; a park on a parked mount is accepted. The client keys on the titles, not the texts.
 
 **Reasoning:** #2140 (Diego, 2026-11-21): a limit the person set protects the rig only when every asker is bound by it. The open points were settled by the user on 2026-11-25 (the position check #2070 stays on park and home; "the mount is held" binds only a person; `force` skips only a sequence; a home from park is refused).
 

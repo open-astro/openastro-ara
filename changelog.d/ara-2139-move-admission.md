@@ -1,2 +1,2 @@
 ### Changed (internal)
-- **One module admits every mount move** (#2139): whether a GoTo, park or home may go is now decided in one place in the daemon, Move Admission, which checks each asker (a person, a Session, Center, the meridian flip, the shutdown, a safety park) for the same rules as before. Nothing changes at the rig: the same moves are refused with the same messages. Later limits are added there once (#2140).
+- **One module admits every mount move** (#2139): whether a GoTo, park or home may go is now decided in one place in the daemon, Move Admission, which checks each asker (a person, a Session, Center, the meridian flip, the shutdown, a safety park) against one table of rules. A new limit is added there once.

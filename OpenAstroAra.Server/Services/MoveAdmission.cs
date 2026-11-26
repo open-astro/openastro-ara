@@ -43,7 +43,7 @@ public enum MoveRule {
     /// <summary>Polar Align is not turning the mount, and its stop is confirmed (#2066).</summary>
     PolarAlignMoving = 32,
     /// <summary>#2140 — nothing holds the mount in Rig Occupancy (record 0025: a Session, polar alignment, Center; End
-    /// Night once #2143 registers it); <c>force</c> skips only a Session, for a GoTo (<c>run_in_progress</c>).</summary>
+    /// Night); <c>force</c> skips only a Session, for a GoTo (<c>run_in_progress</c>; any other holder is <c>mount_held</c>).</summary>
     MountHeld = 64,
     /// <summary>A position limit: the target is above the profile's lowest altitude (#2044).</summary>
     Horizon = 128,
@@ -52,11 +52,21 @@ public enum MoveRule {
 }
 
 /// <summary>A person's move refused while something holds the mount (#2140: Rig Occupancy). The REST endpoints answer it
-/// as the 409 Problem <c>run_in_progress</c>; its text names the holder.</summary>
-public sealed class RunInProgressException : InvalidOperationException {
-    public RunInProgressException() { }
-    public RunInProgressException(string message) : base(message) { }
-    public RunInProgressException(string message, Exception innerException) : base(message, innerException) { }
+/// as a 409 Problem with <see cref="Title"/>: <c>run_in_progress</c> when only a Session holds the mount (a GoTo may repeat
+/// forced), <c>mount_held</c> for any other holder (nothing forces past it). Its text names the holder.</summary>
+public sealed class MountHeldException : InvalidOperationException {
+    /// <summary>The 409 title for a Session: the client may ask the user and repeat the GoTo forced.</summary>
+    public const string RunInProgress = "run_in_progress";
+    /// <summary>The 409 title for a holder other than a Session: <c>force</c> does not skip it.</summary>
+    public const string MountHeld = "mount_held";
+
+    public MountHeldException() { }
+    public MountHeldException(string message) : base(message) { }
+    public MountHeldException(string message, Exception innerException) : base(message, innerException) { }
+    public MountHeldException(string title, string message) : base(message) => Title = title;
+
+    /// <summary>The 409 Problem title.</summary>
+    public string Title { get; } = RunInProgress;
 }
 
 /// <summary>#2140 — a Find Home asked of a parked mount. The REST endpoint answers it as the 409 Problem
@@ -99,26 +109,28 @@ public static class MoveAdmission {
     /// <summary>Whether <paramref name="rule"/> binds <paramref name="asker"/>'s <paramref name="kind"/>.</summary>
     public static bool Binds(MoveAsker asker, MoveKind kind, MoveRule rule) => (RulesFor(asker, kind) & rule) != 0;
 
-    /// <summary>#2140 — the <c>run_in_progress</c> text for a person's move while <paramref name="holders"/> (the
-    /// <see cref="RigOccupancy"/> names of what holds the mount, in registration order) are running, or null when it may go
-    /// ahead: nothing holds it, or the person forced a GoTo and only a Session holds it (<paramref name="forced"/>; nothing
-    /// else can be forced). The text names the holder: a routine beside the Session before the Session.</summary>
-    internal static string? MountHeldRefusal(IEnumerable<string> holders, bool forced, MoveKind kind) {
+    /// <summary>#2140 — the refusal of a person's move while <paramref name="holders"/> (the <see cref="RigOccupancy"/>
+    /// names of what holds the mount, in registration order) are running, or null when it may go ahead: nothing holds it,
+    /// or the person forced a GoTo and only a Session holds it (<paramref name="forced"/>; nothing else can be forced). The
+    /// text names the holder: a routine beside the Session before the Session, as <c>mount_held</c>.</summary>
+    internal static MountHeldException? MountHeldRefusal(IEnumerable<string> holders, bool forced, MoveKind kind) {
         ArgumentNullException.ThrowIfNull(holders);
         var held = holders.ToList();
         if (held.FirstOrDefault(h => h != RigOccupancy.Session) is { } other) {
             var what = kind switch { MoveKind.Slew => "GoTo", MoveKind.Park => "park", _ => "Find Home" };
-            return $"{other} is running and holds the mount, so the {what} was not sent. Stop it first.";
+            return new MountHeldException(MountHeldException.MountHeld,
+                $"{other} is running and holds the mount, so the {what} was not sent. Stop it first.");
         }
         if (held.Count == 0) {
             return null;
         }
-        return kind switch {
+        var text = kind switch {
             MoveKind.Slew when forced => null,
             MoveKind.Slew => "a sequence is running: slewing now stops guiding and pauses the run awaiting you. Repeat with force to slew anyway.",
             MoveKind.Park => "a sequence is running: stop it before you park the mount.",
             _ => "a sequence is running: stop it before you send the mount home.",
         };
+        return text is null ? null : new MountHeldException(MountHeldException.RunInProgress, text);
     }
 
     /// <summary>#2140 — the position-limit Refusal for <paramref name="asker"/>'s GoTo to <paramref name="target"/>, or

@@ -51,9 +51,9 @@ namespace OpenAstroAra.Test {
         [Test]
         public void A_slew_during_a_run_is_refused_with_the_reason_and_the_way_out() {
             var refusal = MoveAdmission.MountHeldRefusal([RigOccupancy.Session], forced: false, MoveKind.Slew);
-            Assert.That(refusal, Does.Contain("a sequence is running").And.Contain("stops guiding").And.Contain("force"));
+            Assert.That(refusal?.Message, Does.Contain("a sequence is running").And.Contain("stops guiding").And.Contain("force"));
             // #2140 — another holder is named, and the text offers no force: force skips only a sequence.
-            Assert.That(MoveAdmission.MountHeldRefusal(["centering"], forced: false, MoveKind.Slew),
+            Assert.That(MoveAdmission.MountHeldRefusal(["centering"], forced: false, MoveKind.Slew)?.Message,
                 Does.Contain("centering is running").And.Not.Contain("force"));
         }
 
@@ -152,12 +152,13 @@ namespace OpenAstroAra.Test {
         }
 
         // #2140 (C1) — a holder of the mount other than a sequence (a Center, a polar alignment, End Night) refuses a GoTo
-        // even with force; the 409 keeps the title run_in_progress and its text names the holder.
+        // even with force; the 409 says so with the title mount_held (not run_in_progress, which the client offers to force)
+        // and its text names the holder.
         [Test]
         public async Task A_forced_goto_while_a_center_holds_the_mount_is_refused_naming_it() {
             using var rig = await FakeMountRig.ConnectAsync(occupancy: HeldBy.Mount("centering"));
             var refused = await EquipmentEndpoints.SlewAsync(new SlewRequestDto(5.5, -12.25, Force: true), null, rig.Service, CancellationToken.None);
-            Assert.That((refused as ProblemHttpResult)?.ProblemDetails.Title, Is.EqualTo("run_in_progress"));
+            Assert.That((refused as ProblemHttpResult)?.ProblemDetails.Title, Is.EqualTo("mount_held"));
             Assert.That((refused as ProblemHttpResult)?.ProblemDetails.Detail, Does.Contain("centering is running"));
             await Task.Delay(100);
             Assert.That(rig.Fake.Slews, Is.Zero);
@@ -227,7 +228,7 @@ namespace OpenAstroAra.Test {
         public void A_forced_slew_and_a_sync_go_ahead_during_a_run() {
             Assert.That(MoveAdmission.MountHeldRefusal([RigOccupancy.Session], forced: true, MoveKind.Slew), Is.Null, "the caller was told and said yes");
             Assert.That(MoveAdmission.MountHeldRefusal(["centering"], forced: true, MoveKind.Slew), Is.Not.Null, "#2140 — force skips only a sequence");
-            Assert.That(MoveAdmission.MountHeldRefusal([RigOccupancy.Session, "centering"], forced: true, MoveKind.Slew),
+            Assert.That(MoveAdmission.MountHeldRefusal([RigOccupancy.Session, "centering"], forced: true, MoveKind.Slew)?.Message,
                 Does.Contain("centering is running"), "#2140 — a Center beside a sequence is not forced past, and it is named");
         }
     }
