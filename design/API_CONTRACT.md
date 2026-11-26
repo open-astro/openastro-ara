@@ -1205,7 +1205,7 @@ and dragged the fitted minimum up and sideways. Dropped probes stay in `probes` 
 
 **Reasoning:** rig night 2026-10-18: a Planning GoTo was accepted mid-dither, the guider stopped (stop-guiding-when-slewing) and the run parked awaiting the user, with nothing to say a run was active. Pausing is the safe outcome; the user should be told first.
 
-**Spec ref:** `OpenAstroAra.Server/openapi.yaml#/paths/~1api~1v1~1equipment~1telescope~1slew`; `Endpoints/EquipmentEndpoints.cs` (`SlewAsync`), `Services/MoveAdmission.cs` (`MountHeldRefusal`, #2139/#2140), `Services/SequencerService.cs` / `PlaceholderSequenceServices.cs` (`ActiveRunIdsAsync`); tests `EquipmentEndpointsSlewTest`, `SequencerServiceTest`, client `equipment_mount_panel_test`.
+**Spec ref:** `OpenAstroAra.Server/openapi.yaml#/paths/~1api~1v1~1equipment~1telescope~1slew`; `Endpoints/EquipmentEndpoints.cs` (`SlewAsync`), `Services/MoveAdmission.cs` (`MountHeldRefusal`, #2139/#2140), `Services/RigOccupancy.cs` (`Holders(RigHolding.Mount)`, `RegisterSession`; #2140); tests `EquipmentEndpointsSlewTest`, `SequencerServiceTest`, client `equipment_mount_panel_test`.
 
 **Related:** CHANGELOG [Unreleased]; #1364 rig checklist.
 

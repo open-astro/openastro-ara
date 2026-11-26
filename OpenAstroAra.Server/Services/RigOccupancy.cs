@@ -64,7 +64,8 @@ public sealed class RigOccupancy {
 
     /// <summary>Adds a routine. <paramref name="name"/> reads in a reason: "{name} is running". The first running
     /// routine in registration order names the refusal, so register the widest one (the Session) first: a centering
-    /// that a Session runs then reads as the Session.</summary>
+    /// that a Session runs then reads as the Session in <see cref="Holder"/>. <see cref="Holders"/> lists both, and a
+    /// person's move (#2140) names the centering.</summary>
     /// <param name="stop">#2142 — ends the routine and returns once it has ended or can no longer move anything: its
     /// return is the routine's confirmation, so it must not return earlier (the register bounds it). Its first argument
     /// names the ladder (a <see cref="MountStopReasons"/> value). Null: no ladder stops it through the register.</param>
