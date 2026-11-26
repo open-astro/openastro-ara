@@ -394,7 +394,7 @@ public sealed partial class TelescopeService : ITelescopeMediator {
                 SlewWatch.NoteSlewTarget(targetRa, targetDec); // §57.8 — slew_started carries the intent
             }
             try {
-                return await RunMountCommandAsync(SlewCommandPolicy, "telescope.slew", asker,
+                return await RunMountCommandAsync(SlewCommandPolicy, "telescope.slew", (asker, MoveKind.Slew),
                     c => {
                         TryEnableTracking(c);
                         // Async goto: returns immediately, Slewing goes true; the settle-wait
@@ -440,18 +440,18 @@ public sealed partial class TelescopeService : ITelescopeMediator {
     public Task<bool> ParkTelescope(IProgress<ApplicationStatus> progress, MoveAsker asker, CancellationToken token) =>
         // TryEnableTracking before Park here too (not just the REST path): some mounts (iOptron) won't
         // park from a stationary state, so an end-of-sequence auto-park would silently no-op otherwise.
-        RunMountCommandAsync(CommandPolicy, "telescope.park", asker, c => { TryEnableTracking(c); c.Park(); },
+        RunMountCommandAsync(CommandPolicy, "telescope.park", (asker, MoveKind.Park), c => { TryEnableTracking(c); c.Park(); },
             c => ReadAtPark(c) && !ReadSlewing(c), token);
 
     public Task<bool> UnparkTelescope(IProgress<ApplicationStatus> progress, CancellationToken token) =>
         // !Slewing matters here too: a motorised unpark can clear AtPark the moment the command is
         // accepted while the mount is still moving to its unpark position — returning early would
         // let a back-to-back slew/tracking change land mid-motion.
-        RunMountCommandAsync(CommandPolicy, "telescope.unpark", asker: null, c => c.Unpark(),
+        RunMountCommandAsync(CommandPolicy, "telescope.unpark", move: null, c => c.Unpark(),
             c => !ReadAtPark(c) && !ReadSlewing(c), token);
 
     public Task<bool> FindHome(IProgress<ApplicationStatus> progress, MoveAsker asker, CancellationToken token) =>
-        RunMountCommandAsync(CommandPolicy, "telescope.findhome", asker, c => c.FindHome(),
+        RunMountCommandAsync(CommandPolicy, "telescope.findhome", (asker, MoveKind.Home), c => c.FindHome(),
             c => ReadAtHome(c) && !ReadSlewing(c), token);
 
     public long TrackingWriteCount => Interlocked.Read(ref _trackingWrites);
@@ -553,18 +553,12 @@ public sealed partial class TelescopeService : ITelescopeMediator {
 
     // ADR 0011 — park/unpark/findhome/goto through the command module. The connected check stays here
     // (not connected = false, nothing sent: the instruction's Validate has already blocked this).
-    // #2139 — asker: who moves the mount (null only for an unpark, which is not a move Move Admission admits). Its kind
-    // follows the op; the owner and position checks run where the table binds the asker (record 0026).
-    private async Task<bool> RunMountCommandAsync(DeviceCommandPolicy policy, string op, MoveAsker? asker, Action<ITelescopeDevice> action, Func<ITelescopeDevice, bool> isDone, CancellationToken ct) {
-        MoveKind? kind = op switch {
-            "telescope.slew" => MoveKind.Slew,
-            "telescope.park" => MoveKind.Park,
-            "telescope.findhome" => MoveKind.Home,
-            _ => null,
-        };
-        bool Binds(MoveRule rule) => asker is { } who && kind is { } k && MoveAdmission.Binds(who, k, rule);
-        if (kind is { } moveKind && asker is { } mover) {
-            _ = MoveAdmission.RulesFor(mover, moveKind); // an asker with no row for this move cannot ask for it
+    // #2139 — move: who moves the mount and how, explicit (null only for an unpark, which is not a move Move Admission
+    // admits); the owner and position checks run where the table binds the asker (record 0026).
+    private async Task<bool> RunMountCommandAsync(DeviceCommandPolicy policy, string op, (MoveAsker Asker, MoveKind Kind)? move, Action<ITelescopeDevice> action, Func<ITelescopeDevice, bool> isDone, CancellationToken ct) {
+        bool Binds(MoveRule rule) => move is { } m && MoveAdmission.Binds(m.Asker, m.Kind, rule);
+        if (move is { } asked) {
+            _ = MoveAdmission.RulesFor(asked.Asker, asked.Kind); // an asker with no row for this move cannot ask for it
         }
         var client = ConnectedClientOrNull();
         if (client is null) {
