@@ -96,11 +96,14 @@ public sealed class RigOccupancy {
 
     /// <summary>The name of the first running routine that holds any of <paramref name="holding"/>, or null when
     /// none does.</summary>
-    public string? Holder(RigHolding holding = RigHolding.Any) {
+    public string? Holder(RigHolding holding = RigHolding.Any) => Holders(holding).FirstOrDefault();
+
+    /// <summary>#2140 — the names of every running routine that holds any of <paramref name="holding"/>, in registration
+    /// order (a forced GoTo past a Session must still see a Center that runs beside it).</summary>
+    public IEnumerable<string> Holders(RigHolding holding = RigHolding.Any) {
         foreach (var routine in _routines) {
-            if ((routine.Holds & holding) != 0 && routine.IsRunning()) return routine.Name;
+            if ((routine.Holds & holding) != 0 && routine.IsRunning()) yield return routine.Name;
         }
-        return null;
     }
 
     /// <summary>#2142 — stops every running routine that holds any of <paramref name="holding"/> and has a stop, the

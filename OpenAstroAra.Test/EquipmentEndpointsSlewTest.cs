@@ -45,15 +45,15 @@ namespace OpenAstroAra.Test {
 
         [Test]
         public void A_slew_with_no_run_in_progress_goes_ahead() {
-            Assert.That(MoveAdmission.MountHeldRefusal(null, forced: false, MoveKind.Slew), Is.Null);
+            Assert.That(MoveAdmission.MountHeldRefusal([], forced: false, MoveKind.Slew), Is.Null);
         }
 
         [Test]
         public void A_slew_during_a_run_is_refused_with_the_reason_and_the_way_out() {
-            var refusal = MoveAdmission.MountHeldRefusal(RigOccupancy.Session, forced: false, MoveKind.Slew);
+            var refusal = MoveAdmission.MountHeldRefusal([RigOccupancy.Session], forced: false, MoveKind.Slew);
             Assert.That(refusal, Does.Contain("a sequence is running").And.Contain("stops guiding").And.Contain("force"));
             // #2140 — another holder is named, and the text offers no force: force skips only a sequence.
-            Assert.That(MoveAdmission.MountHeldRefusal("centering", forced: false, MoveKind.Slew),
+            Assert.That(MoveAdmission.MountHeldRefusal(["centering"], forced: false, MoveKind.Slew),
                 Does.Contain("centering is running").And.Not.Contain("force"));
         }
 
@@ -225,8 +225,10 @@ namespace OpenAstroAra.Test {
 
         [Test]
         public void A_forced_slew_and_a_sync_go_ahead_during_a_run() {
-            Assert.That(MoveAdmission.MountHeldRefusal(RigOccupancy.Session, forced: true, MoveKind.Slew), Is.Null, "the caller was told and said yes");
-            Assert.That(MoveAdmission.MountHeldRefusal("centering", forced: true, MoveKind.Slew), Is.Not.Null, "#2140 — force skips only a sequence");
+            Assert.That(MoveAdmission.MountHeldRefusal([RigOccupancy.Session], forced: true, MoveKind.Slew), Is.Null, "the caller was told and said yes");
+            Assert.That(MoveAdmission.MountHeldRefusal(["centering"], forced: true, MoveKind.Slew), Is.Not.Null, "#2140 — force skips only a sequence");
+            Assert.That(MoveAdmission.MountHeldRefusal([RigOccupancy.Session, "centering"], forced: true, MoveKind.Slew),
+                Does.Contain("centering is running"), "#2140 — a Center beside a sequence is not forced past, and it is named");
         }
     }
 }

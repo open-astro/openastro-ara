@@ -19,6 +19,7 @@ using OpenAstroAra.Server.Contracts.Refusals;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Linq;
 
 namespace OpenAstroAra.Server.Services;
 
@@ -98,23 +99,26 @@ public static class MoveAdmission {
     /// <summary>Whether <paramref name="rule"/> binds <paramref name="asker"/>'s <paramref name="kind"/>.</summary>
     public static bool Binds(MoveAsker asker, MoveKind kind, MoveRule rule) => (RulesFor(asker, kind) & rule) != 0;
 
-    /// <summary>#2140 — the <c>run_in_progress</c> text for a person's move while <paramref name="holder"/> (a
-    /// <see cref="RigOccupancy"/> name) holds the mount, or null when it may go ahead: nothing holds it, or the person
-    /// forced a GoTo past a Session (<paramref name="forced"/>; nothing else can be forced). The text names the holder.</summary>
-    internal static string? MountHeldRefusal(string? holder, bool forced, MoveKind kind) {
-        if (holder is null) {
+    /// <summary>#2140 — the <c>run_in_progress</c> text for a person's move while <paramref name="holders"/> (the
+    /// <see cref="RigOccupancy"/> names of what holds the mount, in registration order) are running, or null when it may go
+    /// ahead: nothing holds it, or the person forced a GoTo and only a Session holds it (<paramref name="forced"/>; nothing
+    /// else can be forced). The text names the holder: a routine beside the Session before the Session.</summary>
+    internal static string? MountHeldRefusal(IEnumerable<string> holders, bool forced, MoveKind kind) {
+        ArgumentNullException.ThrowIfNull(holders);
+        var held = holders.ToList();
+        if (held.FirstOrDefault(h => h != RigOccupancy.Session) is { } other) {
+            var what = kind switch { MoveKind.Slew => "GoTo", MoveKind.Park => "park", _ => "Find Home" };
+            return $"{other} is running and holds the mount, so the {what} was not sent. Stop it first.";
+        }
+        if (held.Count == 0) {
             return null;
         }
-        if (holder == RigOccupancy.Session) {
-            return kind switch {
-                MoveKind.Slew when forced => null,
-                MoveKind.Slew => "a sequence is running: slewing now stops guiding and pauses the run awaiting you. Repeat with force to slew anyway.",
-                MoveKind.Park => "a sequence is running: stop it before you park the mount.",
-                _ => "a sequence is running: stop it before you send the mount home.",
-            };
-        }
-        var what = kind switch { MoveKind.Slew => "GoTo", MoveKind.Park => "park", _ => "Find Home" };
-        return $"{holder} is running and holds the mount, so the {what} was not sent. Stop it first.";
+        return kind switch {
+            MoveKind.Slew when forced => null,
+            MoveKind.Slew => "a sequence is running: slewing now stops guiding and pauses the run awaiting you. Repeat with force to slew anyway.",
+            MoveKind.Park => "a sequence is running: stop it before you park the mount.",
+            _ => "a sequence is running: stop it before you send the mount home.",
+        };
     }
 
     /// <summary>#2140 — the position-limit Refusal for <paramref name="asker"/>'s GoTo to <paramref name="target"/>, or

@@ -265,7 +265,7 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
             MoveAdmission.ThrowIfPolarAlignMovesTheMount(null, what, this);
         }
         if (MoveAdmission.Binds(MoveAsker.Person, kind, MoveRule.MountHeld)
-                && MoveAdmission.MountHeldRefusal(_occupancyResolver?.Invoke()?.Holder(RigHolding.Mount), forced, kind) is { } held) {
+                && MoveAdmission.MountHeldRefusal(_occupancyResolver?.Invoke()?.Holders(RigHolding.Mount) ?? [], forced, kind) is { } held) {
             throw new RunInProgressException(held);
         }
     }
