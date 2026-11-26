@@ -135,6 +135,14 @@ public sealed class RigOccupancy {
             (_, _) => rotation()?.StopAsync() ?? Task.CompletedTask,
             failedRung: "stop_rotation_assist");
 
+    /// <summary>#2143 — Live View: a camera loop on the main camera, and nothing else. Its stop waits for the loop to
+    /// end.</summary>
+    public RigOccupancy RegisterLiveView(Func<ICameraService?> camera) =>
+        Register("Live View", RigHolding.MainCamera,
+            () => camera()?.GetLiveViewStatus().Active == true,
+            (_, _) => camera()?.StopLiveViewAsync() ?? Task.CompletedTask,
+            failedRung: "stop_live_view");
+
     /// <summary>A stop for a routine whose cancel only asks: ask, then wait until its reading says it ended.</summary>
     private static async Task CancelThenWaitAsync(Action cancel, Func<bool> isRunning, CancellationToken ct) {
         cancel();
