@@ -111,7 +111,7 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
-        public async Task A_flip_whose_destination_is_below_the_floor_is_refused_before_the_pier_side_write() {
+        public async Task A_flip_whose_destination_is_below_the_floor_is_refused() {
             using var rig = await FakeMountRig.ConnectAsync(Site(), configure: f => f.CanSetPierSideValue = true);
             await RefusedAsync(() => rig.Service.MeridianFlip(BelowTheFloor(), CancellationToken.None), RefusalCatalog.BelowHorizonLimit);
             Assert.That((rig.Fake.Slews, rig.Fake.PierSideWrites), Is.EqualTo((0, 0)), "nothing reached the mount");
