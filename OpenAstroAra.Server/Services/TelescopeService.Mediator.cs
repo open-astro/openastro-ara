@@ -45,9 +45,9 @@ namespace OpenAstroAra.Server.Services;
 /// <c>FindHome</c>, <c>SlewScopeToRaDec</c>) drive the live Alpaca mount instead of the
 /// <c>HeadlessTelescopeMediator</c> stub.
 ///
-/// The long-running ops (<see cref="SlewToCoordinatesAsync(Coordinates, CancellationToken)"/>,
+/// The long-running ops (<see cref="SlewToCoordinatesAsync(Coordinates, MoveAsker, CancellationToken)"/>,
 /// <see cref="ParkTelescope"/>, <see cref="UnparkTelescope"/>,
-/// <see cref="FindHome(IProgress{ApplicationStatus}, CancellationToken)"/>) drive the device and
+/// <see cref="FindHome(IProgress{ApplicationStatus}, MoveAsker, CancellationToken)"/>) drive the device and
 /// block on a bounded wait for their terminal condition (settled-on-target, AtPark, !AtPark, AtHome),
 /// returning <c>true</c> only when reached — through the shared device-command module (ADR 0011),
 /// as the focuser/rotator/dome mediators do. The tracking writes are prompt synchronous calls.
