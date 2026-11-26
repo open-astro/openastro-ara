@@ -388,7 +388,7 @@ public static partial class EquipmentEndpoints {
         telescope.MapPost("/home", ([FromHeader(Name = "Idempotency-Key")] string? key, ITelescopeService svc, CancellationToken ct) =>
             TelescopeFindHomeAsync(key, svc, ct))
             .Produces<OperationAcceptedDto>(StatusCodes.Status202Accepted)
-            .ProducesProblem(StatusCodes.Status409Conflict); // the mount-position-unverified or polar-align-moving-mount Refusal
+            .ProducesProblem(StatusCodes.Status409Conflict); // run_in_progress, mount_parked (#2140), or the mount-position-unverified or polar-align-moving-mount Refusal
         // #2070 — the user says the mount is physically at Home: a position left unverified by a power loss is trusted again.
         telescope.MapPost("/confirm-home", (ITelescopeService svc, CancellationToken ct) => ConfirmHomeAsync(svc, ct))
             .Produces(StatusCodes.Status204NoContent)

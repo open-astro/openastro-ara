@@ -42,8 +42,8 @@ public enum MoveRule {
     MotionOwner = 16,
     /// <summary>Polar Align is not turning the mount, and its stop is confirmed (#2066).</summary>
     PolarAlignMoving = 32,
-    /// <summary>#2140 — nothing holds the mount in Rig Occupancy (record 0025: a Session, polar alignment, Center, End
-    /// Night); <c>force</c> skips only a Session, for a GoTo (<c>run_in_progress</c>).</summary>
+    /// <summary>#2140 — nothing holds the mount in Rig Occupancy (record 0025: a Session, polar alignment, Center; End
+    /// Night once #2143 registers it); <c>force</c> skips only a Session, for a GoTo (<c>run_in_progress</c>).</summary>
     MountHeld = 64,
     /// <summary>A position limit: the target is above the profile's lowest altitude (#2044).</summary>
     Horizon = 128,
