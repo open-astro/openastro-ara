@@ -306,7 +306,7 @@ namespace OpenAstroAra.Test {
         [Test]
         public async Task Emergency_Stop_ends_End_Night_at_its_next_step() {
             var parking = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
-            telescope.Setup(t => t.ParkTelescope(It.IsAny<IProgress<ApplicationStatus>>(), It.IsAny<CancellationToken>()))
+            telescope.Setup(t => t.ParkTelescope(It.IsAny<IProgress<ApplicationStatus>>(), It.IsAny<MoveAsker>(), It.IsAny<CancellationToken>()))
                 .Returns(async () => { Log("park"); await parking.Task; return true; });
             EndNightService? sut = null;
             var occupancy = new RigOccupancy().RegisterEndNight(() => sut);
