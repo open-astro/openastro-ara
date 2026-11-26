@@ -36,9 +36,10 @@ public static partial class EquipmentEndpoints {
 
     /// <summary><c>POST /equipment/telescope/slew</c>: a person's GoTo or sync. #2139 — the Telescope service admits it (Move
     /// Admission, record 0026): the <c>polar-align-moving-mount</c>, <c>below-horizon-limit</c> and <c>counterweight-limit</c>
-    /// Refusals, and the 409 <c>run_in_progress</c> Problem while a sequence run is active unless the request is a sync or
-    /// forced (rig night 2026-10-18: a Planning GoTo mid-dither was accepted without a word, the guider stopped and the run
-    /// parked); otherwise the 202 the service answers. <c>force</c> bypasses only <c>run_in_progress</c>.</summary>
+    /// Refusals, and the 409 <c>run_in_progress</c> Problem while something holds the mount (#2140: Rig Occupancy; its text
+    /// names the holder) unless the request is a sync, or forced past a sequence (rig night 2026-10-18: a Planning GoTo
+    /// mid-dither was accepted without a word, the guider stopped and the run parked); otherwise the 202 the service answers.
+    /// <c>force</c> bypasses only a sequence's <c>run_in_progress</c>.</summary>
     internal static async Task<IResult> SlewAsync(SlewRequestDto request, string? idempotencyKey, ITelescopeService telescope, CancellationToken ct, IPolarAlignService? polarAlign = null) {
         ArgumentNullException.ThrowIfNull(telescope);
         ArgumentNullException.ThrowIfNull(request);
@@ -55,17 +56,28 @@ public static partial class EquipmentEndpoints {
     }
 
     /// <summary><c>POST /equipment/telescope/park</c>: a person's park, admitted by the Telescope service (#2139: the
-    /// <c>polar-align-moving-mount</c> Refusal while Polar Align runs, #2066), else its 202. The safety and fault parks call
-    /// its ParkAsync, not this.</summary>
+    /// <c>polar-align-moving-mount</c> Refusal while Polar Align runs, #2066; #2140: the 409 <c>run_in_progress</c> Problem
+    /// while something holds the mount), else its 202. The safety and fault parks call its ParkAsync, not this.</summary>
     internal static async Task<IResult> TelescopeParkAsync(ParkRequestDto? request, string? idempotencyKey, ITelescopeService telescope, CancellationToken ct) {
         ArgumentNullException.ThrowIfNull(telescope);
-        return Results.Accepted(value: await telescope.ParkUnlessMotionOwnedAsync(request ?? new ParkRequestDto(), idempotencyKey, ct));
+        try {
+            return Results.Accepted(value: await telescope.ParkUnlessMotionOwnedAsync(request ?? new ParkRequestDto(), idempotencyKey, ct));
+        } catch (RunInProgressException busy) {
+            return Results.Problem(busy.Message, statusCode: StatusCodes.Status409Conflict, title: "run_in_progress");
+        }
     }
 
-    /// <summary><c>POST /equipment/telescope/home</c>: a person's Find Home, admitted by the Telescope service (#2139).</summary>
+    /// <summary><c>POST /equipment/telescope/home</c>: a person's Find Home, admitted by the Telescope service (#2139; #2140:
+    /// <c>run_in_progress</c> while something holds the mount, <c>mount_parked</c> from a parked mount).</summary>
     internal static async Task<IResult> TelescopeFindHomeAsync(string? idempotencyKey, ITelescopeService telescope, CancellationToken ct) {
         ArgumentNullException.ThrowIfNull(telescope);
-        return Results.Accepted(value: await telescope.FindHomeAsync(idempotencyKey, ct));
+        try {
+            return Results.Accepted(value: await telescope.FindHomeAsync(idempotencyKey, ct));
+        } catch (RunInProgressException busy) {
+            return Results.Problem(busy.Message, statusCode: StatusCodes.Status409Conflict, title: "run_in_progress");
+        } catch (MountParkedException parked) {
+            return Results.Problem(parked.Message, statusCode: StatusCodes.Status409Conflict, title: "mount_parked");
+        }
     }
 
     /// <summary>#2070 — <c>POST /equipment/telescope/confirm-home</c>: 204 when the mount reports AtHome and its
@@ -370,7 +382,7 @@ public static partial class EquipmentEndpoints {
         telescope.MapPost("/park", ([FromBody] ParkRequestDto? request, [FromHeader(Name = "Idempotency-Key")] string? key, ITelescopeService svc, CancellationToken ct) =>
             TelescopeParkAsync(request, key, svc, ct))
             .Produces<OperationAcceptedDto>(StatusCodes.Status202Accepted)
-            .ProducesProblem(StatusCodes.Status409Conflict); // the mount-position-unverified or polar-align-moving-mount Refusal
+            .ProducesProblem(StatusCodes.Status409Conflict); // run_in_progress, or the mount-position-unverified or polar-align-moving-mount Refusal
         telescope.MapPost("/unpark", async ([FromHeader(Name = "Idempotency-Key")] string? key, ITelescopeService svc, CancellationToken ct) =>
             Results.Accepted(value: await svc.UnparkAsync(key, ct)));
         telescope.MapPost("/home", ([FromHeader(Name = "Idempotency-Key")] string? key, ITelescopeService svc, CancellationToken ct) =>

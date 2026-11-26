@@ -33,7 +33,7 @@ public static partial class HorizonGuard {
     /// failed transform) — the guard only ever SKIPS or REFUSES a slew, never blocks one on a missing profile.</summary>
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "A profile read or transform fault must degrade to 'unknown — proceed', never fault the caller. Log-and-recover boundary.")]
-    public static (double AltitudeDeg, double LimitDeg)? TargetBelowHorizon(IProfileStore? profiles, Coordinates coords, ILogger? logger = null) {
+    public static (double AltitudeDeg, double LimitDeg)? TargetBelowHorizon(IProfileStore? profiles, Coordinates coords, ILogger? logger = null, DateTimeOffset? atUtc = null) {
         ArgumentNullException.ThrowIfNull(coords);
         try {
             var site = profiles?.GetSiteSettings();
@@ -42,7 +42,7 @@ public static partial class HorizonGuard {
             }
             // SiteAstrometry — the server's ONE managed sky model (shared with the §58.9 flip
             // predictor and Tonight's Sky); sub-degree precision is irrelevant to a horizon floor.
-            var lst = SiteAstrometry.LocalSiderealTimeDeg(DateTimeOffset.UtcNow, site.LongitudeDeg);
+            var lst = SiteAstrometry.LocalSiderealTimeDeg(atUtc ?? DateTimeOffset.UtcNow, site.LongitudeDeg); // #2140 — the flip asks for the flip time
             var hourAngle = (lst - coords.RADegrees % 360.0 + 360.0) % 360.0;
             var altitude = SiteAstrometry.AltitudeFromHourAngleDeg(coords.Dec, site.LatitudeDeg, hourAngle);
             var azimuth = SiteAstrometry.AzimuthFromHourAngleDeg(coords.Dec, site.LatitudeDeg, hourAngle);

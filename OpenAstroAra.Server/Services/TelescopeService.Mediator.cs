@@ -28,6 +28,7 @@ using OpenAstroAra.Equipment.Interfaces;
 using OpenAstroAra.Equipment.Interfaces.Mediator;
 using OpenAstroAra.Profile.Interfaces;
 using OpenAstroAra.Server.Contracts;
+using OpenAstroAra.Server.Contracts.Refusals;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
@@ -309,8 +310,9 @@ public sealed partial class TelescopeService : ITelescopeMediator {
     // mediator slew (sequence, centering, meridian flip) is range-checked here, after the
     // epoch transform: RA is wrapped into [0, 24) and a Dec outside ±90° or a non-finite coordinate is
     // refused before anything reaches the mount. #2139 — each check runs where Move Admission's table binds the asker
-    // (record 0026): today a Session, Center and the flip are checked for the range, parked, the clock, the position and
-    // the motion owner, and not for the horizon (target recenter and the resume refinement ask that up front).
+    // (record 0026). #2140 — this replaces the old "no horizon check here" note: a Session's, Center's and the flip's GoTo
+    // are checked for the position limits too (lowest altitude, counterweight); a refusal fails the instruction carrying the
+    // Refusal and posts a notice. Target recenter and the resume refinement still ask the horizon up front and skip.
     private Task<bool> GotoAsync(Coordinates coords, MoveAsker asker, CancellationToken token) {
         var parkedBinds = MoveAdmission.Binds(asker, MoveKind.Slew, MoveRule.Parked);
         ITelescopeDevice client;
@@ -335,6 +337,8 @@ public sealed partial class TelescopeService : ITelescopeMediator {
         return SlewCoreAsync();
 
         async Task<bool> SlewCoreAsync() {
+            // #2140 — the position limits, before the clock wait and before anything is sent.
+            await ThrowIfPastALimitAsync(asker, coords, "telescope.slew").ConfigureAwait(false);
             // #2071 — a sequencer slew, Center and the flip goto all come
             // here: refuse before anything is sent while the mount's clock is not verified.
             if (MoveAdmission.Binds(asker, MoveKind.Slew, MoveRule.Clock)
@@ -563,6 +567,12 @@ public sealed partial class TelescopeService : ITelescopeMediator {
         var client = ConnectedClientOrNull();
         if (client is null) {
             return false;
+        }
+        // #2140 — a Find Home from a parked mount is refused before the module runs (the mount would throw, an op fault);
+        // it throws, so a Find Home instruction shows it. A park on a parked mount does nothing and goes ahead.
+        if (move is { Kind: MoveKind.Home } && Binds(MoveRule.Parked) && IsParkedNow()) {
+            LogMountOpRejectedParked(op);
+            throw new SequenceEntityFailedException("The mount is parked: unpark it before Find Home.");
         }
         // #2066 (ARA-2) — Polar Align holds the mount for its whole run: a sequencer, Center or flip GoTo, a Park Scope or
         // Find Home instruction, an end-of-sequence park or a failed flip's safe rest would run beside its next turn
@@ -908,6 +918,8 @@ public sealed partial class TelescopeService : ITelescopeMediator {
             LogSlewTargetRefused("telescope.flip", refusal);
             throw new SequenceEntityFailedException(refusal);
         }
+        // #2140 — the position limits, before the pier-side write too (the flip executor also asks in its flight check).
+        await ThrowIfPastALimitAsync(flip, targetCoordinates, "telescope.flip").ConfigureAwait(false);
         // #2071 — before the pier-side hint: some mounts start the flip slew on that write. Waits for a
         // clock push in flight like the goto does, so a time sync landing at the flip does not abort it.
         if (MoveAdmission.Binds(flip, MoveKind.Slew, MoveRule.Clock)
@@ -1001,6 +1013,52 @@ public sealed partial class TelescopeService : ITelescopeMediator {
             return PierSide.pierUnknown;
         }
     }
+
+    private bool IsParkedNow() {
+        lock (_gate) {
+            return _runtime.Parked;
+        }
+    }
+
+    /// <summary>#2140 — the position-limit Refusal for a mediator GoTo or flip (record 0026): the instruction fails carrying
+    /// it (inside a <see cref="SequenceEntityFailedException"/>, so the block's error setting decides what is next), and a
+    /// notice says why, the same kind as "target is low". Nothing is sent to the mount.</summary>
+    private async Task ThrowIfPastALimitAsync(MoveAsker asker, Coordinates target, string op) {
+        if (MoveAdmission.LimitRefusal(asker, _profileStore, target, MountAlignmentMode, _logger) is not { } limit) {
+            return;
+        }
+        LogSlewTargetRefused(op, limit.Message);
+        await NotifyLimitRefusedQuietlyAsync(limit).ConfigureAwait(false);
+        throw new SequenceEntityFailedException(limit.Message, limit);
+    }
+
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "The notice is advisory: a notification store fault must not hide the refusal itself. Logged, never rethrown.")]
+    private async Task NotifyLimitRefusedQuietlyAsync(RefusalException limit) {
+        if (_notificationResolver?.Invoke() is not { } notifications) {
+            return;
+        }
+        try {
+            await notifications.CreateAsync(new NotificationDto(
+                Id: Guid.NewGuid(),
+                PostedUtc: DateTimeOffset.UtcNow,
+                Severity: NotificationSeverity.Warning,
+                Category: NotificationCategory.Sequence,
+                Title: limit.Cause == RefusalCatalog.BelowHorizonLimit ? "GoTo refused — the target is below the horizon limit" : "GoTo refused — past the counterweight limit",
+                Message: limit.Message + " Nothing was sent to the mount; the sequence's error setting decides what comes next.",
+                Read: false,
+                Dismissed: false,
+                DismissedUtc: null,
+                Payload: null,
+                RelatedEntityType: null,
+                RelatedEntityId: null), CancellationToken.None).ConfigureAwait(false);
+        } catch (Exception ex) {
+            LogLimitNoticeFailed(ex);
+        }
+    }
+
+    [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Warning, Message = "The notice for a GoTo refused by a position limit could not be posted")]
+    private partial void LogLimitNoticeFailed(Exception ex);
 
     // ── Unconsumed mediator surface — documented no-op stubs ─────────────────────────────────────
     // No registered headless instruction reaches these: MoveAxis/PulseGuide are interactive-GUI /

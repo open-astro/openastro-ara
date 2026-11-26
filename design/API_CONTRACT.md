@@ -2136,3 +2136,15 @@ The push applies the same limits to values already saved: a bad value is left ou
 **Spec ref:** `Contracts/EquipmentDtos.cs` (`GuiderStateDto`), `Services/GuiderService.cs` (`GetAsync`), `Equipment/MyGuider/PHD2/PHD2Guider.cs` (`ReadCalibrationTargetAsync`), `Equipment/MyGuider/PHD2/PHD2Guider.LiveView.cs` (`ReadProfileSetupAsync`). Tests `GuiderFakeIntegrationTest`; client `models/guider_status_test`. `openapi.yaml` does not list `GuiderStateDto`, so it does not change.
 
 **Related:** #1895, #1875, #1884, ADR 0009 (rule 1), 0014, 0020
+
+## 2026-11-25 — #2140 position limits bind every asker; a person's move asks what holds the mount; `mount_parked`
+
+**Endpoint(s) or area:** `POST /api/v1/equipment/telescope/slew`, `/park`, `/home` (409 `run_in_progress`, new 409 `mount_parked` on `/home`); the sequencer's GoTo, Center and the meridian flip (no endpoint: the instruction fails, and a Warning notification in the Sequence category is posted).
+
+**Decision:** the lowest altitude (`below-horizon-limit`) and the counterweight (`counterweight-limit`) now refuse a Session's GoTo, a Center and a meridian flip too, not only a person's GoTo: the instruction fails carrying the Refusal, a notice says why ("GoTo refused — the target is below the horizon limit" / "— past the counterweight limit"), and the flip's flight check refuses with the Refusal's text and cause token. The safety and fault parks, the shutdown park and Emergency Stop are never refused by a position limit; no position limit binds a park or a home. A person's GoTo, park and home answer `run_in_progress` while anything holds the mount in Rig Occupancy (a Session, a polar alignment, a Center, End Night; not Live View or the camera routines); `force` skips only a Session, and only for a GoTo; the text names the holder ("a sequence is running: …", "centering is running and holds the mount, so the GoTo was not sent. Stop it first."). A person's Find Home from a parked mount answers 409 `mount_parked`; a park on a parked mount is accepted. The client keys on the titles, not the texts.
+
+**Reasoning:** #2140 (Diego, 2026-11-21): a limit the person set protects the rig only when every asker is bound by it. The open points were settled by the user on 2026-11-25 (the position check #2070 stays on park and home; "the mount is held" binds only a person; `force` skips only a sequence; a home from park is refused).
+
+**Spec ref:** `Services/MoveAdmission.cs` (`RulesFor`, `LimitRefusal`, `MountHeldRefusal`), `Services/TelescopeService.cs` (`ThrowUnlessPersonAdmitted`, `FindHomeAsync`), `Services/TelescopeService.Mediator.cs` (`ThrowIfPastALimitAsync`, `RunMountCommandAsync`), `Services/MeridianFlipExecutor.cs` (`PreFlipFlightCheck`), `Endpoints/EquipmentEndpoints.cs`. Tests `MoveAdmissionTableTest`, `PositionLimitsTest`, `EquipmentEndpointsSlewTest`, `MeridianFlipExecutorTest`. `openapi.yaml` is unchanged: the 409s were already declared.
+
+**Related:** #2140, #2139, #2141, #2070, #2073, #2044, ADR 0025, 0026

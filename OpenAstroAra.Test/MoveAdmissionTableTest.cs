@@ -40,22 +40,25 @@ namespace OpenAstroAra.Test {
         public enum Entry { PersonSlew, PersonPark, PersonHome, SessionSlew, CenterSlew, FlipSlew, SessionPark, SessionHome, ShutdownPark, ShutdownHome, FlipPark, SafetyPark }
 
         /// <summary>The one rule broken in a case (None: nothing is).</summary>
-        public enum Broken { None, Range, Parked, Pose, MotionOwner, PolarAlignMoving, RunActive, Horizon, Counterweight }
+        public enum Broken { None, Range, Parked, Pose, MotionOwner, PolarAlignMoving, MountHeld, Horizon, Counterweight }
 
         private static readonly Entry[] Slews = [Entry.PersonSlew, Entry.SessionSlew, Entry.CenterSlew, Entry.FlipSlew];
 
-        /// <summary>Today's table: the rules that refuse each asker's move. A rule not listed lets the move go.</summary>
+        /// <summary>The table (record 0026): the rules that refuse each asker's move. A rule not listed lets the move go.
+        /// #2140 — the position limits (Horizon, Counterweight) bind the Session's, Center's and the flip's GoTo; a person's
+        /// park and home are refused while something holds the mount (MountHeld, Rig Occupancy); a home is refused from
+        /// park (Parked).</summary>
         private static readonly Dictionary<Entry, Broken[]> Refused = new() {
-            [Entry.PersonSlew] = [Broken.Range, Broken.Pose, Broken.MotionOwner, Broken.PolarAlignMoving, Broken.RunActive, Broken.Horizon, Broken.Counterweight],
-            [Entry.PersonPark] = [Broken.Pose, Broken.MotionOwner, Broken.PolarAlignMoving],
-            [Entry.PersonHome] = [Broken.Pose, Broken.MotionOwner, Broken.PolarAlignMoving],
-            [Entry.SessionSlew] = [Broken.Range, Broken.Parked, Broken.Pose, Broken.MotionOwner],
-            [Entry.CenterSlew] = [Broken.Range, Broken.Parked, Broken.Pose, Broken.MotionOwner],
-            [Entry.FlipSlew] = [Broken.Range, Broken.Parked, Broken.Pose, Broken.MotionOwner],
+            [Entry.PersonSlew] = [Broken.Range, Broken.Pose, Broken.MotionOwner, Broken.PolarAlignMoving, Broken.MountHeld, Broken.Horizon, Broken.Counterweight],
+            [Entry.PersonPark] = [Broken.Pose, Broken.MotionOwner, Broken.PolarAlignMoving, Broken.MountHeld],
+            [Entry.PersonHome] = [Broken.Parked, Broken.Pose, Broken.MotionOwner, Broken.PolarAlignMoving, Broken.MountHeld],
+            [Entry.SessionSlew] = [Broken.Range, Broken.Parked, Broken.Pose, Broken.MotionOwner, Broken.Horizon, Broken.Counterweight],
+            [Entry.CenterSlew] = [Broken.Range, Broken.Parked, Broken.Pose, Broken.MotionOwner, Broken.Horizon, Broken.Counterweight],
+            [Entry.FlipSlew] = [Broken.Range, Broken.Parked, Broken.Pose, Broken.MotionOwner, Broken.Horizon, Broken.Counterweight],
             [Entry.SessionPark] = [Broken.Pose, Broken.MotionOwner],
-            [Entry.SessionHome] = [Broken.Pose, Broken.MotionOwner],
+            [Entry.SessionHome] = [Broken.Parked, Broken.Pose, Broken.MotionOwner],
             [Entry.ShutdownPark] = [Broken.Pose, Broken.MotionOwner],
-            [Entry.ShutdownHome] = [Broken.Pose, Broken.MotionOwner],
+            [Entry.ShutdownHome] = [Broken.Parked, Broken.Pose, Broken.MotionOwner],
             [Entry.FlipPark] = [Broken.Pose, Broken.MotionOwner],
             [Entry.SafetyPark] = [Broken.Pose],
         };
@@ -112,13 +115,11 @@ namespace OpenAstroAra.Test {
         [TestCaseSource(nameof(Cases))]
         public async Task The_move_is_refused_only_by_the_rules_its_asker_is_checked_for(Entry entry, Broken broken, bool refused) {
             FakeTelescopeDevice? fake = null;
-            var sequencer = new Mock<ISequencerService>();
-            sequencer.Setup(s => s.ActiveRunIdsAsync(It.IsAny<CancellationToken>()))
-                .ReturnsAsync(broken == Broken.RunActive ? new[] { Guid.NewGuid() } : Array.Empty<Guid>());
+            var occupancy = HeldBy.Mount(RigOccupancy.Session, () => broken == Broken.MountHeld);
             var polarAlign = new Mock<IPolarAlignService>();
             polarAlign.SetupGet(p => p.IsMovingMount).Returns(broken == Broken.PolarAlignMoving);
             using var svc = new TelescopeService(profileStore: Site().Object,
-                    sequencerResolver: () => sequencer.Object, polarAlignResolver: () => polarAlign.Object) {
+                    occupancyResolver: () => occupancy, polarAlignResolver: () => polarAlign.Object) {
                 RefreshPeriod = TimeSpan.FromMilliseconds(20),
                 StopGuidingBeforeMoveTimeout = TimeSpan.FromMilliseconds(50),
                 DeviceFactory = _ => {

@@ -23,7 +23,7 @@ namespace OpenAstroAra.Test {
 
     /// <summary>
     /// #2139 — a real Telescope service connected to the in-memory fake mount, with the person rules' inputs (the profile
-    /// store, the sequencer, Polar Align): the seam a person's move is admitted at. <see cref="Fake"/> counts what reached
+    /// store, Rig Occupancy, Polar Align) and the notice store: the seam a person's move is admitted at. <see cref="Fake"/> counts what reached
     /// the mount.
     /// </summary>
     internal sealed class FakeMountRig : IDisposable {
@@ -34,12 +34,13 @@ namespace OpenAstroAra.Test {
         public required TelescopeService Service { get; init; }
         public required FakeTelescopeDevice Fake { get; init; }
 
-        public static async Task<FakeMountRig> ConnectAsync(IProfileStore? profiles = null, ISequencerService? sequencer = null,
-                IPolarAlignService? polarAlign = null, Action<FakeTelescopeDevice>? configure = null) {
+        public static async Task<FakeMountRig> ConnectAsync(IProfileStore? profiles = null, RigOccupancy? occupancy = null,
+                IPolarAlignService? polarAlign = null, Action<FakeTelescopeDevice>? configure = null, INotificationService? notifications = null) {
             FakeTelescopeDevice? fake = null;
             var svc = new TelescopeService(profileStore: profiles,
-                    sequencerResolver: sequencer is null ? null : () => sequencer,
-                    polarAlignResolver: polarAlign is null ? null : () => polarAlign) {
+                    occupancyResolver: occupancy is null ? null : () => occupancy,
+                    polarAlignResolver: polarAlign is null ? null : () => polarAlign,
+                    notificationResolver: notifications is null ? null : () => notifications) {
                 RefreshPeriod = TimeSpan.FromMilliseconds(20),
                 StopGuidingBeforeMoveTimeout = TimeSpan.FromMilliseconds(50),
                 DeviceFactory = _ => {
@@ -67,5 +68,16 @@ namespace OpenAstroAra.Test {
         public Task SlewedAsync() => WaitForAsync(() => Fake.Slews > 0, "the GoTo at the mount");
 
         public void Dispose() => Service.Dispose();
+    }
+}
+
+namespace OpenAstroAra.Test {
+    /// <summary>#2140 — a Rig Occupancy whose only routine is <paramref name="holder"/>, holding the mount while
+    /// <paramref name="running"/> says so (the Session's name is <see cref="RigOccupancy.Session"/>).</summary>
+    internal static class HeldBy {
+        public static RigOccupancy Mount(string holder, Func<bool>? running = null) =>
+            new RigOccupancy().Register(holder, RigHolding.Mount, running ?? (() => true));
+        public static RigOccupancy Camera(string holder) =>
+            new RigOccupancy().Register(holder, RigHolding.MainCamera, () => true);
     }
 }

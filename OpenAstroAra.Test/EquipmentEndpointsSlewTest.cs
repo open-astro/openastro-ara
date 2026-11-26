@@ -34,14 +34,8 @@ namespace OpenAstroAra.Test {
     /// </summary>
     [TestFixture]
     public class EquipmentEndpointsSlewTest {
-        private static readonly IReadOnlyList<Guid> None = Array.Empty<Guid>();
-        private static readonly IReadOnlyList<Guid> One = [Guid.NewGuid()];
-
-        private static Mock<ISequencerService> Runs(IReadOnlyList<Guid> runs) {
-            var sequencer = new Mock<ISequencerService>();
-            sequencer.Setup(s => s.ActiveRunIdsAsync(It.IsAny<CancellationToken>())).ReturnsAsync(runs);
-            return sequencer;
-        }
+        // #2140 — "a run is active" is a Session holding the mount in Rig Occupancy.
+        private static RigOccupancy Runs(bool active) => active ? HeldBy.Mount(RigOccupancy.Session) : new RigOccupancy();
 
         private static Mock<IPolarAlignService> PolarAlign(bool movingMount) {
             var polarAlign = new Mock<IPolarAlignService>();
@@ -51,21 +45,23 @@ namespace OpenAstroAra.Test {
 
         [Test]
         public void A_slew_with_no_run_in_progress_goes_ahead() {
-            Assert.That(MoveAdmission.RunActiveRefusal(new SlewRequestDto(5.5, -12.25), 0), Is.Null);
+            Assert.That(MoveAdmission.MountHeldRefusal(null, forced: false, MoveKind.Slew), Is.Null);
         }
 
         [Test]
         public void A_slew_during_a_run_is_refused_with_the_reason_and_the_way_out() {
-            var refusal = MoveAdmission.RunActiveRefusal(new SlewRequestDto(5.5, -12.25), 1);
-            Assert.That(refusal, Does.Contain("run is in progress").And.Contain("stops guiding").And.Contain("force"));
-            Assert.That(MoveAdmission.RunActiveRefusal(new SlewRequestDto(5.5, -12.25), 2), Does.Contain("2 sequence runs"));
+            var refusal = MoveAdmission.MountHeldRefusal(RigOccupancy.Session, forced: false, MoveKind.Slew);
+            Assert.That(refusal, Does.Contain("a sequence is running").And.Contain("stops guiding").And.Contain("force"));
+            // #2140 — another holder is named, and the text offers no force: force skips only a sequence.
+            Assert.That(MoveAdmission.MountHeldRefusal("centering", forced: false, MoveKind.Slew),
+                Does.Contain("centering is running").And.Not.Contain("force"));
         }
 
         [Test]
         public async Task The_endpoint_answers_409_run_in_progress_during_a_run_and_202_when_forced_or_idle() {
             // #2139 — the wiring through the service seam: the Telescope service asks the sequencer and the endpoint answers
             // the problem title the client keys on; a forced request (and an idle sequencer) reach the mount.
-            using (var busy = await FakeMountRig.ConnectAsync(sequencer: Runs(One).Object)) {
+            using (var busy = await FakeMountRig.ConnectAsync(occupancy: Runs(active: true))) {
                 var refused = await EquipmentEndpoints.SlewAsync(new SlewRequestDto(5.5, -12.25), null, busy.Service, CancellationToken.None);
                 Assert.That((refused as ProblemHttpResult)?.StatusCode, Is.EqualTo(StatusCodes.Status409Conflict));
                 Assert.That((refused as ProblemHttpResult)?.ProblemDetails.Title, Is.EqualTo("run_in_progress"));
@@ -77,7 +73,7 @@ namespace OpenAstroAra.Test {
                 Assert.That((forced as Accepted<OperationAcceptedDto>)?.Value?.IdempotencyKey, Is.EqualTo("k1"), "the idempotency key rides through");
                 await busy.SlewedAsync();
             }
-            using var idle = await FakeMountRig.ConnectAsync(sequencer: Runs(None).Object);
+            using var idle = await FakeMountRig.ConnectAsync(occupancy: Runs(active: false));
             var quiet = await EquipmentEndpoints.SlewAsync(new SlewRequestDto(5.5, -12.25), null, idle.Service, CancellationToken.None);
             Assert.That(quiet, Is.InstanceOf<Accepted<OperationAcceptedDto>>());
             await idle.SlewedAsync();
@@ -87,7 +83,7 @@ namespace OpenAstroAra.Test {
         // force or not. A sync is refused too: it shifts the RA reading the turn steers by, which can reverse the motor.
         [Test]
         public async Task A_goto_or_sync_while_polar_align_turns_the_mount_is_refused() {
-            using var rig = await FakeMountRig.ConnectAsync(sequencer: Runs(None).Object, polarAlign: PolarAlign(movingMount: true).Object);
+            using var rig = await FakeMountRig.ConnectAsync(occupancy: Runs(active: false), polarAlign: PolarAlign(movingMount: true).Object);
 
             var refusal = await Assert.ThrowsAsync<RefusalException>(() => EquipmentEndpoints.SlewAsync(
                 new SlewRequestDto(5.5, -12.25, Force: true), null, rig.Service, CancellationToken.None));
@@ -138,7 +134,7 @@ namespace OpenAstroAra.Test {
         // solves included, not only while a motor turns. A GoTo, sync, Park or Home between its turns is refused too.
         [Test]
         public async Task GoTo_Park_and_Home_are_refused_while_Polar_Align_holds_the_mount_between_turns() {
-            using var rig = await FakeMountRig.ConnectAsync(sequencer: Runs(None).Object, polarAlign: PolarAlign(movingMount: false).Object);
+            using var rig = await FakeMountRig.ConnectAsync(occupancy: Runs(active: false), polarAlign: PolarAlign(movingMount: false).Object);
             using var hold = rig.Service.AcquireMotion(MotionOwners.PolarAlign); // solving or adjusting: no motor runs
 
             var goTo = await Assert.ThrowsAsync<RefusalException>(() => EquipmentEndpoints.SlewAsync(
@@ -153,6 +149,53 @@ namespace OpenAstroAra.Test {
             Assert.That(sync!.Cause, Is.EqualTo(RefusalCatalog.PolarAlignMovingMount), "a sync moves the readings the run measures by");
             await Task.Delay(100);
             Assert.That((rig.Fake.Slews, rig.Fake.Parks, rig.Fake.Homes, rig.Fake.Syncs), Is.EqualTo((0, 0, 0, 0)));
+        }
+
+        // #2140 (C1) — a holder of the mount other than a sequence (a Center, a polar alignment, End Night) refuses a GoTo
+        // even with force; the 409 keeps the title run_in_progress and its text names the holder.
+        [Test]
+        public async Task A_forced_goto_while_a_center_holds_the_mount_is_refused_naming_it() {
+            using var rig = await FakeMountRig.ConnectAsync(occupancy: HeldBy.Mount("centering"));
+            var refused = await EquipmentEndpoints.SlewAsync(new SlewRequestDto(5.5, -12.25, Force: true), null, rig.Service, CancellationToken.None);
+            Assert.That((refused as ProblemHttpResult)?.ProblemDetails.Title, Is.EqualTo("run_in_progress"));
+            Assert.That((refused as ProblemHttpResult)?.ProblemDetails.Detail, Does.Contain("centering is running"));
+            await Task.Delay(100);
+            Assert.That(rig.Fake.Slews, Is.Zero);
+        }
+
+        // #2140 — record 0025 rule 1: a GoTo asks what holds the mount. Live View holds only the main camera.
+        [Test]
+        public async Task A_goto_while_live_view_runs_goes_ahead() {
+            using var rig = await FakeMountRig.ConnectAsync(occupancy: HeldBy.Camera("Live View"));
+            var accepted = await EquipmentEndpoints.SlewAsync(new SlewRequestDto(5.5, -12.25), null, rig.Service, CancellationToken.None);
+            Assert.That(accepted, Is.InstanceOf<Accepted<OperationAcceptedDto>>());
+            await rig.SlewedAsync();
+        }
+
+        // #2140 (B1) — a person's park and home are refused while a sequence runs, as the GoTo is; there is no force for them.
+        [Test]
+        public async Task A_persons_park_and_home_are_refused_while_a_sequence_runs() {
+            using var rig = await FakeMountRig.ConnectAsync(occupancy: Runs(active: true));
+            var park = await EquipmentEndpoints.TelescopeParkAsync(null, null, rig.Service, CancellationToken.None);
+            var home = await EquipmentEndpoints.TelescopeFindHomeAsync(null, rig.Service, CancellationToken.None);
+            Assert.That(new[] { (park as ProblemHttpResult)?.ProblemDetails.Title, (home as ProblemHttpResult)?.ProblemDetails.Title },
+                Is.All.EqualTo("run_in_progress"));
+            Assert.That((park as ProblemHttpResult)?.ProblemDetails.Detail, Does.Contain("stop it before you park"));
+            await Task.Delay(100);
+            Assert.That((rig.Fake.Parks, rig.Fake.Homes), Is.EqualTo((0, 0)));
+        }
+
+        // #2140 (D) — a Find Home from a parked mount is refused (409 mount_parked); a park on a parked mount is not.
+        [Test]
+        public async Task A_find_home_from_a_parked_mount_is_refused_and_a_park_is_not() {
+            using var rig = await FakeMountRig.ConnectAsync(configure: f => f.AtParkScript = () => true);
+            await FakeMountRig.WaitForAsync(() => rig.Service.GetAsync(CancellationToken.None).Result?.Runtime?.Parked == true, "the parked mount");
+            var home = await EquipmentEndpoints.TelescopeFindHomeAsync(null, rig.Service, CancellationToken.None);
+            Assert.That((home as ProblemHttpResult)?.ProblemDetails.Title, Is.EqualTo("mount_parked"));
+            var park = await EquipmentEndpoints.TelescopeParkAsync(null, null, rig.Service, CancellationToken.None);
+            Assert.That(park, Is.InstanceOf<Accepted<OperationAcceptedDto>>());
+            await FakeMountRig.WaitForAsync(() => rig.Fake.Parks == 1, "the park at the mount");
+            Assert.That(rig.Fake.Homes, Is.Zero);
         }
 
         [Test]
@@ -182,8 +225,8 @@ namespace OpenAstroAra.Test {
 
         [Test]
         public void A_forced_slew_and_a_sync_go_ahead_during_a_run() {
-            Assert.That(MoveAdmission.RunActiveRefusal(new SlewRequestDto(5.5, -12.25, Force: true), 1), Is.Null, "the caller was told and said yes");
-            Assert.That(MoveAdmission.RunActiveRefusal(new SlewRequestDto(5.5, -12.25, Sync: true), 1), Is.Null, "a sync does not move the mount");
+            Assert.That(MoveAdmission.MountHeldRefusal(RigOccupancy.Session, forced: true, MoveKind.Slew), Is.Null, "the caller was told and said yes");
+            Assert.That(MoveAdmission.MountHeldRefusal("centering", forced: true, MoveKind.Slew), Is.Not.Null, "#2140 — force skips only a sequence");
         }
     }
 }

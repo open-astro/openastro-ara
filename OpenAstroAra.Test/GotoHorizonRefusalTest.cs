@@ -61,17 +61,17 @@ namespace OpenAstroAra.Test {
             _seams.Clear();
         }
 
-        private (Seam Telescope, Mock<ISequencerService> Sequencer) Rig(IReadOnlyList<Guid>? runs = null) {
-            var sequencer = new Mock<ISequencerService>();
-            sequencer.Setup(s => s.ActiveRunIdsAsync(It.IsAny<CancellationToken>())).ReturnsAsync(runs ?? None);
+        private (Seam Telescope, RigOccupancy Occupancy) Rig(IReadOnlyList<Guid>? runs = null) {
+            // #2140 — a run active is a Session holding the mount in Rig Occupancy.
+            var sequencer = HeldBy.Mount(RigOccupancy.Session, () => (runs ?? None).Count > 0);
             var seam = new Seam();
             _seams.Add(seam);
             return (seam, sequencer);
         }
 
-        private static async Task<Microsoft.AspNetCore.Http.IResult> Slew(SlewRequestDto request, Seam t, Mock<ISequencerService> s, IProfileStore? profiles) {
+        private static async Task<Microsoft.AspNetCore.Http.IResult> Slew(SlewRequestDto request, Seam t, RigOccupancy s, IProfileStore? profiles) {
             t.Rig?.Dispose();
-            t.Rig = await FakeMountRig.ConnectAsync(profiles, s.Object, configure: f => f.Alignment = t.Alignment);
+            t.Rig = await FakeMountRig.ConnectAsync(profiles, s, configure: f => f.Alignment = t.Alignment);
             return await EquipmentEndpoints.SlewAsync(request, null, t.Rig.Service, CancellationToken.None);
         }
 
