@@ -136,5 +136,91 @@ namespace OpenAstroAra.Test {
             Assert.That(stops.Single(), Is.EqualTo(new RoutineStop("polar alignment",
                 RigHolding.Mount | RigHolding.MainCamera | RigHolding.GuideCamera, true, "stop_polar_align", null)));
         }
+
+        /// <summary>#2143 — one routine registered by its helper over a fake (End Night and filter-offset calibration are
+        /// real services: their fixtures cover them): its name, what it holds, how to make it run,
+        /// and whether its stop reached it.</summary>
+        private sealed record Routine(string Name, RigHolding Holds, string FailedRung, Func<RigOccupancy, Action, Func<bool>> Arrange);
+
+        private static IEnumerable<string> RoutineNames() => Routines().Select(r => r.Name);
+
+        private static IEnumerable<Routine> Routines() {
+            yield return new Routine("autofocus", RigHolding.MainCamera | RigHolding.Focuser, "cancel_autofocus", (occupancy, ended) => {
+                var tracker = new AutofocusRunTracker();
+                var run = new CancellationTokenSource();
+                tracker.Begin("classic", 100, 5, null, null, run);
+                run.Token.Register(() => { tracker.Cancel(100); ended(); });
+                occupancy.RegisterAutofocus(() => tracker);
+                return () => tracker.IsRunning;
+            });
+            yield return new Routine("the Bahtinov focus readout", RigHolding.MainCamera, "stop_bahtinov", (occupancy, ended) => {
+                var runs = true;
+                var bahtinov = new Mock<IBahtinovFocusService>();
+                bahtinov.SetupGet(b => b.IsActive).Returns(() => runs);
+                bahtinov.Setup(b => b.StopAsync()).Callback(() => { runs = false; ended(); }).Returns(Task.CompletedTask);
+                occupancy.RegisterBahtinov(() => bahtinov.Object);
+                return () => runs;
+            });
+            yield return new Routine("guide-camera focus", RigHolding.GuideCamera, "stop_guide_focus", (occupancy, ended) => {
+                var runs = true;
+                var focus = new Mock<IGuideFocusService>();
+                focus.SetupGet(f => f.IsActive).Returns(() => runs);
+                focus.Setup(f => f.StopAsync()).Callback(() => { runs = false; ended(); }).Returns(Task.CompletedTask);
+                occupancy.RegisterGuideFocus(() => focus.Object);
+                return () => runs;
+            });
+            yield return new Routine("the rotation readout", RigHolding.MainCamera, "stop_rotation_assist", (occupancy, ended) => {
+                var runs = true;
+                var rotation = new Mock<IRotationAssistService>();
+                rotation.SetupGet(r => r.IsBusy).Returns(() => runs);
+                rotation.Setup(r => r.StopAsync()).Callback(() => { runs = false; ended(); }).Returns(Task.CompletedTask);
+                occupancy.RegisterRotationAssist(() => rotation.Object);
+                return () => runs;
+            });
+            yield return new Routine("Live View", RigHolding.MainCamera, "stop_live_view", (occupancy, ended) => {
+                var runs = true;
+                var camera = new Mock<ICameraService>();
+                camera.Setup(c => c.GetLiveViewStatus()).Returns(() => LiveViewStatus(runs));
+                camera.Setup(c => c.StopLiveViewAsync()).Callback(() => { runs = false; ended(); }).Returns(Task.CompletedTask);
+                occupancy.RegisterLiveView(() => camera.Object);
+                return () => runs;
+            });
+            yield return new Routine("a disk-to-disk copy", RigHolding.Disk, "stop_storage_copy", (occupancy, ended) => {
+                var runs = true;
+                var copy = new Mock<IStorageCopyService>();
+                copy.SetupGet(c => c.IsRunning).Returns(() => runs);
+                copy.Setup(c => c.Cancel()).Callback(() => { runs = false; ended(); }).Returns(true);
+                occupancy.RegisterStorageCopy(() => copy.Object);
+                return () => runs;
+            });
+        }
+
+        private static OpenAstroAra.Server.Contracts.LiveViewStatusDto LiveViewStatus(bool active) =>
+            new(active, 1, 0, null, null, null, null, null);
+
+        // #2143 — each remaining routine: the busy questions that care about what it holds name it, the others do not, and
+        // a ladder that frees what it holds stops it through its own stop and reports it stopped.
+        [TestCaseSource(nameof(RoutineNames))]
+        public async Task A_registered_routine_answers_for_its_holding_and_a_ladder_stops_it(string name) {
+            var routine = Routines().Single(r => r.Name == name);
+            var occupancy = new RigOccupancy();
+            var stopReached = false;
+            var isRunning = routine.Arrange(occupancy, () => stopReached = true);
+            Assert.That(isRunning(), Is.True, "the routine runs");
+
+            Assert.Multiple(() => {
+                foreach (var holding in new[] { RigHolding.Mount, RigHolding.MainCamera, RigHolding.GuideCamera, RigHolding.Focuser, RigHolding.Disk }) {
+                    Assert.That(occupancy.Holder(holding), Is.EqualTo((routine.Holds & holding) != 0 ? routine.Name : null), holding.ToString());
+                }
+            });
+
+            var stops = await occupancy.StopAsync(routine.Holds, MountStopReasons.EmergencyStop, TimeSpan.FromSeconds(5));
+
+            Assert.Multiple(() => {
+                Assert.That(stopReached, Is.True, "its own stop was called");
+                Assert.That(stops.Single(), Is.EqualTo(new RoutineStop(routine.Name, routine.Holds, true, routine.FailedRung, null)));
+                Assert.That(isRunning(), Is.False, "it ended");
+            });
+        }
     }
 }

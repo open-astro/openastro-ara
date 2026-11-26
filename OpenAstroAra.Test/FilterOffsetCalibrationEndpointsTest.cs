@@ -134,6 +134,7 @@ namespace OpenAstroAra.Test {
                 builder.Services.AddSingleton(Runs);
                 builder.Services.AddSingleton(new RigOccupancy().RegisterSession(Runs, () => null)
                     .Register("polar alignment", RigHolding.Mount | RigHolding.MainCamera | RigHolding.GuideCamera, () => PolarAligning)
+                    .RegisterFilterOffsetCalibration(() => Service)
                     .RegisterAutofocus(() => Tracker)
                     .RegisterBahtinov(() => Bahtinov.Object)
                     .RegisterGuideFocus(() => GuideFocus.Object));
@@ -202,7 +203,12 @@ namespace OpenAstroAra.Test {
                 rig.AutofocusRuns.Add((slot, record.Filter, record.Trigger));
                 if (rig.BlockOnSlot == slot) {
                     rig.Blocked.TrySetResult();
-                    await Task.Delay(Timeout.Infinite, token);
+                    try {
+                        await Task.Delay(Timeout.Infinite, token);
+                    } catch (OperationCanceledException) {
+                        rig.Tracker.Cancel(rig.FocuserPosition); // as the sweep does (AutofocusSweepService)
+                        throw;
+                    }
                 }
                 if (rig.Script[slot].Dequeue() is int best) {
                     rig.FocuserPosition = best;
@@ -353,6 +359,29 @@ namespace OpenAstroAra.Test {
             Assert.That(rig.CurrentSlot, Is.EqualTo(0), "the reference filter is back in place");
             Assert.That(rig.FocuserPosition, Is.EqualTo(1000), "at the reference's best");
             Assert.That(await rig.PostAsync("cancel"), Is.EqualTo(409), "nothing left to cancel");
+        }
+
+        // #2143 — the calibration is a Rig Occupancy routine: Emergency Stop ends the job, not just the autofocus run in it,
+        // and the job ends as a cancel does (the reference filter back in place).
+        [Test]
+        public async Task Emergency_Stop_ends_the_calibration_job() {
+            await using var rig = new Rig { BlockOnSlot = 2 };
+            rig.Seed([1000, 1000], [1040], [990], [1100]);
+            await rig.StartAsync();
+            using var started = await rig.CalibrateAsync(0, 1, 2, 3);
+            await rig.Blocked.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            var occupancy = rig.App.Services.GetRequiredService<RigOccupancy>();
+            Assert.That(occupancy.Holder(RigHolding.Focuser), Is.EqualTo("filter-offset calibration"), "the job names itself, not its autofocus run");
+
+            var stop = await new EmergencyStopService(occupancy: occupancy).ExecuteAsync().WaitAsync(TimeSpan.FromSeconds(15));
+            var result = await rig.WaitForEndAsync();
+
+            Assert.Multiple(() => {
+                Assert.That(stop.FailedRungs, Is.Empty);
+                Assert.That(result.GetProperty("state").GetString(), Is.EqualTo("cancelled"));
+                Assert.That(rig.CurrentSlot, Is.EqualTo(0), "the reference filter is back in place");
+                Assert.That(rig.Service.IsRunning, Is.False);
+            });
         }
 
         [TestCase("plan", "a sequence is running")]
