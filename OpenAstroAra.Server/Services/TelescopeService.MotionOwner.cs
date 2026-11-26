@@ -76,6 +76,8 @@ public sealed partial class TelescopeService {
     }
 
     /// <inheritdoc />
+    /// <remarks>The scope flows into every task started inside it (an <see cref="AsyncLocal{T}"/>): wrap only the one
+    /// call that sends the holder's own move, never a longer stretch of work.</remarks>
     public IDisposable ActAsHolder(IDisposable hold) {
         ArgumentNullException.ThrowIfNull(hold);
         var prior = s_actingHold.Value;
