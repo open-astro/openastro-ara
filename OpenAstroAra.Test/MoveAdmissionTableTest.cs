@@ -112,7 +112,13 @@ namespace OpenAstroAra.Test {
         [TestCaseSource(nameof(Cases))]
         public async Task The_move_is_refused_only_by_the_rules_its_asker_is_checked_for(Entry entry, Broken broken, bool refused) {
             FakeTelescopeDevice? fake = null;
-            using var svc = new TelescopeService(profileStore: Site().Object) {
+            var sequencer = new Mock<ISequencerService>();
+            sequencer.Setup(s => s.ActiveRunIdsAsync(It.IsAny<CancellationToken>()))
+                .ReturnsAsync(broken == Broken.RunActive ? new[] { Guid.NewGuid() } : Array.Empty<Guid>());
+            var polarAlign = new Mock<IPolarAlignService>();
+            polarAlign.SetupGet(p => p.IsMovingMount).Returns(broken == Broken.PolarAlignMoving);
+            using var svc = new TelescopeService(profileStore: Site().Object,
+                    sequencerResolver: () => sequencer.Object, polarAlignResolver: () => polarAlign.Object) {
                 RefreshPeriod = TimeSpan.FromMilliseconds(20),
                 StopGuidingBeforeMoveTimeout = TimeSpan.FromMilliseconds(50),
                 DeviceFactory = _ => {
@@ -131,48 +137,47 @@ namespace OpenAstroAra.Test {
                 await WaitForAsync(() => svc.GetAsync(CancellationToken.None).Result?.Runtime?.Parked == true, "the parked mount");
             }
             using var hold = broken == Broken.MotionOwner ? svc.AcquireMotion(MotionOwners.PolarAlign) : null;
-            var sequencer = new Mock<ISequencerService>();
-            sequencer.Setup(s => s.ActiveRunIdsAsync(It.IsAny<CancellationToken>()))
-                .ReturnsAsync(broken == Broken.RunActive ? new[] { Guid.NewGuid() } : Array.Empty<Guid>());
-            var polarAlign = new Mock<IPolarAlignService>();
-            polarAlign.SetupGet(p => p.IsMovingMount).Returns(broken == Broken.PolarAlignMoving);
             var (ra, dec) = Target(broken);
             var before = Sent(entry, fake!);
 
-            var answered = await RunAsync(entry, svc, sequencer.Object, polarAlign.Object, ra, dec).WaitAsync(TimeSpan.FromSeconds(30));
+            var answered = await RunAsync(entry, svc, ra, dec).WaitAsync(TimeSpan.FromSeconds(30));
             var sent = answered && await SentWithinAsync(() => Sent(entry, fake!) > before);
 
             Assert.That(!sent, Is.EqualTo(refused), refused ? "the move went out" : "the move was refused");
         }
 
         /// <summary>Runs the entry; false when it was refused (a throw, a false, or a 409).</summary>
-        private static async Task<bool> RunAsync(Entry entry, TelescopeService svc, ISequencerService sequencer, IPolarAlignService polarAlign, double ra, double dec) {
+        private static async Task<bool> RunAsync(Entry entry, TelescopeService svc, double ra, double dec) {
             var mediator = svc;
             var target = new Coordinates(ra, dec, Epoch.J2000, Coordinates.RAType.Hours);
             var progress = new Progress<ApplicationStatus>();
             try {
                 switch (entry) {
                     case Entry.PersonSlew:
-                        var result = await EquipmentEndpoints.SlewAsync(new SlewRequestDto(ra, dec), null, svc, sequencer, Site().Object, CancellationToken.None, polarAlign: polarAlign);
+                        var result = await EquipmentEndpoints.SlewAsync(new SlewRequestDto(ra, dec), null, svc, CancellationToken.None);
                         return result is not Microsoft.AspNetCore.Http.HttpResults.ProblemHttpResult;
                     case Entry.PersonPark:
-                        await EquipmentEndpoints.TelescopeParkAsync(null, null, svc, polarAlign, CancellationToken.None);
+                        await EquipmentEndpoints.TelescopeParkAsync(null, null, svc, CancellationToken.None);
                         return true;
                     case Entry.PersonHome:
-                        await EquipmentEndpoints.TelescopeFindHomeAsync(null, svc, polarAlign, CancellationToken.None);
+                        await EquipmentEndpoints.TelescopeFindHomeAsync(null, svc, CancellationToken.None);
                         return true;
                     case Entry.SessionSlew:
+                        return await mediator.SlewToCoordinatesAsync(target, MoveAsker.Session, CancellationToken.None);
                     case Entry.CenterSlew:
-                        return await mediator.SlewToCoordinatesAsync(target, CancellationToken.None);
+                        return await mediator.SlewToCoordinatesAsync(target, MoveAsker.Center, CancellationToken.None);
                     case Entry.FlipSlew:
                         return await mediator.MeridianFlip(target, CancellationToken.None);
                     case Entry.SessionPark:
+                        return await mediator.ParkTelescope(progress, MoveAsker.Session, CancellationToken.None);
                     case Entry.ShutdownPark:
+                        return await mediator.ParkTelescope(progress, MoveAsker.Shutdown, CancellationToken.None);
                     case Entry.FlipPark:
-                        return await mediator.ParkTelescope(progress, CancellationToken.None);
+                        return await mediator.ParkTelescope(progress, MoveAsker.MeridianFlip, CancellationToken.None);
                     case Entry.SessionHome:
+                        return await mediator.FindHome(progress, MoveAsker.Session, CancellationToken.None);
                     case Entry.ShutdownHome:
-                        return await mediator.FindHome(progress, CancellationToken.None);
+                        return await mediator.FindHome(progress, MoveAsker.Shutdown, CancellationToken.None);
                     case Entry.SafetyPark:
                         await svc.ParkAsync(new ParkRequestDto("safety.unsafe"), null, CancellationToken.None);
                         return true;

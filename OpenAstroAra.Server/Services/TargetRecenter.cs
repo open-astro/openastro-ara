@@ -17,6 +17,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using OpenAstroAra.Astrometry;
 using OpenAstroAra.PlateSolving;
 using OpenAstroAra.Server.Contracts;
+using OpenAstroAra.Equipment.Interfaces.Mediator;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
@@ -103,7 +104,8 @@ public sealed partial class TargetRecenter {
         if (ct.IsCancellationRequested) {
             return TargetRecenterResult.Of(TargetRecenterOutcome.Cancelled);
         }
-        if (HorizonGuard.TargetBelowHorizon(_profiles, target, _logger) is { } low) {
+        // #2139 — asked up front (record 0026): a target too low is skipped, not refused mid-Center.
+        if (MoveAdmission.TargetTooLow(MoveAsker.TargetRecenter, _profiles, target, _logger) is { } low) {
             LogTargetTooLow(low.AltitudeDeg, low.LimitDeg);
             return new TargetRecenterResult(TargetRecenterOutcome.TargetTooLow, low.AltitudeDeg, low.LimitDeg);
         }

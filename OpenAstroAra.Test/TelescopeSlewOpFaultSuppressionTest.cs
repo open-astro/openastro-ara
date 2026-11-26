@@ -64,7 +64,7 @@ namespace OpenAstroAra.Test {
                 await Task.Delay(50);
             }
             var target = new Coordinates(Angle.ByHours(6.0), Angle.ByDegree(45.0), Epoch.J2000);
-            Task<bool> Slew() => ((ITelescopeMediator)svc).SlewToCoordinatesAsync(target, CancellationToken.None);
+            Task<bool> Slew() => ((ITelescopeMediator)svc).SlewToCoordinatesAsync(target, MoveAsker.Session, CancellationToken.None);
 
             await Assert.ThrowsAsync<SequenceEntityFailedException>(
                 () => suppressed ? TelescopeService.RunWithoutOpFaultsAsync(Slew) : Slew());

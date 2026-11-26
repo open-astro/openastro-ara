@@ -126,7 +126,7 @@ public static class PlateSolveEndpoints {
         }
         // #2066 (ARA-2) — Polar Align holds the mount for its whole run: Center's GoTo would run beside its next turn.
         // Refused before a job is queued (the mediator's GoTo refuses it again, for a center that started first).
-        EquipmentEndpoints.ThrowIfPolarAlignMovesTheMount(null, "centering GoTo", telescope);
+        MoveAdmission.ThrowIfPolarAlignMovesTheMount(null, "centering GoTo", telescope);
         var target = new OpenAstroAra.Astrometry.Coordinates(request.RaHours, request.DecDegrees,
             OpenAstroAra.Astrometry.Epoch.J2000, OpenAstroAra.Astrometry.Coordinates.RAType.Hours);
         // Job total = the profile's solve-attempt budget, read at enqueue time (the autofocus

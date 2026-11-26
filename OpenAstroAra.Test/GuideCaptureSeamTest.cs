@@ -93,8 +93,8 @@ namespace OpenAstroAra.Test {
             mount.Setup(m => m.GetInfo()).Returns(new TelescopeInfo { Connected = true, SiderealTime = 20.0, TrackingEnabled = true });
             var position = new Coordinates(0.0, 85.0, Epoch.JNOW, Coordinates.RAType.Degrees);
             mount.Setup(m => m.GetCurrentPosition()).Returns(() => position);
-            mount.Setup(m => m.SlewToCoordinatesAsync(It.IsAny<Coordinates>(), It.IsAny<CancellationToken>()))
-                .Callback<Coordinates, CancellationToken>((target, _) => position = target)
+            mount.Setup(m => m.SlewToCoordinatesAsync(It.IsAny<Coordinates>(), It.IsAny<MoveAsker>(), It.IsAny<CancellationToken>()))
+                .Callback<Coordinates, MoveAsker, CancellationToken>((target, _, _) => position = target)
                 .ReturnsAsync(true);
             // Polar alignment turns with the RA motor: each command steps the reported RA 0.25°.
             mount.Setup(m => m.MoveAxis(It.IsAny<OpenAstroAra.Core.Enums.TelescopeAxes>(), It.IsAny<double>()))

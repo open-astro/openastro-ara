@@ -120,8 +120,8 @@ namespace OpenAstroAra.Test {
             mount.Setup(m => m.GetInfo()).Returns(() => new OpenAstroAra.Equipment.Equipment.MyTelescope.TelescopeInfo {
                 Connected = true, SiderealTime = 0.0, TrackingEnabled = tracking, SideOfPier = OpenAstroAra.Core.Enums.PierSide.pierEast });
             mount.Setup(m => m.GetCurrentPosition()).Returns(() => encoder);
-            mount.Setup(m => m.SlewToCoordinatesAsync(Moq.It.IsAny<OpenAstroAra.Astrometry.Coordinates>(), Moq.It.IsAny<CancellationToken>()))
-                .Returns<OpenAstroAra.Astrometry.Coordinates, CancellationToken>(async (target, _) => {
+            mount.Setup(m => m.SlewToCoordinatesAsync(Moq.It.IsAny<OpenAstroAra.Astrometry.Coordinates>(), Moq.It.IsAny<MoveAsker>(), Moq.It.IsAny<CancellationToken>()))
+                .Returns<OpenAstroAra.Astrometry.Coordinates, MoveAsker, CancellationToken>(async (target, _, _) => {
                     await SlewSimulatorAsync(http, target.RADegrees / 15.0, target.Dec).ConfigureAwait(false);
                     encoder = target;
                     return true;

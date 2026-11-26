@@ -96,7 +96,7 @@ namespace OpenAstroAra.Test {
                 var settles = new List<TimeSpan>();
                 using var svc = await ConnectAsync(box, profileService, settles);
 
-                Assert.That(await ((ITelescopeMediator)svc).SlewToCoordinatesAsync(Target(), CancellationToken.None), Is.True);
+                Assert.That(await ((ITelescopeMediator)svc).SlewToCoordinatesAsync(Target(), MoveAsker.Session, CancellationToken.None), Is.True);
                 Assert.That(settles, Is.EqualTo(new[] { TimeSpan.FromSeconds(5) }),
                     "the next frame must not start while the mount is still ringing from the goto");
             }
@@ -110,7 +110,7 @@ namespace OpenAstroAra.Test {
                 var settles = new List<TimeSpan>();
                 using var svc = await ConnectAsync(box, profileService, settles);
 
-                Assert.That(await ((ITelescopeMediator)svc).SlewToCoordinatesAsync(Target(), CancellationToken.None), Is.True);
+                Assert.That(await ((ITelescopeMediator)svc).SlewToCoordinatesAsync(Target(), MoveAsker.Session, CancellationToken.None), Is.True);
                 Assert.That(settles, Is.Empty);
             }
         }
@@ -124,7 +124,7 @@ namespace OpenAstroAra.Test {
                     SettleDelay = (wait, _) => { settles.Add(wait); return Task.CompletedTask; },
                 };
 
-                Assert.That(await ((ITelescopeMediator)svc).SlewToCoordinatesAsync(Target(), CancellationToken.None), Is.False);
+                Assert.That(await ((ITelescopeMediator)svc).SlewToCoordinatesAsync(Target(), MoveAsker.Session, CancellationToken.None), Is.False);
                 Assert.That(settles, Is.Empty, "a disconnected mount went nowhere; there is nothing to settle");
             }
         }

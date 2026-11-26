@@ -46,8 +46,8 @@ namespace OpenAstroAra.Test {
             var mount = new Mock<ITelescopeMediator>();
             mount.Setup(m => m.GetCurrentPosition()).Returns(position);
             var slews = new List<Coordinates>();
-            mount.Setup(m => m.SlewToCoordinatesAsync(It.IsAny<Coordinates>(), It.IsAny<CancellationToken>()))
-                .Callback<Coordinates, CancellationToken>((c, _) => slews.Add(c))
+            mount.Setup(m => m.SlewToCoordinatesAsync(It.IsAny<Coordinates>(), It.IsAny<MoveAsker>(), It.IsAny<CancellationToken>()))
+                .Callback<Coordinates, MoveAsker, CancellationToken>((c, _, _) => slews.Add(c))
                 .ReturnsAsync(true);
             mount.Setup(m => m.GetInfo()).Returns(new TelescopeInfo());
             var dome = new Mock<IDomeMediator>();
@@ -61,7 +61,7 @@ namespace OpenAstroAra.Test {
                 mount.Object, Mock.Of<IFilterWheelMediator>(), dome.Object, Mock.Of<IDomeFollower>()) {
                 CaptureSolver = captureSolver.Object,
             };
-            var parameter = new CenterSolveParameter { Coordinates = target, Threshold = 1.0, Attempts = 1, NoSync = true };
+            var parameter = new CenterSolveParameter { Asker = OpenAstroAra.Equipment.Interfaces.Mediator.MoveAsker.Center, Coordinates = target, Threshold = 1.0, Attempts = 1, NoSync = true };
 
             var result = await solver.Center(new CaptureSequence(), parameter, null, null, CancellationToken.None);
 

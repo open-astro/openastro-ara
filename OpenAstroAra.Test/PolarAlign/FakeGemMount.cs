@@ -869,7 +869,7 @@ namespace OpenAstroAra.Test.PolarAlign {
 
         /// <summary>The mediator's GoTo (the sequencer's, Center's). As TelescopeService (#2066 ARA-2): refused, with
         /// nothing sent, while a routine holds the motion owner.</summary>
-        public async Task<bool> SlewToCoordinatesAsync(Coordinates coords, CancellationToken token) {
+        public async Task<bool> SlewToCoordinatesAsync(Coordinates coords, MoveAsker asker, CancellationToken token) {
             ArgumentNullException.ThrowIfNull(coords);
             var jnow = coords.Epoch == Epoch.JNOW ? coords : coords.Transform(Epoch.JNOW);
             int? entry;
@@ -903,7 +903,7 @@ namespace OpenAstroAra.Test.PolarAlign {
             }
         }
 
-        public async Task<bool> FindHome(IProgress<ApplicationStatus> progress, CancellationToken token) {
+        public async Task<bool> FindHome(IProgress<ApplicationStatus> progress, MoveAsker asker, CancellationToken token) {
             int? entry;
             lock (_lock) {
                 ThrowIfMediatorMoveOwnedLocked("Find Home");
@@ -912,7 +912,7 @@ namespace OpenAstroAra.Test.PolarAlign {
             return entry is int e && await WaitForMotionAsync(e, token).ConfigureAwait(false);
         }
 
-        public async Task<bool> ParkTelescope(IProgress<ApplicationStatus> progress, CancellationToken token) {
+        public async Task<bool> ParkTelescope(IProgress<ApplicationStatus> progress, MoveAsker asker, CancellationToken token) {
             int? entry;
             lock (_lock) {
                 ThrowIfMediatorMoveOwnedLocked("park");
@@ -1025,9 +1025,9 @@ namespace OpenAstroAra.Test.PolarAlign {
         public void PulseGuide(GuideDirections direction, int duration) => throw Unmodelled(nameof(PulseGuide));
 
         [Obsolete("Use SlewToTopocentricCoordinates instead.")]
-        public Task<bool> SlewToCoordinatesAsync(TopocentricCoordinates coords, CancellationToken token) => throw Unmodelled("SlewToCoordinatesAsync(topocentric)");
+        public Task<bool> SlewToCoordinatesAsync(TopocentricCoordinates coords, MoveAsker asker, CancellationToken token) => throw Unmodelled("SlewToCoordinatesAsync(topocentric)");
 
-        public Task<bool> SlewToTopocentricCoordinates(TopocentricCoordinates coords, CancellationToken token) => throw Unmodelled(nameof(SlewToTopocentricCoordinates));
+        public Task<bool> SlewToTopocentricCoordinates(TopocentricCoordinates coords, MoveAsker asker, CancellationToken token) => throw Unmodelled(nameof(SlewToTopocentricCoordinates));
 
         public bool SetTrackingMode(TrackingMode trackingMode) => throw Unmodelled(nameof(SetTrackingMode));
 

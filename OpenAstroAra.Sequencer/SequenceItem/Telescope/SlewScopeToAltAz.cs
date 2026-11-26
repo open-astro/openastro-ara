@@ -80,7 +80,7 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Telescope {
                 throw new SequenceEntityFailedException(Loc.Instance["LblTelescopeParkedWarning"]);
             }
             var stoppedGuiding = await guiderMediator.StopGuiding(token);
-            await telescopeMediator.SlewToTopocentricCoordinates(Coordinates.Coordinates, token);
+            await telescopeMediator.SlewToTopocentricCoordinates(Coordinates.Coordinates, MoveAsker.Session, token);
             if (stoppedGuiding) {
                 await guiderMediator.StartGuiding(false, progress, token);
             }

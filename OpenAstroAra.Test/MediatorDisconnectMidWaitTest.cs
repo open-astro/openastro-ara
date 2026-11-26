@@ -148,7 +148,7 @@ namespace OpenAstroAra.Test {
                 TimeSpan.FromSeconds(15), "mount never connected");
 
             var target = new Coordinates(Angle.ByHours(5.5), Angle.ByDegree(20.0), Epoch.JNOW);
-            var slew = ((ITelescopeMediator)svc).SlewToCoordinatesAsync(target, CancellationToken.None);
+            var slew = ((ITelescopeMediator)svc).SlewToCoordinatesAsync(target, MoveAsker.Session, CancellationToken.None);
             await Task.Delay(MidWait);
             Assert.That(slew.IsCompleted, Is.False, "the wait is still confirming against the never-settling mount");
             await svc.DisconnectAsync(null, CancellationToken.None);

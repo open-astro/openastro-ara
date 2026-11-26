@@ -14,6 +14,7 @@
 
 using Microsoft.Extensions.Logging.Abstractions;
 using NUnit.Framework;
+using OpenAstroAra.Equipment.Interfaces.Mediator;
 using OpenAstroAra.Astrometry;
 using OpenAstroAra.Core.Model;
 using OpenAstroAra.Server.Contracts;
@@ -88,7 +89,7 @@ namespace OpenAstroAra.Test {
             Assert.That(mount.MotionOwner, Is.EqualTo(MotionOwners.PolarAlign), "held through the adjust loop");
             var (ra, dec) = mount.TrueSky;
             var goTo = new Coordinates(Angle.ByDegree(ra + 5.0), Angle.ByDegree(dec), Epoch.JNOW);
-            await Assert.ThrowsAsync<SequenceEntityFailedException>(() => mount.SlewToCoordinatesAsync(goTo, CancellationToken.None),
+            await Assert.ThrowsAsync<SequenceEntityFailedException>(() => mount.SlewToCoordinatesAsync(goTo, MoveAsker.Session, CancellationToken.None),
                 "a sequencer or Center GoTo is refused while Polar Align holds the mount").ConfigureAwait(false);
             await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
 
@@ -130,7 +131,7 @@ namespace OpenAstroAra.Test {
                     var (ra, dec) = mount.TrueSky;
                     var goTo = new Coordinates(Angle.ByDegree(ra + 3.0), Angle.ByDegree(dec), Epoch.JNOW);
                     // A refusal faults the call at once; a GoTo the mount took would still be running (not awaited here).
-                    var call = mount.SlewToCoordinatesAsync(goTo, CancellationToken.None);
+                    var call = mount.SlewToCoordinatesAsync(goTo, MoveAsker.Session, CancellationToken.None);
                     refused = call.IsFaulted ? call.Exception!.InnerException : null;
                 }
             };

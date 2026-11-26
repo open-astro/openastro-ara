@@ -710,7 +710,7 @@ namespace OpenAstroAra.Test {
             });
             telescope.Setup(t => t.MeridianFlip(It.IsAny<Coordinates>(), It.IsAny<CancellationToken>()))
                 .Callback(() => side = PierSide.pierWest).ReturnsAsync(true);
-            telescope.Setup(t => t.ParkTelescope(It.IsAny<IProgress<ApplicationStatus>>(), It.IsAny<CancellationToken>()))
+            telescope.Setup(t => t.ParkTelescope(It.IsAny<IProgress<ApplicationStatus>>(), It.IsAny<MoveAsker>(), It.IsAny<CancellationToken>()))
                 .ReturnsAsync(true);
             centering.Setup(c => c.CenterOnTarget(It.IsAny<Coordinates>(), It.IsAny<IProgress<PlateSolveProgress>>(),
                     It.IsAny<IProgress<ApplicationStatus>>(), It.IsAny<CancellationToken>()))
@@ -720,7 +720,7 @@ namespace OpenAstroAra.Test {
             var ok = await sut.MeridianFlip(SafeTarget, TimeSpan.Zero, Progress, CancellationToken.None);
 
             Assert.That(ok, Is.False);
-            telescope.Verify(t => t.ParkTelescope(It.IsAny<IProgress<ApplicationStatus>>(), It.IsAny<CancellationToken>()), Times.Once);
+            telescope.Verify(t => t.ParkTelescope(It.IsAny<IProgress<ApplicationStatus>>(), It.IsAny<MoveAsker>(), It.IsAny<CancellationToken>()), Times.Once);
             guider.Verify(g => g.StartGuiding(It.IsAny<bool>(), It.IsAny<IProgress<ApplicationStatus>>(), It.IsAny<CancellationToken>()),
                 Times.Never, "PHD2 corrections on a mis-aimed scope drift it further — the guider stays stopped");
             Assert.That(published.Single().Message, Does.Contain("parked"));
@@ -762,7 +762,7 @@ namespace OpenAstroAra.Test {
             });
             telescope.Setup(t => t.MeridianFlip(It.IsAny<Coordinates>(), It.IsAny<CancellationToken>()))
                 .Callback(() => side = PierSide.pierWest).ReturnsAsync(true);
-            telescope.Setup(t => t.ParkTelescope(It.IsAny<IProgress<ApplicationStatus>>(), It.IsAny<CancellationToken>()))
+            telescope.Setup(t => t.ParkTelescope(It.IsAny<IProgress<ApplicationStatus>>(), It.IsAny<MoveAsker>(), It.IsAny<CancellationToken>()))
                 .ReturnsAsync(false);   // parkable, but this attempt fails
             centering.Setup(c => c.CenterOnTarget(It.IsAny<Coordinates>(), It.IsAny<IProgress<PlateSolveProgress>>(),
                     It.IsAny<IProgress<ApplicationStatus>>(), It.IsAny<CancellationToken>()))
@@ -790,7 +790,7 @@ namespace OpenAstroAra.Test {
             var ok = await sut.MeridianFlip(SafeTarget, TimeSpan.Zero, Progress, CancellationToken.None);
 
             Assert.That(ok, Is.False);
-            telescope.Verify(t => t.ParkTelescope(It.IsAny<IProgress<ApplicationStatus>>(), It.IsAny<CancellationToken>()), Times.Never);
+            telescope.Verify(t => t.ParkTelescope(It.IsAny<IProgress<ApplicationStatus>>(), It.IsAny<MoveAsker>(), It.IsAny<CancellationToken>()), Times.Never);
             Assert.That(callLog.Last(), Is.EqualTo("SetTracking(False)"),
                 "safe rest ends with tracking OFF — the §58.4 restore-to-tracking path must not run");
             Assert.That(published.Single().Message, Does.Contain("tracking was stopped"));

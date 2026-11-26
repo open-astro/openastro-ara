@@ -136,7 +136,7 @@ namespace OpenAstroAra.PlateSolving {
                         var slewMeasurement = new Measurement("Reslew").Start();
                         // #2075 — near the pole the sum can pass ±90° (operator + does not fold); fold it
                         // to the same sky point so the mediator's range guard does not refuse it.
-                        await telescopeMediator.SlewToCoordinatesAsync((parameterCoordinates + offset).FoldedOverPole(), ct);
+                        await telescopeMediator.SlewToCoordinatesAsync((parameterCoordinates + offset).FoldedOverPole(), parameter.Asker, ct);
                         slewMeasurement.Stop();
                         centeringAttempt.AddSubMeasurement(slewMeasurement);
 

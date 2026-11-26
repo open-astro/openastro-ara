@@ -387,7 +387,10 @@ public partial class Program {
             // #2070 — registered below, once profileDir is known.
             sp.GetService<IMountPoseStore>(),
             // #2071 — the mount's clock is set from, and checked against, the synced rig clock.
-            () => sp.GetService<ITimeSyncService>()))));
+            () => sp.GetService<ITimeSyncService>(),
+            // #2139 — Move Admission's person rules: the active runs and Polar Align turning the mount (built later).
+            () => sp.GetService<ISequencerService>(),
+            () => sp.GetService<IPolarAlignService>()))));
         builder.Services.AddSingleton<ITelescopeService>(sp => sp.GetRequiredService<TelescopeService>());
         builder.Services.AddSingleton<IMountClockGate>(sp => sp.GetRequiredService<TelescopeService>());
         builder.Services.AddSingleton<IMountSpecSheetSource>(sp => sp.GetRequiredService<TelescopeService>());

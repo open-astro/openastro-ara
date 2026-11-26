@@ -52,7 +52,7 @@ namespace OpenAstroAra.Test {
                 mount.Object, Mock.Of<IFilterWheelMediator>(), Mock.Of<IDomeMediator>(), Mock.Of<IDomeFollower>()) {
                 CaptureSolver = captureSolver.Object,
             };
-            var parameter = new CenterSolveParameter { Coordinates = target, Threshold = 1.0, Attempts = 1 };
+            var parameter = new CenterSolveParameter { Asker = OpenAstroAra.Equipment.Interfaces.Mediator.MoveAsker.Center, Coordinates = target, Threshold = 1.0, Attempts = 1 };
 
             await Assert.ThatAsync(() => solver.Center(new CaptureSequence(), parameter, null, null, cts.Token),
                 Throws.InstanceOf<OperationCanceledException>());

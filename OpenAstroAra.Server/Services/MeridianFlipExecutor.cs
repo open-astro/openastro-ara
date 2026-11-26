@@ -821,7 +821,7 @@ public sealed class MeridianFlipExecutor : IMeridianFlipExecutor {
                 Logger.Info("Meridian Flip - Safe rest: parking the mount.");
                 progress.Report(new ApplicationStatus { Source = "MeridianFlip", Status = "Parking (safe rest)" });
                 using var parkCts = new CancellationTokenSource(TimeSpan.FromSeconds(ParkTimeoutSeconds));
-                if (await telescopeMediator.ParkTelescope(progress, parkCts.Token)) {
+                if (await telescopeMediator.ParkTelescope(progress, MoveAsker.MeridianFlip, parkCts.Token)) {
                     return "the mount was parked.";
                 }
                 parkAttemptFailed = true;

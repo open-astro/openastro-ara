@@ -120,7 +120,7 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Telescope {
                         "The mount refused the slew (parked, at a limit or target below the horizon), or centering did not converge within the profile's threshold/attempts (Settings → Plate Solving → Center target after slew).");
                 }
             } else {
-                await telescopeMediator.SlewToCoordinatesAsync(Coordinates.Coordinates, token);
+                await telescopeMediator.SlewToCoordinatesAsync(Coordinates.Coordinates, MoveAsker.Session, token);
             }
             if (stoppedGuiding) {
                 await guiderMediator.StartGuiding(false, progress, token);

@@ -141,16 +141,16 @@ namespace OpenAstroAra.Test {
                     }
                 });
                 // #2048 — the routine sends none of these; each is logged (and does what a mount would) so a test sees it.
-                Mock.Setup(m => m.SlewToCoordinatesAsync(It.IsAny<Coordinates>(), It.IsAny<CancellationToken>()))
-                    .Returns((Coordinates target, CancellationToken _) => {
+                Mock.Setup(m => m.SlewToCoordinatesAsync(It.IsAny<Coordinates>(), It.IsAny<MoveAsker>(), It.IsAny<CancellationToken>()))
+                    .Returns((Coordinates target, MoveAsker _, CancellationToken _) => {
                         lock (_lock) {
                             Record("goto");
                             (_raDeg, _decDeg) = (target.RADegrees, target.Dec);
                         }
                         return Task.FromResult(true);
                     });
-                Mock.Setup(m => m.FindHome(It.IsAny<IProgress<ApplicationStatus>>(), It.IsAny<CancellationToken>()))
-                    .Returns((IProgress<ApplicationStatus> _, CancellationToken _) => {
+                Mock.Setup(m => m.FindHome(It.IsAny<IProgress<ApplicationStatus>>(), It.IsAny<MoveAsker>(), It.IsAny<CancellationToken>()))
+                    .Returns((IProgress<ApplicationStatus> _, MoveAsker _, CancellationToken _) => {
                         lock (_lock) {
                             Record("findhome");
                             (_raDeg, _decDeg) = (0.0, 90.0);

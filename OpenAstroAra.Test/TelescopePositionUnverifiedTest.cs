@@ -152,11 +152,8 @@ namespace OpenAstroAra.Test {
         [Test]
         public async Task Force_does_not_bypass_the_refusal() {
             using var svc = await ConnectedAtFalseZeroAsync();
-            var sequencer = new Mock<ISequencerService>();
-            sequencer.Setup(s => s.ActiveRunIdsAsync(It.IsAny<CancellationToken>())).ReturnsAsync(new List<Guid> { Guid.NewGuid() });
-
             var refusal = await RefusedAsync(() => EquipmentEndpoints.SlewAsync(
-                new SlewRequestDto(5.0, 30.0, Force: true), null, svc, sequencer.Object, profiles: null, CancellationToken.None));
+                new SlewRequestDto(5.0, 30.0, Force: true), null, svc, CancellationToken.None));
 
             Assert.That(refusal.Cause, Is.EqualTo(RefusalCatalog.MountPositionUnverified));
             Assert.That(Current.Slews, Is.Zero);
@@ -203,7 +200,7 @@ namespace OpenAstroAra.Test {
         public async Task A_sequence_goto_fails_the_instruction_without_an_op_fault() {
             using var svc = await ConnectedAtFalseZeroAsync();
 
-            await Assert.ThrowsAsync<SequenceEntityFailedException>(() => ((ITelescopeMediator)svc).SlewToCoordinatesAsync(Target, CancellationToken.None));
+            await Assert.ThrowsAsync<SequenceEntityFailedException>(() => ((ITelescopeMediator)svc).SlewToCoordinatesAsync(Target, MoveAsker.Session, CancellationToken.None));
 
             Assert.That(Current.Slews, Is.Zero);
             Assert.That(_faults.Faults.Where(f => f.Kind is EquipmentFaultKind.OpError or EquipmentFaultKind.StallTimeout), Is.Empty);
@@ -214,11 +211,11 @@ namespace OpenAstroAra.Test {
             using var svc = await ConnectedAtFalseZeroAsync();
 
             Current.TrackingOn = true;
-            var park = await Assert.ThrowsAsync<SequenceEntityFailedException>(() => ((ITelescopeMediator)svc).ParkTelescope(new Progress<ApplicationStatus>(), CancellationToken.None));
+            var park = await Assert.ThrowsAsync<SequenceEntityFailedException>(() => ((ITelescopeMediator)svc).ParkTelescope(new Progress<ApplicationStatus>(), MoveAsker.Session, CancellationToken.None));
             Assert.That(Current.TrackingOn, Is.False, "a refused park does not leave the mount tracking unattended");
             Assert.That(park!.Message, Does.Contain("NOT parked"));
             Current.TrackingOn = true;
-            await Assert.ThrowsAsync<SequenceEntityFailedException>(() => ((ITelescopeMediator)svc).FindHome(new Progress<ApplicationStatus>(), CancellationToken.None));
+            await Assert.ThrowsAsync<SequenceEntityFailedException>(() => ((ITelescopeMediator)svc).FindHome(new Progress<ApplicationStatus>(), MoveAsker.Session, CancellationToken.None));
             Assert.That(Current.TrackingOn, Is.True, "a refused Home changes nothing");
 
             Assert.That(Current.Parks, Is.Zero);

@@ -34,12 +34,13 @@ namespace OpenAstroAra.Equipment.Interfaces.Mediator {
         /// cannot cancel their sync keep the parameterless behaviour.</summary>
         Task<bool> Sync(Coordinates coordinates, System.Threading.CancellationToken token) => Sync(coordinates);
 
-        Task<bool> SlewToCoordinatesAsync(Coordinates coords, CancellationToken token);
+        /// <summary>#2139 — a GoTo for <paramref name="asker"/>: Move Admission checks it for that asker's rules (record 0026).</summary>
+        Task<bool> SlewToCoordinatesAsync(Coordinates coords, MoveAsker asker, CancellationToken token);
 
         [Obsolete("Use SlewToTopocentricCoordinates instead.")]
-        Task<bool> SlewToCoordinatesAsync(TopocentricCoordinates coords, CancellationToken token);
+        Task<bool> SlewToCoordinatesAsync(TopocentricCoordinates coords, MoveAsker asker, CancellationToken token);
 
-        Task<bool> SlewToTopocentricCoordinates(TopocentricCoordinates coords, CancellationToken token);
+        Task<bool> SlewToTopocentricCoordinates(TopocentricCoordinates coords, MoveAsker asker, CancellationToken token);
 
         Task<bool> MeridianFlip(Coordinates targetCoordinates, CancellationToken token);
 
@@ -60,13 +61,15 @@ namespace OpenAstroAra.Equipment.Interfaces.Mediator {
 
         Coordinates GetCurrentPosition();
 
-        Task<bool> ParkTelescope(IProgress<ApplicationStatus> progress, CancellationToken token);
+        /// <summary>#2139 — a park for <paramref name="asker"/> (record 0026).</summary>
+        Task<bool> ParkTelescope(IProgress<ApplicationStatus> progress, MoveAsker asker, CancellationToken token);
 
         Task<bool> UnparkTelescope(IProgress<ApplicationStatus> progress, CancellationToken token);
 
         Task WaitForSlew(CancellationToken token);
 
-        Task<bool> FindHome(IProgress<ApplicationStatus> progress, CancellationToken token);
+        /// <summary>#2139 — a Find Home for <paramref name="asker"/> (record 0026).</summary>
+        Task<bool> FindHome(IProgress<ApplicationStatus> progress, MoveAsker asker, CancellationToken token);
 
         void StopSlew();
 

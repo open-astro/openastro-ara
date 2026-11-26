@@ -161,7 +161,7 @@ public sealed partial class ShutdownLadder {
             if (!mount.Connected || !mount.CanFindHome || mount.AtPark) return new(LadderOutcome.Skipped, string.Empty);
             await EndRoutinesFirstAsync().ConfigureAwait(false);
             using var cts = new CancellationTokenSource(FindHomeTimeout);
-            var found = await _telescope.FindHome(new Progress<OpenAstroAra.Core.Model.ApplicationStatus>(), cts.Token).ConfigureAwait(false);
+            var found = await _telescope.FindHome(new Progress<OpenAstroAra.Core.Model.ApplicationStatus>(), MoveAsker.Shutdown, cts.Token).ConfigureAwait(false);
             return found
                 ? new(LadderOutcome.Done, "Mount found home. ")
                 : new(LadderOutcome.Failed, "Mount did not find home. ");
@@ -203,7 +203,7 @@ public sealed partial class ShutdownLadder {
                 try {
                     using var parkCts = new CancellationTokenSource(ParkTimeout);
                     var progress = new Progress<OpenAstroAra.Core.Model.ApplicationStatus>();
-                    parked = await _telescope.ParkTelescope(progress, parkCts.Token).ConfigureAwait(false);
+                    parked = await _telescope.ParkTelescope(progress, MoveAsker.Shutdown, parkCts.Token).ConfigureAwait(false);
                 } catch (Exception ex) {
                     LogStepFailed("park-mount", ex);
                 }

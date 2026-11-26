@@ -54,21 +54,40 @@ namespace OpenAstroAra.Test {
             return ((lstHours - hourAngleHours) % 24.0 + 24.0) % 24.0;
         }
 
-        private static (Mock<ITelescopeService> Telescope, Mock<ISequencerService> Sequencer) Rig(AlignmentMode? alignment = AlignmentMode.GermanPolar) {
-            var telescope = new Mock<ITelescopeService>();
-            telescope.Setup(t => t.MountAlignmentMode).Returns(alignment);
-            telescope.Setup(t => t.SlewAsync(It.IsAny<SlewRequestDto>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
-                .ReturnsAsync(new OperationAcceptedDto(Guid.NewGuid(), "telescope.slew", DateTimeOffset.UtcNow, null));
-            var sequencer = new Mock<ISequencerService>();
-            sequencer.Setup(s => s.ActiveRunIdsAsync(It.IsAny<CancellationToken>())).ReturnsAsync(None);
-            return (telescope, sequencer);
+        /// <summary>#2139 — the seam a person's GoTo is admitted at: a real Telescope service on the fake mount. The Slew
+        /// below connects it with the case's profile store and runs; <see cref="Rig"/> is the last one.</summary>
+        private sealed class Seam : IDisposable {
+            public ASCOM.Common.DeviceInterfaces.AlignmentMode? Alignment { get; init; } = ASCOM.Common.DeviceInterfaces.AlignmentMode.GermanPolar;
+            public FakeMountRig? Rig { get; set; }
+            public void Dispose() => Rig?.Dispose();
         }
 
-        private static Task<Microsoft.AspNetCore.Http.IResult> Slew(SlewRequestDto request, Mock<ITelescopeService> t, Mock<ISequencerService> s, IProfileStore? profiles) =>
-            EquipmentEndpoints.SlewAsync(request, null, t.Object, s.Object, profiles, CancellationToken.None);
+        private readonly List<Seam> _seams = new();
 
-        private static void NothingDispatched(Mock<ITelescopeService> telescope) =>
-            telescope.Verify(t => t.SlewAsync(It.IsAny<SlewRequestDto>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Never, "a refused GoTo never reaches the mount");
+        [TearDown]
+        public void DisposeSeams() {
+            foreach (var seam in _seams) { seam.Dispose(); }
+            _seams.Clear();
+        }
+
+        private (Seam Telescope, Mock<ISequencerService> Sequencer) Rig(AlignmentMode? alignment = AlignmentMode.GermanPolar) {
+            var sequencer = new Mock<ISequencerService>();
+            sequencer.Setup(s => s.ActiveRunIdsAsync(It.IsAny<CancellationToken>())).ReturnsAsync(None);
+            var seam = new Seam { Alignment = alignment };
+            _seams.Add(seam);
+            return (seam, sequencer);
+        }
+
+        private static async Task<Microsoft.AspNetCore.Http.IResult> Slew(SlewRequestDto request, Seam t, Mock<ISequencerService> s, IProfileStore? profiles) {
+            t.Rig?.Dispose();
+            t.Rig = await FakeMountRig.ConnectAsync(profiles, s.Object, configure: f => f.Alignment = t.Alignment);
+            return await EquipmentEndpoints.SlewAsync(request, null, t.Rig.Service, CancellationToken.None);
+        }
+
+        private static void NothingDispatched(Seam telescope) {
+            Thread.Sleep(100);
+            Assert.That(telescope.Rig!.Fake.Slews, Is.Zero, "a refused GoTo never reaches the mount");
+        }
 
         [Test]
         public async Task A_goto_below_the_pole_near_the_lower_meridian_is_refused_with_the_counterweight_angle() {
