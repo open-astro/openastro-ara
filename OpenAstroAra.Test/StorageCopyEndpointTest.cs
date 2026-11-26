@@ -71,7 +71,7 @@ namespace OpenAstroAra.Test {
             builder.Services.AddSingleton(copy.Object);
             builder.Services.AddSingleton(devices.Object);
             builder.Services.AddSingleton(runs);
-            builder.Services.AddSingleton(new RigOccupancy().RegisterSession(runs, () => sequencer.Object));
+            builder.Services.AddSingleton(new RigOccupancy().RegisterSession(runs, () => sequencer.Object).RegisterStorageCopy(() => copy.Object));
             builder.Services.AddSingleton(erased);
             // The rest of the system endpoints' services: registered so the route table builds.
             builder.Services.AddSingleton(Mock.Of<IDataManagerService>());
@@ -189,6 +189,7 @@ namespace OpenAstroAra.Test {
         [TestCase("/api/v1/storage/configure")]
         [TestCase("/api/v1/storage/check")]
         [TestCase("/api/v1/storage/eject")]
+        [TestCase("/api/v1/storage/rescan")] // #2143 — the copy is a Rig Occupancy routine on the disk: rescan waits for it too
         public async Task The_store_is_not_touched_while_a_copy_runs(string route) {
             copy.Setup(c => c.IsRunning).Returns(true);
             using var resp = await http.PostAsJsonAsync(route, new { uuid = "EBDF-D246" }, Json);

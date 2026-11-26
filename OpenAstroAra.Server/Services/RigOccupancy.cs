@@ -143,6 +143,14 @@ public sealed class RigOccupancy {
             (_, _) => camera()?.StopLiveViewAsync() ?? Task.CompletedTask,
             failedRung: "stop_live_view");
 
+    /// <summary>#2143 — a disk-to-disk storage copy: it holds the disk. Its stop cancels the copy and waits for it to
+    /// end (the copy releases its target first).</summary>
+    public RigOccupancy RegisterStorageCopy(Func<IStorageCopyService?> copy) =>
+        Register("a disk-to-disk copy", RigHolding.Disk,
+            () => copy()?.IsRunning == true,
+            (_, ct) => CancelThenWaitAsync(() => copy()?.Cancel(), () => copy()?.IsRunning == true, ct),
+            failedRung: "stop_storage_copy");
+
     /// <summary>A stop for a routine whose cancel only asks: ask, then wait until its reading says it ended.</summary>
     private static async Task CancelThenWaitAsync(Action cancel, Func<bool> isRunning, CancellationToken ct) {
         cancel();
