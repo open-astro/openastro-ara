@@ -102,7 +102,7 @@ namespace OpenAstroAra.Test {
             using var svc = await ConnectAsync(box);
 
             await Assert.ThrowsAsync<SequenceEntityFailedException>(
-                () => ((ITelescopeMediator)svc).SlewToCoordinatesAsync(J2000Target(), CancellationToken.None),
+                () => ((ITelescopeMediator)svc).SlewToCoordinatesAsync(J2000Target(), MoveAsker.Session, CancellationToken.None),
                 "a slew whose target frame is unknown must fail the instruction, not guess JNOW");
             Assert.That(PutReached(box, "slewtocoordinatesasync"), Is.False,
                 "no target may reach the mount while its coordinate system is unknown");
@@ -126,7 +126,7 @@ namespace OpenAstroAra.Test {
             using var svc = await ConnectAsync(box);
             Volatile.Write(ref system, J2000); // readable now; the next refresh is up to 2 s away
 
-            Assert.That(await ((ITelescopeMediator)svc).SlewToCoordinatesAsync(J2000Target(), CancellationToken.None), Is.True);
+            Assert.That(await ((ITelescopeMediator)svc).SlewToCoordinatesAsync(J2000Target(), MoveAsker.Session, CancellationToken.None), Is.True);
             var put = box.Puts.Single(p => p.Path.EndsWith("/slewtocoordinatesasync", StringComparison.Ordinal));
             Assert.That(FormValue(put.Body, "RightAscension"), Is.EqualTo(6.0).Within(1e-9),
                 "a J2000 mount gets the J2000 target as-is — no precession");

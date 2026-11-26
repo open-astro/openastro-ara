@@ -14,6 +14,7 @@
 
 using Microsoft.Extensions.Logging.Abstractions;
 using NUnit.Framework;
+using OpenAstroAra.Equipment.Interfaces.Mediator;
 using OpenAstroAra.Core.Model;
 using OpenAstroAra.Server.Contracts;
 using OpenAstroAra.Server.Contracts.WsEvents;
@@ -229,7 +230,7 @@ namespace OpenAstroAra.Test {
                 await svc.StopForTakeoverAsync("safety_park", CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(10)).ConfigureAwait(false);
                 var answeredIn = watch.Elapsed;
                 var parkAt = mount.Now;
-                var park = mount.ParkTelescope(new Progress<ApplicationStatus>(), CancellationToken.None);
+                var park = mount.ParkTelescope(new Progress<ApplicationStatus>(), MoveAsker.Session, CancellationToken.None);
                 await stop.WaitAsync(SignalTimeout).ConfigureAwait(false);
                 solver.Release(); // the stuck run unwinds now, in the middle of the park
                 var parked = await park.WaitAsync(SignalTimeout).ConfigureAwait(false);
@@ -264,7 +265,7 @@ namespace OpenAstroAra.Test {
             try {
                 await svc.StopForTakeoverAsync("safety_park", CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(10)).ConfigureAwait(false);
                 var parkAt = mount.Now;
-                var park = mount.ParkTelescope(new Progress<ApplicationStatus>(), CancellationToken.None);
+                var park = mount.ParkTelescope(new Progress<ApplicationStatus>(), MoveAsker.Session, CancellationToken.None);
                 mount.HangReads = null;
                 hang.TrySetResult(); // the turn's read returns now, in the middle of the park
                 var parked = await park.WaitAsync(SignalTimeout).ConfigureAwait(false);
@@ -306,7 +307,7 @@ namespace OpenAstroAra.Test {
                 await svc.StopForTakeoverAsync("safety_park", CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(10)).ConfigureAwait(false);
                 var parkAt = mount.Now;
                 Assert.That(mount.SetTrackingEnabled(true), Is.True, "the park turns tracking on first");
-                var park = mount.ParkTelescope(new Progress<ApplicationStatus>(), CancellationToken.None);
+                var park = mount.ParkTelescope(new Progress<ApplicationStatus>(), MoveAsker.Session, CancellationToken.None);
                 mount.HangReads = null;
                 hang.TrySetResult(); // the exit's read returns now, in the middle of the park
                 var parked = await park.WaitAsync(SignalTimeout).ConfigureAwait(false);
@@ -349,7 +350,7 @@ namespace OpenAstroAra.Test {
             try {
                 await svc.StopForTakeoverAsync("safety_park", CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(10)).ConfigureAwait(false);
                 var parkAt = mount.Now;
-                var park = mount.ParkTelescope(new Progress<ApplicationStatus>(), CancellationToken.None);
+                var park = mount.ParkTelescope(new Progress<ApplicationStatus>(), MoveAsker.Session, CancellationToken.None);
                 var parked = await park.WaitAsync(SignalTimeout).ConfigureAwait(false);
                 await Task.Delay(svc.StopCommandTimeout).ConfigureAwait(false); // the hung read has given up by now
 
@@ -438,7 +439,7 @@ namespace OpenAstroAra.Test {
             try {
                 await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
                 var parkAt = mount.Now;
-                var park = mount.ParkTelescope(new Progress<ApplicationStatus>(), CancellationToken.None);
+                var park = mount.ParkTelescope(new Progress<ApplicationStatus>(), MoveAsker.Session, CancellationToken.None);
                 solver.Release(); // the stuck run unwinds now, in the middle of the park
                 var parked = await park.WaitAsync(SignalTimeout).ConfigureAwait(false);
 

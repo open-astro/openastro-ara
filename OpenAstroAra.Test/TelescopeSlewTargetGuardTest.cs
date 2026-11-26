@@ -120,7 +120,7 @@ namespace OpenAstroAra.Test {
             var target = new Coordinates(Angle.ByHours(6.0), Angle.ByDegree(dec), Epoch.JNOW);
 
             var ex = await Assert.ThrowsAsync<SequenceEntityFailedException>(
-                () => rig.Mediator.SlewToCoordinatesAsync(target, CancellationToken.None));
+                () => rig.Mediator.SlewToCoordinatesAsync(target, MoveAsker.Session, CancellationToken.None));
 
             Assert.That(ex!.Message, Does.Contain("Nothing was sent to the mount"));
             Assert.That(rig.Put("/slewtocoordinatesasync"), Is.False, "no goto reached the mount");
@@ -133,7 +133,7 @@ namespace OpenAstroAra.Test {
             await using var rig = await StartAsync(6.0, 90.0);
             var target = new Coordinates(Angle.ByHours(6.0), Angle.ByDegree(90.0), Epoch.JNOW);
 
-            Assert.That(await rig.Mediator.SlewToCoordinatesAsync(target, CancellationToken.None), Is.True);
+            Assert.That(await rig.Mediator.SlewToCoordinatesAsync(target, MoveAsker.Session, CancellationToken.None), Is.True);
             Assert.That(rig.Put("/slewtocoordinatesasync"), Is.True);
             Assert.That(rig.FaultSnapshot(), Is.Empty);
         }
@@ -170,7 +170,7 @@ namespace OpenAstroAra.Test {
             await using var rig = await StartAsync(6.0, 90.6);
             var target = new Coordinates(Angle.ByHours(18.0), Angle.ByDegree(89.4), Epoch.JNOW);
 
-            Assert.That(await rig.Mediator.SlewToCoordinatesAsync(target, CancellationToken.None), Is.True);
+            Assert.That(await rig.Mediator.SlewToCoordinatesAsync(target, MoveAsker.Session, CancellationToken.None), Is.True);
             Assert.That(rig.FaultSnapshot(), Is.Empty, "no StallTimeout fault");
         }
 

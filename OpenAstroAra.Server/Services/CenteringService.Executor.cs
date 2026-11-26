@@ -16,6 +16,7 @@ using OpenAstroAra.Astrometry;
 using OpenAstroAra.Core.Model;
 using OpenAstroAra.Core.Model.Equipment;
 using OpenAstroAra.Core.Utility;
+using OpenAstroAra.Equipment.Interfaces.Mediator;
 using OpenAstroAra.Equipment.Model;
 using OpenAstroAra.PlateSolving;
 using OpenAstroAra.Sequencer.SequenceItem.Platesolving;
@@ -90,7 +91,7 @@ public sealed partial class CenteringService : ICenteringExecutor {
     // when that fails too (rig night 2026-10-17).
     private async Task<bool> SlewToTargetAsync(Coordinates target, CancellationToken token) {
         Logger.Info($"Centering: slewing to {target} before the first solve");
-        if (await telescopeMediator.SlewToCoordinatesAsync(target, token)) {
+        if (await telescopeMediator.SlewToCoordinatesAsync(target, MoveAsker.Center, token)) {
             return true;
         }
         Logger.Warning($"Centering: the slew to {target} was refused (mount not connected, parked, at a limit or the target below the horizon) — not solving off target");

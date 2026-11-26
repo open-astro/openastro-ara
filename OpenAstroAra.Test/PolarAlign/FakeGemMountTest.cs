@@ -13,6 +13,7 @@
 #endregion "copyright"
 
 using NUnit.Framework;
+using OpenAstroAra.Equipment.Interfaces.Mediator;
 using OpenAstroAra.Astrometry;
 using OpenAstroAra.Core.Enums;
 using OpenAstroAra.Server.Contracts.Refusals;
@@ -166,7 +167,7 @@ namespace OpenAstroAra.Test.PolarAlign {
             new(GemGeometry.Wrap360((Lst - haHours) * 15.0), decDeg, Epoch.JNOW, Coordinates.RAType.Degrees);
 
         private static async Task<bool> GoToAsync(FakeGemMount mount, ManualMountClock clock, Coordinates target) {
-            var slew = mount.SlewToCoordinatesAsync(target, CancellationToken.None);
+            var slew = mount.SlewToCoordinatesAsync(target, MoveAsker.Session, CancellationToken.None);
             for (var i = 0; i < 600 && !slew.IsCompleted; i++) {
                 Run(mount, clock, OneSecond);
                 await Task.Yield();
@@ -271,7 +272,7 @@ namespace OpenAstroAra.Test.PolarAlign {
         public async Task FakeGemMount_GoTo_while_a_motor_runs_is_sent_while_slewing() {
             var (mount, clock) = At(6.0, 90.0);
             await mount.MoveAxisAsync(1, 1.0, leaseMs: null, CancellationToken.None);
-            var slew = mount.SlewToCoordinatesAsync(AtHourAngle(5.0, 80.0), CancellationToken.None);
+            var slew = mount.SlewToCoordinatesAsync(AtHourAngle(5.0, 80.0), MoveAsker.Session, CancellationToken.None);
             Run(mount, clock, TimeSpan.FromMinutes(1));
             await mount.MoveAxisAsync(1, 0, leaseMs: null, CancellationToken.None);
             Run(mount, clock, TimeSpan.FromMinutes(1));
@@ -423,7 +424,7 @@ namespace OpenAstroAra.Test.PolarAlign {
         public async Task FakeGemMount_find_home_drives_to_the_true_Home_and_clears_a_false_zero() {
             var (mount, clock) = At(-4.0, 85.0);
             mount.PowerCycle(reportsHome: true);
-            var home = mount.FindHome(new Progress<OpenAstroAra.Core.Model.ApplicationStatus>(), CancellationToken.None);
+            var home = mount.FindHome(new Progress<OpenAstroAra.Core.Model.ApplicationStatus>(), MoveAsker.Session, CancellationToken.None);
             for (var i = 0; i < 120 && !home.IsCompleted; i++) {
                 Run(mount, clock, OneSecond);
                 await Task.Yield();

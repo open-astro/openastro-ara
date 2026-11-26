@@ -17,5 +17,8 @@ namespace OpenAstroAra.PlateSolving {
     public class CenterSolveParameter : CaptureSolverParameter {
         public double Threshold { get; set; }
         public bool NoSync { get; set; }
+        /// <summary>#2139 — who asks for the re-slews (record 0026): Move Admission checks them for that asker's rules.
+        /// Required, so a new caller must say who it is.</summary>
+        public required OpenAstroAra.Equipment.Interfaces.Mediator.MoveAsker Asker { get; init; }
     }
 }

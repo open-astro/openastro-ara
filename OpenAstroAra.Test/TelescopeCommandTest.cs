@@ -250,9 +250,9 @@ namespace OpenAstroAra.Test {
         public async Task A_mount_op_call_that_never_returns_fails_with_one_StallTimeout_and_the_abandoned_call_is_observed(string op) {
             await AssertAbandonedCallObservedAsync((m, blocked) => m.OnCommand = blocked, async svc => {
                 await Assert.ThrowsAsync<SequenceEntityFailedException>(() => op switch {
-                    "park" => svc.ParkTelescope(null!, CancellationToken.None),
+                    "park" => svc.ParkTelescope(null!, MoveAsker.Session, CancellationToken.None),
                     "unpark" => svc.UnparkTelescope(null!, CancellationToken.None),
-                    _ => svc.FindHome(null!, CancellationToken.None),
+                    _ => svc.FindHome(null!, MoveAsker.Session, CancellationToken.None),
                 });
             }, svc => svc.CommandPolicy = Mounted(), expectFault: true);
         }
@@ -260,7 +260,7 @@ namespace OpenAstroAra.Test {
         [Test]
         public async Task A_goto_call_that_never_returns_fails_with_one_StallTimeout_and_the_abandoned_call_is_observed() {
             await AssertAbandonedCallObservedAsync((m, blocked) => m.OnCommand = blocked, async svc => {
-                await Assert.ThrowsAsync<SequenceEntityFailedException>(() => svc.SlewToCoordinatesAsync(Here, CancellationToken.None));
+                await Assert.ThrowsAsync<SequenceEntityFailedException>(() => svc.SlewToCoordinatesAsync(Here, MoveAsker.Session, CancellationToken.None));
             }, svc => svc.SlewCommandPolicy = Slew(), expectFault: true);
         }
 
@@ -288,7 +288,7 @@ namespace OpenAstroAra.Test {
         public async Task A_mount_that_keeps_slewing_past_the_bound_is_one_StallTimeout() {
             using var mount = new FakeTelescopeDevice { SlewingScript = () => true, AtParkScript = () => true };
             using var svc = await ConnectedAsync(mount, s => s.CommandPolicy = Mounted(maxPolls: 10));
-            var ex = await Assert.ThrowsAsync<SequenceEntityFailedException>(() => svc.ParkTelescope(null!, CancellationToken.None));
+            var ex = await Assert.ThrowsAsync<SequenceEntityFailedException>(() => svc.ParkTelescope(null!, MoveAsker.Session, CancellationToken.None));
             Assert.That(ex!.Message, Does.Contain("telescope.park was not confirmed settled within the"));
             Assert.That(_faults.Faults.Single().Kind, Is.EqualTo(EquipmentFaultKind.StallTimeout));
         }
@@ -314,7 +314,7 @@ namespace OpenAstroAra.Test {
             using var mount = new FakeTelescopeDevice { SlewingScript = () => true, AtParkScript = () => true };
             using var svc = await ConnectedAsync(mount, s => s.CommandPolicy = Mounted(maxPolls: 5));
             var before = mount.FailedReads;
-            await Assert.ThrowsAsync<SequenceEntityFailedException>(() => svc.ParkTelescope(null!, CancellationToken.None));
+            await Assert.ThrowsAsync<SequenceEntityFailedException>(() => svc.ParkTelescope(null!, MoveAsker.Session, CancellationToken.None));
             await Task.Delay(150);
             Assert.That(mount.FailedReads, Is.EqualTo(before));
             Assert.That((await svc.GetAsync(CancellationToken.None))?.State, Is.EqualTo(EquipmentConnectionState.Connected));
@@ -326,7 +326,7 @@ namespace OpenAstroAra.Test {
             using var mount = new FakeTelescopeDevice { SlewingScript = () => true, AtParkScript = () => true };
             using var svc = await ConnectedAsync(mount, s => s.CommandPolicy = Mounted(maxPolls: 2000));
             await Assert.ThrowsAsync<SequenceEntityFailedException>(async () => {
-                var park = svc.ParkTelescope(null!, CancellationToken.None);
+                var park = svc.ParkTelescope(null!, MoveAsker.Session, CancellationToken.None);
                 await Task.Delay(30);
                 await svc.DisconnectAsync(null, CancellationToken.None);
                 await park;

@@ -57,7 +57,7 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Telescope {
 
         public override async Task Execute(IProgress<ApplicationStatus> progress, CancellationToken token) {
             await guiderMediator.StopGuiding(token);
-            if (!await telescopeMediator.ParkTelescope(progress, token)) {
+            if (!await telescopeMediator.ParkTelescope(progress, MoveAsker.Session, token)) {
                 throw new SequenceEntityFailedException("Failed to park telescope");
             }
         }

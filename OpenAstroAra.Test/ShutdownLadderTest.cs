@@ -31,7 +31,7 @@ namespace OpenAstroAra.Test {
         private static Mock<ITelescopeMediator> ParkableMount() {
             var mount = new Mock<ITelescopeMediator>();
             mount.Setup(m => m.GetInfo()).Returns(new TelescopeInfo { Connected = true, CanPark = true, TrackingEnabled = true });
-            mount.Setup(m => m.ParkTelescope(It.IsAny<IProgress<ApplicationStatus>>(), It.IsAny<CancellationToken>())).ReturnsAsync(true);
+            mount.Setup(m => m.ParkTelescope(It.IsAny<IProgress<ApplicationStatus>>(), It.IsAny<MoveAsker>(), It.IsAny<CancellationToken>())).ReturnsAsync(true);
             return mount;
         }
 

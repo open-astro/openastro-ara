@@ -50,7 +50,7 @@ namespace OpenAstroAra.Test {
             profile.SetupGet(p => p.ActiveProfile.PlateSolveSettings).Returns(settings.Object);
             profile.SetupGet(p => p.ActiveProfile.TelescopeSettings.FocalLength).Returns(800);
             profile.SetupGet(p => p.ActiveProfile.CameraSettings.PixelSize).Returns(3.8);
-            Mediator.Setup(m => m.SlewToCoordinatesAsync(It.IsAny<Coordinates>(), It.IsAny<CancellationToken>())).ReturnsAsync(true);
+            Mediator.Setup(m => m.SlewToCoordinatesAsync(It.IsAny<Coordinates>(), It.IsAny<MoveAsker>(), It.IsAny<CancellationToken>())).ReturnsAsync(true);
 
             var solver = new Mock<ICenteringSolver>();
             solver.Setup(s => s.Center(It.IsAny<CaptureSequence>(), It.IsAny<CenterSolveParameter>(),
@@ -59,7 +59,7 @@ namespace OpenAstroAra.Test {
                     async (_, parameter, _, _, ct) => {
                         _entered.TrySetResult();
                         await _nextAttempt.Task.WaitAsync(ct).ConfigureAwait(false);
-                        await Mediator.Object.SlewToCoordinatesAsync(parameter.Coordinates!, ct).ConfigureAwait(false);
+                        await Mediator.Object.SlewToCoordinatesAsync(parameter.Coordinates!, MoveAsker.Session, ct).ConfigureAwait(false);
                         return new PlateSolveResult { Success = true };
                     });
             var factory = new Mock<IPlateSolverFactory>();

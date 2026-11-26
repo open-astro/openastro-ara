@@ -13,6 +13,7 @@
 #endregion "copyright"
 
 using NUnit.Framework;
+using OpenAstroAra.Equipment.Interfaces.Mediator;
 using OpenAstroAra.Equipment.Interfaces;
 using OpenAstroAra.Sequencer.SequenceItem.Telescope;
 using OpenAstroAra.Server.Services;
@@ -55,7 +56,7 @@ namespace OpenAstroAra.Test {
         [Test]
         public async Task ParkTelescope_and_UnparkTelescope_return_false() {
             var m = new HeadlessTelescopeMediator();
-            Assert.That(await m.ParkTelescope(progress: null!, CancellationToken.None), Is.False);
+            Assert.That(await m.ParkTelescope(progress: null!, MoveAsker.Session, CancellationToken.None), Is.False);
             Assert.That(await m.UnparkTelescope(progress: null!, CancellationToken.None), Is.False);
         }
 

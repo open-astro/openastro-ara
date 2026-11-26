@@ -122,13 +122,13 @@ namespace OpenAstroAra.Test {
             var target = new Coordinates(6.0, 45.0, Epoch.J2000, Coordinates.RAType.Hours);
 
             using (svc.AcquireMotion(MotionOwners.PolarAlign)) {
-                var refused = await Assert.ThrowsAsync<SequenceEntityFailedException>(() => svc.SlewToCoordinatesAsync(target, CancellationToken.None));
+                var refused = await Assert.ThrowsAsync<SequenceEntityFailedException>(() => svc.SlewToCoordinatesAsync(target, MoveAsker.Session, CancellationToken.None));
                 Assert.That(refused!.Message, Does.Contain("Polar alignment is running"));
                 Assert.That(Put(box, "slewtocoordinatesasync"), Is.False, "nothing reached the mount");
             }
 
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
-            _ = svc.SlewToCoordinatesAsync(target, cts.Token);
+            _ = svc.SlewToCoordinatesAsync(target, MoveAsker.Session, cts.Token);
             await WaitForAsync(() => Put(box, "slewtocoordinatesasync"), "the GoTo never went out once the owner was given back");
             await cts.CancelAsync();
         }
@@ -275,7 +275,7 @@ namespace OpenAstroAra.Test {
 
             await svc.SlewAsync(new SlewRequestDto(6.0, 45.0), idempotencyKey: null, CancellationToken.None);
             await WaitForAsync(() => Put(box, "slewtocoordinatesasync"), "the REST GoTo never went out");
-            Assert.That(await svc.SlewToCoordinatesAsync(target, CancellationToken.None), Is.True, "the mediator GoTo went out");
+            Assert.That(await svc.SlewToCoordinatesAsync(target, MoveAsker.Session, CancellationToken.None), Is.True, "the mediator GoTo went out");
 
             var tried = attempts.ToArray();
             Assert.That(tried, Has.Length.EqualTo(2), "one try during each GoTo's tracking write");
@@ -321,8 +321,8 @@ namespace OpenAstroAra.Test {
             var progress = new Progress<ApplicationStatus>();
 
             using (svc.AcquireMotion(MotionOwners.PolarAlign)) {
-                var park = await Assert.ThrowsAsync<SequenceEntityFailedException>(() => svc.ParkTelescope(progress, CancellationToken.None));
-                var home = await Assert.ThrowsAsync<SequenceEntityFailedException>(() => svc.FindHome(progress, CancellationToken.None));
+                var park = await Assert.ThrowsAsync<SequenceEntityFailedException>(() => svc.ParkTelescope(progress, MoveAsker.Session, CancellationToken.None));
+                var home = await Assert.ThrowsAsync<SequenceEntityFailedException>(() => svc.FindHome(progress, MoveAsker.Session, CancellationToken.None));
                 Assert.That(park!.Message, Does.Contain("Polar alignment is running").And.Contain("park"));
                 Assert.That(home!.Message, Does.Contain("Polar alignment is running").And.Contain("Find Home"));
             }

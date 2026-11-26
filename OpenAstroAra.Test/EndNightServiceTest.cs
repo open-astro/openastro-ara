@@ -107,9 +107,9 @@ namespace OpenAstroAra.Test {
 
             telescope = new Mock<ITelescopeMediator>();
             telescope.Setup(t => t.GetInfo()).Returns(Mount());
-            telescope.Setup(t => t.FindHome(It.IsAny<IProgress<ApplicationStatus>>(), It.IsAny<CancellationToken>()))
+            telescope.Setup(t => t.FindHome(It.IsAny<IProgress<ApplicationStatus>>(), It.IsAny<MoveAsker>(), It.IsAny<CancellationToken>()))
                 .Callback(() => Log("find-home")).ReturnsAsync(true);
-            telescope.Setup(t => t.ParkTelescope(It.IsAny<IProgress<ApplicationStatus>>(), It.IsAny<CancellationToken>()))
+            telescope.Setup(t => t.ParkTelescope(It.IsAny<IProgress<ApplicationStatus>>(), It.IsAny<MoveAsker>(), It.IsAny<CancellationToken>()))
                 .Callback(() => Log("park")).ReturnsAsync(true);
             telescope.Setup(t => t.SetTrackingEnabled(false))
                 .Callback(() => Log("tracking-off")).Returns(true);
@@ -263,7 +263,7 @@ namespace OpenAstroAra.Test {
 
         [Test]
         public async Task The_host_stays_on_when_the_mount_ended_neither_parked_nor_tracking_off() {
-            telescope.Setup(t => t.ParkTelescope(It.IsAny<IProgress<ApplicationStatus>>(), It.IsAny<CancellationToken>()))
+            telescope.Setup(t => t.ParkTelescope(It.IsAny<IProgress<ApplicationStatus>>(), It.IsAny<MoveAsker>(), It.IsAny<CancellationToken>()))
                 .ReturnsAsync(false);
             telescope.Setup(t => t.SetTrackingEnabled(false)).Returns(false);
             var sut = CreateSUT();
@@ -331,7 +331,7 @@ namespace OpenAstroAra.Test {
         [Test]
         public async Task A_cancel_during_a_step_stops_at_the_next_boundary_and_leaves_the_rig_as_it_is() {
             var parking = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
-            telescope.Setup(t => t.ParkTelescope(It.IsAny<IProgress<ApplicationStatus>>(), It.IsAny<CancellationToken>()))
+            telescope.Setup(t => t.ParkTelescope(It.IsAny<IProgress<ApplicationStatus>>(), It.IsAny<MoveAsker>(), It.IsAny<CancellationToken>()))
                 .Returns(async () => { Log("park"); await parking.Task; return true; });
             var sut = CreateSUT();
             sut.Start(shutDownHost: true);
@@ -390,7 +390,7 @@ namespace OpenAstroAra.Test {
         [Test]
         public async Task A_second_start_while_one_runs_is_refused_with_the_declared_cause() {
             var parking = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
-            telescope.Setup(t => t.ParkTelescope(It.IsAny<IProgress<ApplicationStatus>>(), It.IsAny<CancellationToken>()))
+            telescope.Setup(t => t.ParkTelescope(It.IsAny<IProgress<ApplicationStatus>>(), It.IsAny<MoveAsker>(), It.IsAny<CancellationToken>()))
                 .Returns(async () => { Log("park"); await parking.Task; return true; });
             var sut = CreateSUT();
             sut.Start(shutDownHost: true);

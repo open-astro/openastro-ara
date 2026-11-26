@@ -20,6 +20,7 @@ using OpenAstroAra.Sequencer.Container;
 using OpenAstroAra.Sequencer.SequenceItem.Autofocus;
 using OpenAstroAra.Server.Contracts;
 using OpenAstroAra.Server.Contracts.WsEvents;
+using OpenAstroAra.Equipment.Interfaces.Mediator;
 using System;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -131,7 +132,7 @@ public sealed partial class SequencerService {
             // on it would waste minutes of rig time on a target the plan's altitude conditions are
             // about to abandon. Unknown altitude proceeds — the guard only ever SKIPS work.
             var coords = TargetCoordinates(target);
-            if (coords is not null && HorizonGuard.TargetBelowHorizon(_profileStore, coords, _logger) is { } low) {
+            if (coords is not null && MoveAdmission.TargetTooLow(MoveAsker.ResumeRefinement, _profileStore, coords, _logger) is { } low) {
                 LogResumeTargetTooLow(id, low.AltitudeDeg, low.LimitDeg);
                 await NotifyTargetTooLowAsync(low.AltitudeDeg, low.LimitDeg, recenter, refocus).ConfigureAwait(false);
                 return; // finally releases the gate; the plan's conditions decide what's next

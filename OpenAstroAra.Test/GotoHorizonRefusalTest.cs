@@ -45,24 +45,44 @@ namespace OpenAstroAra.Test {
             return store;
         }
 
-        private static (Mock<ITelescopeService> Telescope, Mock<ISequencerService> Sequencer) Rig(IReadOnlyList<Guid>? runs = null) {
-            var telescope = new Mock<ITelescopeService>();
-            telescope.Setup(t => t.SlewAsync(It.IsAny<SlewRequestDto>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
-                .ReturnsAsync(new OperationAcceptedDto(Guid.NewGuid(), "telescope.slew", DateTimeOffset.UtcNow, null));
-            var sequencer = new Mock<ISequencerService>();
-            sequencer.Setup(s => s.ActiveRunIdsAsync(It.IsAny<CancellationToken>())).ReturnsAsync(runs ?? None);
-            return (telescope, sequencer);
+        /// <summary>#2139 — the seam a person's GoTo is admitted at: a real Telescope service on the fake mount. The Slew
+        /// below connects it with the case's profile store and runs; <see cref="Rig"/> is the last one.</summary>
+        private sealed class Seam : IDisposable {
+            public ASCOM.Common.DeviceInterfaces.AlignmentMode? Alignment { get; init; } = ASCOM.Common.DeviceInterfaces.AlignmentMode.GermanPolar;
+            public FakeMountRig? Rig { get; set; }
+            public void Dispose() => Rig?.Dispose();
         }
 
-        private static Task<Microsoft.AspNetCore.Http.IResult> Slew(SlewRequestDto request, Mock<ITelescopeService> t, Mock<ISequencerService> s, IProfileStore? profiles) =>
-            EquipmentEndpoints.SlewAsync(request, null, t.Object, s.Object, profiles, CancellationToken.None);
+        private readonly List<Seam> _seams = new();
+
+        [TearDown]
+        public void DisposeSeams() {
+            foreach (var seam in _seams) { seam.Dispose(); }
+            _seams.Clear();
+        }
+
+        private (Seam Telescope, Mock<ISequencerService> Sequencer) Rig(IReadOnlyList<Guid>? runs = null) {
+            var sequencer = new Mock<ISequencerService>();
+            sequencer.Setup(s => s.ActiveRunIdsAsync(It.IsAny<CancellationToken>())).ReturnsAsync(runs ?? None);
+            var seam = new Seam();
+            _seams.Add(seam);
+            return (seam, sequencer);
+        }
+
+        private static async Task<Microsoft.AspNetCore.Http.IResult> Slew(SlewRequestDto request, Seam t, Mock<ISequencerService> s, IProfileStore? profiles) {
+            t.Rig?.Dispose();
+            t.Rig = await FakeMountRig.ConnectAsync(profiles, s.Object, configure: f => f.Alignment = t.Alignment);
+            return await EquipmentEndpoints.SlewAsync(request, null, t.Rig.Service, CancellationToken.None);
+        }
 
         /// <summary>An RA on the meridian now (longitude 0): a target the #2073 counterweight check never
         /// refuses, so an accepted case does not depend on the time of day.</summary>
         private static double RaOnTheMeridian() => SiteAstrometry.LocalSiderealTimeDeg(DateTimeOffset.UtcNow, 0) / 15.0 % 24.0;
 
-        private static void NothingDispatched(Mock<ITelescopeService> telescope) =>
-            telescope.Verify(t => t.SlewAsync(It.IsAny<SlewRequestDto>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Never, "a refused GoTo never reaches the mount");
+        private static void NothingDispatched(Seam telescope) {
+            Thread.Sleep(100);
+            Assert.That(telescope.Rig!.Fake.Slews, Is.Zero, "a refused GoTo never reaches the mount");
+        }
 
         [Test]
         public async Task A_slew_to_a_target_under_the_floor_is_refused_with_its_altitude_and_the_limit() {
@@ -129,8 +149,6 @@ namespace OpenAstroAra.Test {
         [Test]
         public async Task An_out_of_range_declination_is_not_answered_with_the_horizon_refusal() {
             var (telescope, sequencer) = Rig();
-            telescope.Setup(t => t.SlewAsync(It.Is<SlewRequestDto>(r => r.DeclinationDegrees < -90), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
-                .ThrowsAsync(new ArgumentOutOfRangeException("request"));
             await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() => Slew(new SlewRequestDto(5.5, -95), telescope, sequencer, Site(floorDeg: 20).Object));
         }
 

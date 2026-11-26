@@ -24,7 +24,7 @@ namespace OpenAstroAra.Server.Services;
 /// holds it for its whole run; meanwhile every mediator GoTo, park and Find Home (the sequencer's, Center's, the meridian
 /// flip's, an end-of-sequence park, a failed flip's safe rest) fails here, a sync is not sent (it shifts the readings the
 /// routine steers and measures by), and the REST GoTo, sync, Center, Park and Home endpoints refuse with
-/// <c>polar-align-moving-mount</c> (<c>EquipmentEndpoints.ThrowIfPolarAlignMovesTheMount</c>). The owner check and the
+/// <c>polar-align-moving-mount</c> (<c>MoveAdmission.ThrowIfPolarAlignMovesTheMount</c>). The owner check and the
 /// send are one step: a move is counted while it is being sent (<see cref="TryBeginMotionDispatch"/>), so a REST GoTo or
 /// sync accepted just before the routine took the owner is dropped when it would go out, a REST Park or Find Home is
 /// refused when its checks end, and the routine cannot take the owner while one is on its way. Nothing that stops the
