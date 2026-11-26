@@ -355,7 +355,8 @@ public partial class Program {
             .RegisterCenter(() => sp.GetService<ICenteringService>())
             .RegisterAutofocus(() => sp.GetService<AutofocusRunTracker>())
             .RegisterBahtinov(() => sp.GetService<IBahtinovFocusService>())
-            .RegisterGuideFocus(() => sp.GetService<IGuideFocusService>()));
+            .RegisterGuideFocus(() => sp.GetService<IGuideFocusService>())
+            .RegisterRotationAssist(() => sp.GetService<IRotationAssistService>()));
         // Singleton on purpose: the service sweeps stale request/result files from the storage
         // exchange in its constructor (#1135), which is only safe because exactly one instance is
         // built — resolved eagerly after Build() below, so the sweep really runs at boot and

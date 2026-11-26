@@ -118,6 +118,14 @@ public sealed class RigOccupancy {
             (_, _) => guideFocus()?.StopAsync() ?? Task.CompletedTask,
             failedRung: "stop_guide_focus");
 
+    /// <summary>#2143 — the rotation readout: a camera loop on the main camera, or its Confirm frame. Its stop waits
+    /// for the solve in flight to drain.</summary>
+    public RigOccupancy RegisterRotationAssist(Func<IRotationAssistService?> rotation) =>
+        Register("the rotation readout", RigHolding.MainCamera,
+            () => rotation()?.IsBusy == true,
+            (_, _) => rotation()?.StopAsync() ?? Task.CompletedTask,
+            failedRung: "stop_rotation_assist");
+
     /// <summary>A stop for a routine whose cancel only asks: ask, then wait until its reading says it ended.</summary>
     private static async Task CancelThenWaitAsync(Action cancel, Func<bool> isRunning, CancellationToken ct) {
         cancel();
