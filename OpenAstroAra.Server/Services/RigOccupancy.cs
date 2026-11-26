@@ -94,6 +94,15 @@ public sealed class RigOccupancy {
             () => centering()?.IsCentering == true,
             (_, ct) => centering()?.StopAsync(ct) ?? Task.CompletedTask);
 
+    /// <summary>#2143 — filter-offset calibration: a background job of autofocus runs on the main camera and the focuser.
+    /// Register it before autofocus: a stop then ends the job before it starts its next run, and a refusal during the job
+    /// names the calibration. Its stop cancels the job and waits for it to end.</summary>
+    public RigOccupancy RegisterFilterOffsetCalibration(Func<FilterOffsetCalibrationService?> calibration) =>
+        Register("filter-offset calibration", RigHolding.MainCamera | RigHolding.Focuser,
+            () => calibration()?.IsRunning == true,
+            (_, ct) => CancelThenWaitAsync(() => calibration()?.TryCancel(), () => calibration()?.IsRunning == true, ct),
+            failedRung: "stop_filter_offset_calibration");
+
     /// <summary>#2143 — autofocus: a run in progress. Its stop cancels the run and waits for it to end (the run puts the
     /// focuser back where it started first).</summary>
     public RigOccupancy RegisterAutofocus(Func<AutofocusRunTracker?> autofocus) =>

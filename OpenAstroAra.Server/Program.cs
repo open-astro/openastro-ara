@@ -353,6 +353,7 @@ public partial class Program {
             .RegisterSession(sp.GetRequiredService<ActiveRunSessionRegistry>(), () => sp.GetService<ISequencerService>())
             .RegisterPolarAlign(() => sp.GetService<IPolarAlignService>())
             .RegisterCenter(() => sp.GetService<ICenteringService>())
+            .RegisterFilterOffsetCalibration(() => sp.GetService<FilterOffsetCalibrationService>())
             .RegisterAutofocus(() => sp.GetService<AutofocusRunTracker>())
             .RegisterBahtinov(() => sp.GetService<IBahtinovFocusService>())
             .RegisterGuideFocus(() => sp.GetService<IGuideFocusService>())
