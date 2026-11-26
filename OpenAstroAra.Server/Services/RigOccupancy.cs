@@ -110,6 +110,14 @@ public sealed class RigOccupancy {
             (_, _) => bahtinov()?.StopAsync() ?? Task.CompletedTask,
             failedRung: "stop_bahtinov");
 
+    /// <summary>#2143 — Guide Focus: a camera loop on the Guide Camera (its frames come through the guider, so stopping
+    /// guiding does not end it). Its stop waits for the loop to end.</summary>
+    public RigOccupancy RegisterGuideFocus(Func<IGuideFocusService?> guideFocus) =>
+        Register("guide-camera focus", RigHolding.GuideCamera,
+            () => guideFocus()?.IsActive == true,
+            (_, _) => guideFocus()?.StopAsync() ?? Task.CompletedTask,
+            failedRung: "stop_guide_focus");
+
     /// <summary>A stop for a routine whose cancel only asks: ask, then wait until its reading says it ended.</summary>
     private static async Task CancelThenWaitAsync(Action cancel, Func<bool> isRunning, CancellationToken ct) {
         cancel();

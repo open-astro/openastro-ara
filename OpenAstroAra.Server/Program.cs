@@ -354,7 +354,8 @@ public partial class Program {
             .RegisterPolarAlign(() => sp.GetService<IPolarAlignService>())
             .RegisterCenter(() => sp.GetService<ICenteringService>())
             .RegisterAutofocus(() => sp.GetService<AutofocusRunTracker>())
-            .RegisterBahtinov(() => sp.GetService<IBahtinovFocusService>()));
+            .RegisterBahtinov(() => sp.GetService<IBahtinovFocusService>())
+            .RegisterGuideFocus(() => sp.GetService<IGuideFocusService>()));
         // Singleton on purpose: the service sweeps stale request/result files from the storage
         // exchange in its constructor (#1135), which is only safe because exactly one instance is
         // built — resolved eagerly after Build() below, so the sweep really runs at boot and
@@ -1141,7 +1142,6 @@ public partial class Program {
                 sp.GetService<IWsBroadcaster>(),
                 sp.GetService<ILogger<EmergencyStopService>>(),
                 sp.GetService<IRotatorService>(),
-                sp.GetService<IGuideFocusService>(),
                 sp.GetService<RigOccupancy>(),
                 () => sp.GetService<DomeFollower>(),
                 sp.GetService<IPolarAlignerService>()));

@@ -120,7 +120,7 @@ namespace OpenAstroAra.Test {
             var result = await new EmergencyStopService(
                 camera.Object, () => sequencer.Object, guider.Object,
                 telescope.Object, flat.Object, notifications.Object, ws.Object,
-                guideFocus: focus.Object).ExecuteAsync();
+                occupancy: new RigOccupancy().RegisterGuideFocus(() => focus.Object)).ExecuteAsync();
 
             focus.Verify(f => f.StopAsync(), Times.Once);
             Assert.That(result.FailedRungs, Is.Empty);
@@ -223,7 +223,7 @@ namespace OpenAstroAra.Test {
             await new EmergencyStopService(
                 camera.Object, () => sequencer.Object, guider.Object,
                 telescope.Object, flat.Object, notifications.Object, ws.Object,
-                guideFocus: focus.Object).ExecuteAsync();
+                occupancy: new RigOccupancy().RegisterGuideFocus(() => focus.Object)).ExecuteAsync();
 
             focus.Verify(f => f.StopAsync(), Times.Never);
         }

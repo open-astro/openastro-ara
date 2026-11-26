@@ -42,7 +42,6 @@ public sealed partial class EmergencyStopService {
     private readonly ITelescopeService? _telescope;
     private readonly IFlatDeviceService? _flatDevice;
     private readonly IRotatorService? _rotator;
-    private readonly IGuideFocusService? _guideFocus;
     private readonly RigOccupancy? _occupancy;
     private readonly INotificationService? _notifications;
     private readonly IWsBroadcaster? _ws;
@@ -82,7 +81,6 @@ public sealed partial class EmergencyStopService {
             IWsBroadcaster? ws = null,
             ILogger<EmergencyStopService>? logger = null,
             IRotatorService? rotator = null,
-            IGuideFocusService? guideFocus = null,
             RigOccupancy? occupancy = null,
             Func<DomeFollower?>? domeFollower = null,
             IPolarAlignerService? polarAligner = null) {
@@ -94,7 +92,6 @@ public sealed partial class EmergencyStopService {
         _telescope = telescope;
         _flatDevice = flatDevice;
         _rotator = rotator;
-        _guideFocus = guideFocus;
         _occupancy = occupancy;
         _notifications = notifications;
         _ws = ws;
@@ -174,11 +171,6 @@ public sealed partial class EmergencyStopService {
             _camera is null ? null : async () => (await _camera.GetAsync(CancellationToken.None).ConfigureAwait(false))?.State == EquipmentConnectionState.Connected,
             _camera is null ? null : ct => _camera.AbortExposureAsync(ct)).ConfigureAwait(false);
         if (exposureOutcome is RungOutcome.Failed) { failedRungs.Add("abort_exposure"); }
-        // The guide-camera focus loop borrows frames through the guider, so stopping guiding doesn't end it.
-        var guideFocusOutcome = await RungAsync("stop guide focus",
-            _guideFocus is null ? null : () => Task.FromResult(_guideFocus.IsActive),
-            _guideFocus is null ? null : _ => _guideFocus.StopAsync()).ConfigureAwait(false);
-        if (guideFocusOutcome is RungOutcome.Failed) { failedRungs.Add("stop_guide_focus"); }
         // #2142 — every routine the register knows, by its own stop, each bounded like a rung. Only a routine that runs
         // (its own reading): a stray Stop would clear a finished polar alignment's result.
         var routineStops = await StopRoutinesQuietlyAsync().ConfigureAwait(false);

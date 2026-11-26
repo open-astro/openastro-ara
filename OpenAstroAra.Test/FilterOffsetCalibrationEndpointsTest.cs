@@ -135,7 +135,8 @@ namespace OpenAstroAra.Test {
                 builder.Services.AddSingleton(new RigOccupancy().RegisterSession(Runs, () => null)
                     .Register("polar alignment", RigHolding.Mount | RigHolding.MainCamera | RigHolding.GuideCamera, () => PolarAligning)
                     .RegisterAutofocus(() => Tracker)
-                    .RegisterBahtinov(() => Bahtinov.Object));
+                    .RegisterBahtinov(() => Bahtinov.Object)
+                    .RegisterGuideFocus(() => GuideFocus.Object));
                 builder.Services.AddSingleton(Bahtinov.Object);
                 builder.Services.AddSingleton(GuideFocus.Object);
                 builder.Services.AddSingleton<FilterOffsetCalibrationService>();
