@@ -25,9 +25,9 @@ namespace OpenAstroAra.Server.Services;
 /// turn the dome's follow-the-mount off (#1689), then abort active sequence runs (so a still-running instruction can't
 /// start a fresh exposure or slew behind the stop), then stop the mount where it is, stop the Polar Aligner, halt the rotator
 /// where it is (aborting a run only stops the sequencer waiting on its move,
-/// #1671), abort the in-flight exposure, stop the guide-camera focus loop, the Bahtinov readout and
-/// a running autofocus, stop every routine in <see cref="RigOccupancy"/> (#2142: the mount's holders first — polar
-/// alignment, told to leave the mount to this ladder, and Center), stop guiding, stop the mount and the Polar Aligner
+/// #1671), abort the in-flight exposure, stop every routine in <see cref="RigOccupancy"/> (#2142, #2143: the mount's
+/// holders first — polar alignment, told to leave the mount to this ladder, Center and End Night — then filter-offset
+/// calibration, autofocus, the camera loops, Live View and a storage copy), stop guiding, stop the mount and the Polar Aligner
 /// again if a routine that holds the mount was running, switch the flat panel's light off, and switch the camera's cooler off. Every rung is best-effort — a
 /// dead device must never block the remaining rungs — and the result reports honestly what each rung did.
 /// The <c>safety.emergency_stop</c> WS event fires up-front so WILMA can
@@ -59,9 +59,9 @@ public sealed partial class EmergencyStopService {
     // instead of stalling the ladder behind it and wedging the single-flight
     // gate for the rest of the session — abort_exposure in particular blocks
     // on the real Alpaca HTTP call, unlike the 202-style rungs. 10 s per rung
-    // puts the worst-case ladder at 16 rungs plus one per Rig Occupancy routine
-    // (abort runs, 11 single rungs, two mount passes of two; #2142: polar
-    // alignment and Center today), 180 s on a healthy pool.
+    // puts the worst-case ladder at 13 rungs plus one per Rig Occupancy routine
+    // (abort runs, 8 single rungs, two mount passes of two; 10 routines with a
+    // stop today, #2143), 230 s on a healthy pool.
     // #1985 — the window covers the connected probe and the action's synchronous prefix too.
     // Both run on a dedicated thread, so a probe that never completes or a prefix that blocks
     // holds neither the caller nor the ladder, and a rung whose work completes synchronously

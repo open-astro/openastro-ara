@@ -1135,7 +1135,7 @@ public partial class Program {
         builder.Services.AddHostedService(sp => sp.GetRequiredService<FaultReactionService>());
 
         // §35.3 — emergency stop (abort runs → stop mount where it is → halt rotator → abort exposure →
-        // stop focus/Bahtinov/autofocus → stop every Rig Occupancy routine → stop guiding → stop mount again if a
+        // stop every Rig Occupancy routine → stop guiding → stop mount again if a
         // mount holder ran → flat light off → cooler off), behind POST /api/v1/server/emergency-stop.
         // Same optional-dep + sequencer-resolver pattern as the reaction engine.
         builder.Services.AddSingleton<EmergencyStopService>(sp =>
