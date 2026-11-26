@@ -16,9 +16,9 @@ This slice is a pure move: the table holds what each asker was checked for befor
 | --- | --- | --- |
 | Person (REST) | range, clock, position, motion owner, Polar Align moving, run active (`run_in_progress`, `force` skips it), horizon, counterweight | position, motion owner, Polar Align moving |
 | Session, Center, meridian flip | range, parked, clock, position, motion owner | Session and flip: position, motion owner |
-| Shutdown ladder | none | position, motion owner |
-| Safety and fault park | none | park: position |
-| Target recenter, resume refinement | asked up front: horizon | none |
+| Shutdown ladder | cannot ask (no row) | position, motion owner |
+| Safety and fault park | cannot ask (no row) | park: position; cannot ask for a home |
+| Target recenter, resume refinement | asked up front: horizon | cannot ask (no row) |
 
 The "run active" rule is the sequencer's active runs, as before (not finished and not aborting). Moving it onto Rig Occupancy (record 0025) is #2140's work. The rule that #2140 is to make true, "safety moves are the only askers exempt from position limits", is the target and does not hold today: a Session's slew, Center and the flip are not checked for the horizon or the counterweight.
 
