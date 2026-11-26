@@ -401,7 +401,13 @@ namespace OpenAstroAra.Test {
         public void Unpark() => OnCommand?.Invoke();
         public void FindHome() { _atHome = true; Interlocked.Increment(ref _homes); OnCommand?.Invoke(); }
         // What the mount was told to do (#2071: a refused GoTo or Sync sends nothing; Park and Home always go).
-        public void SlewToCoordinatesAsync(double raHours, double decDegrees) { Interlocked.Increment(ref _slews); OnCommand?.Invoke(); }
+        public void SlewToCoordinatesAsync(double raHours, double decDegrees) {
+            Interlocked.Increment(ref _slews);
+            if (ArrivesAtTarget) { Ra = raHours; Dec = decDegrees; }
+            OnCommand?.Invoke();
+        }
+        /// <summary>#2139 — a GoTo lands at once on its target, so a mediator GoTo (which waits for arrival) returns.</summary>
+        public volatile bool ArrivesAtTarget;
         public void SyncToCoordinates(double raHours, double decDegrees) { Interlocked.Increment(ref _syncs); OnSync?.Invoke(); }
 
         private sealed class FakeTrackingRates : ITrackingRates {
