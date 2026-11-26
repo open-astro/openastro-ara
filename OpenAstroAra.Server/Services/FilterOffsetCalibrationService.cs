@@ -99,7 +99,6 @@ public sealed class FilterOffsetCalibrationService {
     /// <see cref="ArgumentOutOfRangeException"/> for a slot the wheel does not have (400).</summary>
     public async Task<BatchJobDto> StartAsync(IReadOnlyList<int>? positions, CancellationToken ct) {
         var busy = IsRunning ? "an offset calibration is already running"
-            : _bahtinov.IsActive ? "the Bahtinov focus readout is running"
             : _guideFocus.IsActive ? "guide-camera focus is running"
             : _occupancy.Holder(RigHolding.MainCamera | RigHolding.Focuser) is { } holder ? $"{holder} is running"
             : null;

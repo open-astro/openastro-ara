@@ -102,6 +102,14 @@ public sealed class RigOccupancy {
             (_, ct) => CancelThenWaitAsync(() => autofocus()?.TryCancel(), () => autofocus()?.IsRunning == true, ct),
             failedRung: "cancel_autofocus");
 
+    /// <summary>#2143 — the Bahtinov focus readout: a camera loop on the main camera. Its stop waits for the frame in
+    /// flight to drain.</summary>
+    public RigOccupancy RegisterBahtinov(Func<IBahtinovFocusService?> bahtinov) =>
+        Register("the Bahtinov focus readout", RigHolding.MainCamera,
+            () => bahtinov()?.IsActive == true,
+            (_, _) => bahtinov()?.StopAsync() ?? Task.CompletedTask,
+            failedRung: "stop_bahtinov");
+
     /// <summary>A stop for a routine whose cancel only asks: ask, then wait until its reading says it ended.</summary>
     private static async Task CancelThenWaitAsync(Action cancel, Func<bool> isRunning, CancellationToken ct) {
         cancel();

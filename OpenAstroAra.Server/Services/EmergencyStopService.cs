@@ -43,7 +43,6 @@ public sealed partial class EmergencyStopService {
     private readonly IFlatDeviceService? _flatDevice;
     private readonly IRotatorService? _rotator;
     private readonly IGuideFocusService? _guideFocus;
-    private readonly IBahtinovFocusService? _bahtinov;
     private readonly RigOccupancy? _occupancy;
     private readonly INotificationService? _notifications;
     private readonly IWsBroadcaster? _ws;
@@ -84,7 +83,6 @@ public sealed partial class EmergencyStopService {
             ILogger<EmergencyStopService>? logger = null,
             IRotatorService? rotator = null,
             IGuideFocusService? guideFocus = null,
-            IBahtinovFocusService? bahtinov = null,
             RigOccupancy? occupancy = null,
             Func<DomeFollower?>? domeFollower = null,
             IPolarAlignerService? polarAligner = null) {
@@ -97,7 +95,6 @@ public sealed partial class EmergencyStopService {
         _flatDevice = flatDevice;
         _rotator = rotator;
         _guideFocus = guideFocus;
-        _bahtinov = bahtinov;
         _occupancy = occupancy;
         _notifications = notifications;
         _ws = ws;
@@ -182,10 +179,6 @@ public sealed partial class EmergencyStopService {
             _guideFocus is null ? null : () => Task.FromResult(_guideFocus.IsActive),
             _guideFocus is null ? null : _ => _guideFocus.StopAsync()).ConfigureAwait(false);
         if (guideFocusOutcome is RungOutcome.Failed) { failedRungs.Add("stop_guide_focus"); }
-        var bahtinovOutcome = await RungAsync("stop bahtinov readout",
-            _bahtinov is null ? null : () => Task.FromResult(_bahtinov.IsActive),
-            _bahtinov is null ? null : _ => _bahtinov.StopAsync()).ConfigureAwait(false);
-        if (bahtinovOutcome is RungOutcome.Failed) { failedRungs.Add("stop_bahtinov"); }
         // #2142 — every routine the register knows, by its own stop, each bounded like a rung. Only a routine that runs
         // (its own reading): a stray Stop would clear a finished polar alignment's result.
         var routineStops = await StopRoutinesQuietlyAsync().ConfigureAwait(false);

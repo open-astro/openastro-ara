@@ -135,7 +135,7 @@ namespace OpenAstroAra.Test {
             var result = await new EmergencyStopService(
                 camera.Object, () => sequencer.Object, guider.Object,
                 telescope.Object, flat.Object, notifications.Object, ws.Object,
-                bahtinov: bahtinov.Object).ExecuteAsync();
+                occupancy: new RigOccupancy().RegisterBahtinov(() => bahtinov.Object)).ExecuteAsync();
 
             bahtinov.Verify(b => b.StopAsync(), Times.Once);
             Assert.That(result.FailedRungs, Is.Empty);
