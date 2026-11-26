@@ -112,15 +112,6 @@ public sealed partial class EndNightService : IDisposable {
         get { lock (_lock) { return _state == EndNightStates.Running; } }
     }
 
-    /// <summary>#2143 — End Night's stop in <see cref="RigOccupancy"/>: cancel at the next step boundary, then return once
-    /// it has ended, or when <paramref name="ct"/> is cancelled (a host poweroff under way cannot be cancelled).</summary>
-    public async Task StopAsync(CancellationToken ct) {
-        Cancel();
-        while (IsRunning) {
-            await Task.Delay(20, ct).ConfigureAwait(false);
-        }
-    }
-
     /// <summary>Start the action and return its status at once. Refused while one runs.</summary>
     public EndNightStatusDto Start(bool shutDownHost) {
         Guid runId;

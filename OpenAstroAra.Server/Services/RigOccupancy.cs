@@ -160,7 +160,8 @@ public sealed class RigOccupancy {
     public RigOccupancy RegisterEndNight(Func<EndNightService?> endNight) =>
         Register(EndNight, RigHolding.Mount | RigHolding.MainCamera | RigHolding.GuideCamera | RigHolding.Focuser,
             () => endNight()?.IsRunning == true,
-            (_, ct) => endNight()?.StopAsync(ct) ?? Task.CompletedTask,
+            // Cancel ends it at its next step; a host poweroff under way cannot be cancelled, so that stop runs out its bound.
+            (_, ct) => CancelThenWaitAsync(() => endNight()?.Cancel(), () => endNight()?.IsRunning == true, ct),
             failedRung: "stop_end_night");
 
     /// <summary>A stop for a routine whose cancel only asks: ask, then wait until its reading says it ended.</summary>
