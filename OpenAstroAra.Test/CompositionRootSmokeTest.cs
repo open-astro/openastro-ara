@@ -209,6 +209,8 @@ namespace OpenAstroAra.Test {
                 foreach (var (name, ladder) in ladders) {
                     Assert.That(Field(ladder, "_occupancy"), Is.SameAs(occupancy), name);
                 }
+                // #2143 — End Night's ladder runs for End Night, so its own step leaves End Night alone.
+                Assert.That(Field(ladders["end night"], "_routine"), Is.EqualTo(RigOccupancy.EndNight), "end night's routine");
             });
 
             // The composed Center has a stop: a ladder that asks for the mount reaches it (held gate: it never ends here).

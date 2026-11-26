@@ -42,7 +42,7 @@ We decided (2026-11-21, [#2142](https://github.com/open-astro/openastro-ara/issu
 
 - Emergency Stop and the parks now end End Night, so a park or device step that it had not reached does not follow the stop. End Night's own shutdown ladder stops every other routine, never End Night itself.
 - Emergency Stop and shutdown now end filter-offset calibration (the job, not only its autofocus run), the rotation readout, Live View and a storage copy.
-- The busy questions now also wait for these routines. For example, the storage rescan and the stats rebuild wait for a storage copy, and a profile switch and restart when idle wait for Live View. A refusal names the routine ("Live View is running", "autofocus is running").
+- The busy questions now also wait for these routines. For example, the storage rescan and the stats rebuild wait for a storage copy, and a profile switch and restart when idle wait for Live View and for a storage copy. A refusal names the routine ("Live View is running", "autofocus is running").
 
 ## How to reverse
 

@@ -130,6 +130,7 @@ namespace OpenAstroAra.Test {
 
         [Test]
         public async Task A_refusal_keeps_its_status_code_and_code() {
+            copy.Setup(c => c.IsRunning).Returns(true); // #2143 — the running copy, a disk holder, still answers for itself
             copy.Setup(c => c.Start(It.IsAny<string>(), It.IsAny<IReadOnlyList<string>?>()))
                 .Returns(new StorageCopyRefusal(409, "copy_running", "A copy is already running."));
 

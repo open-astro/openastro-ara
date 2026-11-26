@@ -536,7 +536,9 @@ public static class SystemEndpoints {
                 RigOccupancy occupancy) => {
                 // The run's frames would land on the store mid-walk and be missed; copy in
                 // the morning, or re-run the copy afterwards (it only adds what is new).
-                if (occupancy.Holder(RigHolding.Disk) is { } writer) {
+                // #2143 — a copy is itself a disk holder: a second copy gets the copy's own
+                // copy_running refusal from Start, which the client words.
+                if (!copy.IsRunning && occupancy.Holder(RigHolding.Disk) is { } writer) {
                     return Results.Problem(
                         $"{writer} is running — stop it before copying the storage drive",
                         statusCode: StatusCodes.Status409Conflict);

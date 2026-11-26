@@ -47,7 +47,8 @@ namespace OpenAstroAra.Test {
         /// carries a ladder's own steps (abort the exposure, the cooler), so for it the routine is its Live View members.</summary>
         private static string[] RoutineNames() =>
             typeof(RigOccupancy).GetMethods()
-                .Where(m => m.Name.StartsWith("Register", StringComparison.Ordinal) && m.Name != nameof(RigOccupancy.RegisterSession))
+                .Where(m => m.Name.StartsWith("Register", StringComparison.Ordinal) && m.Name != nameof(RigOccupancy.Register)
+                    && m.Name != nameof(RigOccupancy.RegisterSession))
                 .SelectMany(m => m.GetParameters())
                 .Select(p => p.ParameterType)
                 .Where(t => t.IsGenericType && t.GetGenericTypeDefinition() == typeof(Func<>))
@@ -60,6 +61,7 @@ namespace OpenAstroAra.Test {
         public void No_stop_ladder_names_a_registered_routine() {
             var names = RoutineNames();
             Assert.That(names, Does.Contain(nameof(IPolarAlignService)).And.Contain(nameof(ICenteringService)), "the helpers were read");
+            Assert.That(names, Does.Not.Contain(nameof(Boolean)), "the generic Register's reading is not a routine");
             var root = FindRepoRoot();
 
             var offenders = Ladders
