@@ -377,9 +377,11 @@ namespace OpenAstroAra.Server.Services {
             public void Hold(IDisposable hold) => Volatile.Write(ref _hold, hold);
 
             /// <summary>Give the run's motion owner back, once per hold: when its exit has stopped the mount, when an end
-            /// gives up waiting for a stuck run, when the next Start drains it, and while the run's own Find Home runs
-            /// (<see cref="GoHomeAsync"/>, which takes it again with <see cref="Hold"/>).</summary>
+            /// gives up waiting for a stuck run, and when the next Start drains it.</summary>
             public void ReleaseHold() => Interlocked.Exchange(ref _hold, null)?.Dispose();
+
+            /// <summary>The live hold, null once given back: the run's own Find Home acts for it (<see cref="GoHomeAsync"/>).</summary>
+            public IDisposable? CurrentHold => Volatile.Read(ref _hold);
 
             /// <summary>#2066 — the stop fence when the run was launched (set before the run is published): once the fence
             /// moves, no stop of this run goes out (<see cref="StopsFenced"/>).</summary>

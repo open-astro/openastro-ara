@@ -177,7 +177,8 @@ namespace OpenAstroAra.Test {
 
         [Test]
         public async Task Polar_Aligns_own_Find_Home_is_not_refused_by_its_own_hold_and_is_not_read_as_a_stop_from_outside() {
-            // The telescope service refuses a mediator Find Home while a routine holds the mount: the run lends its hold.
+            // The telescope service refuses a mediator Find Home while a routine holds the mount: the run sends its own as the
+            // holder and never gives the hold back meanwhile.
             var mount = GemAtHome();
             mount.MediatorRefusesHomeAndParkWhileOwned = true;
             var ws = new WsRecorder();
@@ -190,11 +191,9 @@ namespace OpenAstroAra.Test {
             var commands = mount.Commands.Select(c => c.Text).ToArray();
             var homes = Enumerable.Range(0, commands.Length).Where(i => commands[i] == "findhome").ToArray();
             Assert.That(homes, Has.Length.EqualTo(2));
+            Assert.That(commands.Take(homes[^1]).Count(c => c == "release motion"), Is.Zero, "the hold never lapses before or between the Find Homes");
             foreach (var home in homes) {
-                var owner = commands.Take(home).Last(c => c.StartsWith("acquire motion", StringComparison.Ordinal) || c == "release motion");
-                Assert.That(owner, Is.EqualTo("release motion"), "the hold is lent before Find Home goes out");
-                Assert.That(commands.Skip(home).First(c => c.StartsWith("acquire motion", StringComparison.Ordinal) || c == "release motion"),
-                    Is.EqualTo("acquire motion " + MotionOwners.PolarAlign), "and taken again once the mount is Home");
+                Assert.That(commands[home - 1], Is.EqualTo("act as holder"), "each Find Home goes out as the holder's own move");
             }
         }
 

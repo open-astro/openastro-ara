@@ -675,6 +675,22 @@ namespace OpenAstroAra.Test.PolarAlign {
             }
         }
 
+        private static readonly AsyncLocal<object?> s_acting = new();
+
+        /// <summary>As TelescopeService: the calling flow's moves pass the owner check while <paramref name="hold"/> is live.</summary>
+        public IDisposable ActAsHolder(IDisposable hold) {
+            var prior = s_acting.Value;
+            s_acting.Value = hold;
+            lock (_lock) {
+                CommandLocked("act as holder", isMotion: false);
+            }
+            return new ActingScope(prior);
+        }
+
+        private sealed class ActingScope(object? prior) : IDisposable {
+            public void Dispose() => s_acting.Value = prior;
+        }
+
         private sealed class MotionClaim(FakeGemMount mount) : IDisposable {
             public void Dispose() {
                 lock (mount._lock) {
@@ -774,13 +790,13 @@ namespace OpenAstroAra.Test.PolarAlign {
         }
 
         /// <summary>#2066 (ARA-2) — opt-in: the mediator's <see cref="FindHome"/> and <see cref="ParkTelescope"/> refuse, as
-        /// TelescopeService's do, while a routine holds the motion owner (the shutdown ladder's, and Polar Align's own Find
-        /// Home when it has not lent its hold). Off by default: other tests call <see cref="ParkTelescope"/> as the safety
+        /// TelescopeService's do, while a routine holds the motion owner (the shutdown ladder's, and any Find Home not sent
+        /// under the holder's <see cref="ActAsHolder"/>). Off by default: other tests call <see cref="ParkTelescope"/> as the safety
         /// park, which goes through the service's ParkAsync and is never refused.</summary>
         public bool MediatorRefusesHomeAndParkWhileOwned { get; set; }
 
         private void ThrowIfMediatorMoveOwnedLocked(string what) {
-            if (MediatorRefusesHomeAndParkWhileOwned && _motionOwner is { } owner) {
+            if (MediatorRefusesHomeAndParkWhileOwned && _motionOwner is { } owner && !(s_acting.Value is { } acting && ReferenceEquals(acting, _motionClaim))) {
                 CommandLocked(what + " refused: " + owner + " holds the mount", isMotion: false);
                 throw new SequenceEntityFailedException(TelescopeService.MotionOwnedMessage(owner, what));
             }

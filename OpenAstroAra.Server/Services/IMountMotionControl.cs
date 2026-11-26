@@ -92,6 +92,11 @@ public interface IMountMotionControl {
     /// and disposing the old one then gives nothing back. Throws <see cref="InvalidOperationException"/> while another
     /// owner holds it.</summary>
     IDisposable AcquireMotion(string owner) => MotionHold.None;
+
+    /// <summary>The holder's own move: a GoTo, park or Find Home sent from the calling flow while the returned scope is open
+    /// passes the owner check when <paramref name="hold"/> is the live hold (Polar Align's Find Home after Done). Every
+    /// other flow is still refused meanwhile, so the hold never lapses.</summary>
+    IDisposable ActAsHolder(IDisposable hold) => MotionHold.None;
 }
 
 /// <summary>#2066 (ARA-2) — the names a routine takes the motion owner (<see cref="IMountMotionControl.AcquireMotion"/>)

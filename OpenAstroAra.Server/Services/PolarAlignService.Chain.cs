@@ -120,8 +120,9 @@ namespace OpenAstroAra.Server.Services {
         /// <summary>
         /// Send the mount Home with its own Find Home and wait until it is there. The motion is marked from before the
         /// command goes out, so a Stop meanwhile sends AbortSlew and the telescope endpoints refuse other moves
-        /// (<see cref="IsMovingMount"/>). The run lends its hold of the mount's motion owner to the Find Home, which the
-        /// telescope service refuses while a routine holds the mount, and takes it again once the mount is Home. The run's
+        /// (<see cref="IsMovingMount"/>). The run keeps its hold of the mount's motion owner throughout: its Find Home is
+        /// sent as the holder's own move (<see cref="IMountMotionControl.ActAsHolder"/>), so every other GoTo, park and
+        /// Find Home is still refused while the mount goes Home. The run's
         /// token ends the wait (Stop); a stop from outside (Stop Mount, Emergency Stop) ends it too, and the run with it.
         /// A Find Home the mount refuses or does not finish fails the run with <see cref="HomeFailed"/>.
         /// </summary>
@@ -131,11 +132,14 @@ namespace OpenAstroAra.Server.Services {
             await renewLeaseIfDue().ConfigureAwait(false);
             BeginMotion(MountMotion.Home, gen, ct);
             LogGoingHome();
-            end.ReleaseHold();
+            var hold = end.CurrentHold; // null only where no owner is kept (a bare mediator); a stop is caught below
             bool atHome;
             using (var homing = CancellationTokenSource.CreateLinkedTokenSource(ct)) {
                 try {
-                    var find = _mount.FindHome(new Progress<ApplicationStatus>(), homing.Token);
+                    Task<bool> find;
+                    using (hold is null ? null : _motionControl.ActAsHolder(hold)) {
+                        find = _mount.FindHome(new Progress<ApplicationStatus>(), homing.Token);
+                    }
                     // Left behind by a stop from outside: its own end is not this run's to report.
                     _ = find.ContinueWith(static t => _ = t.Exception, CancellationToken.None, TaskContinuationOptions.OnlyOnFaulted, TaskScheduler.Default);
                     while (!find.IsCompleted) {
@@ -159,17 +163,6 @@ namespace OpenAstroAra.Server.Services {
                 throw new RoutineFailedException(HomeFailed, HomeFailedMessage);
             }
             ThrowIfRunEnded(gen);
-            lock (_gate) {
-                // With the generation: a run that was stopped meanwhile takes nothing, and never a newer run's hold.
-                if (_generation != gen) {
-                    throw new OperationCanceledException("the run was stopped as the mount reached Home");
-                }
-                try {
-                    end.Hold(AcquireMountForRun());
-                } catch (RefusalException ex) {
-                    throw new RoutineFailedException(HomeFailed, ex.Message);
-                }
-            }
             EndMotion();
             LogAtHome();
         }
