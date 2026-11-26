@@ -71,24 +71,24 @@ On 2026-11-24 the guards above made Polar Align fail 15 runs in a row on the rig
 
 ## Alternatives rejected
 
-- **The full ARA-1 to ARA-19 spec** (a counterweight model, a start band, a pose envelope, a motion budget, a fork opt-in, pier-side checks): it covers poses NINA users never meet, needs a per-mount clearance measurement before any run, and raised a design question per layer. The sweep bound, the clearance confirm and the move guards already keep a confirmed start from walking into the pier.
+- **The full ARA-1 to ARA-19 spec** (a counterweight model, a start band, a pose envelope, a motion budget, a fork opt-in, pier-side checks): it covers poses NINA users never meet, needs a per-mount clearance measurement before any run, and raised a design question per layer. Starting every run from Home, turning RA only and judging each turn on the solves keeps a run from walking into the pier.
 - **NINA's code as it is, with no additions**: its 2× timeout carries on, it steers by the cached position (the #2070 false zero), its stop is not verified, and nothing stops a GoTo beside the turn. Each of those is a cause of the #2048 incident.
-- **NINA's own start GoTo** (Alt = latitude + 2°, Az 1°): it needs a verified mount clock, AlpacaBridge #2395 and a pier-side read after the slew; Ara starts from where the user pointed the mount, as NINA's "start from current position", and only a start within 3° of the pole is offered the Dec-only move of rule 14.
-- **The motion owner only while a turn runs** (ARA-2 as written): a GoTo between turns, during a solve or while adjusting, would change the RA reading the next turn steers by and the sweep it is measured from.
+- **NINA's own start GoTo** (Alt = latitude + 2°, Az 1°): it needs a verified mount clock, AlpacaBridge #2395 and a pier-side read after the slew; Ara starts every run from the mount's Home (rule 2) and moves no Dec.
+- **The motion owner only while a turn runs** (ARA-2 as written): a GoTo between turns, during a solve or while adjusting, would move the mount between the points of one measurement.
 - **A manual (hand-turn) mode, as NINA offers**: Ara is about automation; a mount that cannot turn its own RA axis is refused (the maintainer, 2026-11-21, #2170).
 - **A `force` that lifts the Polar Align refusals**: it would put back the two-commands-at-once case the owner exists to stop.
 
 ## Consequences
 
 - A change to Polar Align's motion is reviewed against NINA's `MoveToNextPoint` first; a guard beyond this list needs an incident and a new record or an edit of this one.
-- The dropped layers' five placeholder pre-flight rows (`motionsafety`, `pier_side`, `pose_envelope`, `start_cw_angle`, `turn_step`) were removed by #2159; the pre-flight list holds only the checks above.
-- A motor start on a new mount needs one clearance confirm and one 0.5° test turn per mount and driver name and version.
+- The dropped layers' five placeholder pre-flight rows (`motionsafety`, `pier_side`, `pose_envelope`, `start_cw_angle`, `turn_step`) were removed by #2159; the pre-flight list itself was removed on 2026-11-24.
+- A run on a new mount needs nothing set up first: the user taps Home, then Start.
 - The rig checks on #2048 (the stop traces P0-3/4/5, the motor sign P0-6, the staged 5°/10°/30° runs) tune the timings in the Rules; a tuned number is an edit of this record.
 - `stable/1.0` holds this work alone; one merge of `stable/1.0` into `master` carries it there.
 
 ## How to reverse
 
-Each guard is its own partial class or evaluator row, so one can be removed by deleting its file or row, its refusal cause from `RefusalCatalog` and `openapi.yaml`, its sentences from the two arb files and its tests, then editing this record. Going back to the full ARA spec means building the dropped #2065 layers (a counterweight model, a measured clearance per mount, a start band) and adding their pre-flight rows back. Going back to the pre-#2048 routine (Find Home and GoTo between stages) is not a reversal anyone should make: it is the cause of the incident.
+Each guard is its own partial class or check, so one can be removed by deleting it, its refusal cause from `RefusalCatalog` and `openapi.yaml`, its sentences from the two arb files and its tests, then editing this record. Going back to the full ARA spec means building the dropped #2065 layers (a counterweight model, a measured clearance per mount, a start band) and a pre-flight list for them. Going back to the pre-#2048 routine (Find Home and GoTo between stages) is not a reversal anyone should make: it is the cause of the incident.
 
 ## Links
 
