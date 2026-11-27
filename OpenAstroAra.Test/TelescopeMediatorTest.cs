@@ -59,7 +59,7 @@ namespace OpenAstroAra.Test {
         public async Task SlewToCoordinatesAsync_when_not_connected_returns_false() {
             using var svc = new TelescopeService();
             Assert.That(
-                await ((ITelescopeMediator)svc).SlewToCoordinatesAsync(SampleTarget(), CancellationToken.None),
+                await ((ITelescopeMediator)svc).SlewToCoordinatesAsync(SampleTarget(), MoveAsker.Session, CancellationToken.None),
                 Is.False);
         }
 
@@ -67,7 +67,7 @@ namespace OpenAstroAra.Test {
         public void SlewToCoordinatesAsync_null_coords_throws() {
             using var svc = new TelescopeService();
             Assert.Throws<System.ArgumentNullException>(
-                () => { _ = ((ITelescopeMediator)svc).SlewToCoordinatesAsync((Coordinates)null!, CancellationToken.None); });
+                () => { _ = ((ITelescopeMediator)svc).SlewToCoordinatesAsync((Coordinates)null!, MoveAsker.Session, CancellationToken.None); });
         }
 
         [Test]
@@ -91,7 +91,7 @@ namespace OpenAstroAra.Test {
         public async Task ParkTelescope_when_not_connected_returns_false() {
             using var svc = new TelescopeService();
             Assert.That(
-                await ((ITelescopeMediator)svc).ParkTelescope(progress: null!, CancellationToken.None),
+                await ((ITelescopeMediator)svc).ParkTelescope(progress: null!, MoveAsker.Session, CancellationToken.None),
                 Is.False);
         }
 
@@ -107,7 +107,7 @@ namespace OpenAstroAra.Test {
         public async Task FindHome_when_not_connected_returns_false() {
             using var svc = new TelescopeService();
             Assert.That(
-                await ((ITelescopeMediator)svc).FindHome(progress: null!, CancellationToken.None),
+                await ((ITelescopeMediator)svc).FindHome(progress: null!, MoveAsker.Session, CancellationToken.None),
                 Is.False);
         }
 
@@ -116,10 +116,10 @@ namespace OpenAstroAra.Test {
             var svc = new TelescopeService();
             svc.Dispose();
             Assert.That(
-                await ((ITelescopeMediator)svc).ParkTelescope(progress: null!, CancellationToken.None),
+                await ((ITelescopeMediator)svc).ParkTelescope(progress: null!, MoveAsker.Session, CancellationToken.None),
                 Is.False);
             Assert.That(
-                await ((ITelescopeMediator)svc).SlewToCoordinatesAsync(SampleTarget(), CancellationToken.None),
+                await ((ITelescopeMediator)svc).SlewToCoordinatesAsync(SampleTarget(), MoveAsker.Session, CancellationToken.None),
                 Is.False);
             Assert.That(
                 await ((ITelescopeMediator)svc).Sync(SampleTarget()),

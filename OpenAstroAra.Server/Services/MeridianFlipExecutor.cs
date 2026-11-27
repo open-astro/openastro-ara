@@ -621,10 +621,12 @@ public sealed class MeridianFlipExecutor : IMeridianFlipExecutor {
         // now + timeToFlip, since PassMeridian can wait out tens of minutes and a target near the
         // floor keeps sinking through the wait. The site horizon altitude is the profile's floor
         // (§35/§36 semantics).
+        // #2140 — Move Admission answers it (record 0026): the flip is bound by the position limits (the lowest altitude,
+        // custom horizon included, and the counterweight), asked for the flip time.
         var site = profileStore!.GetSiteSettings();
         var predictedAlt = PredictedTargetAltitudeDeg(target, site.LatitudeDeg, site.LongitudeDeg, UtcNow() + timeToFlip);
-        if (predictedAlt < site.DefaultHorizonAltitudeDeg) {
-            return $"the predicted post-flip target altitude ({predictedAlt:0.#}°) is below the site's horizon floor ({site.DefaultHorizonAltitudeDeg:0.#}°) — the target should be skipped, not flipped to.";
+        if (MoveAdmission.LimitRefusal(MoveAsker.MeridianFlip, profileStore, target, alignmentMode: null, logger: null, UtcNow() + timeToFlip) is { } limit) {
+            return $"{limit.Message} At the flip the target would be past a limit ({limit.Cause.Token}): it should be skipped, not flipped to.";
         }
 
         var mount = telescopeMediator.GetInfo();
@@ -821,7 +823,7 @@ public sealed class MeridianFlipExecutor : IMeridianFlipExecutor {
                 Logger.Info("Meridian Flip - Safe rest: parking the mount.");
                 progress.Report(new ApplicationStatus { Source = "MeridianFlip", Status = "Parking (safe rest)" });
                 using var parkCts = new CancellationTokenSource(TimeSpan.FromSeconds(ParkTimeoutSeconds));
-                if (await telescopeMediator.ParkTelescope(progress, parkCts.Token)) {
+                if (await telescopeMediator.ParkTelescope(progress, MoveAsker.MeridianFlip, parkCts.Token)) {
                     return "the mount was parked.";
                 }
                 parkAttemptFailed = true;

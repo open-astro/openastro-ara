@@ -131,7 +131,7 @@ namespace OpenAstroAra.Test {
                 var current = ((ITelescopeMediator)svc).GetCurrentPosition();
                 var target = new Coordinates(
                     Angle.ByHours(NormalizeRaHours(current.RA + 0.2)), Angle.ByDegree(45.0), current.Epoch);
-                var slewed = await ((ITelescopeMediator)svc).SlewToCoordinatesAsync(target, CancellationToken.None).ConfigureAwait(false);
+                var slewed = await ((ITelescopeMediator)svc).SlewToCoordinatesAsync(target, MoveAsker.Session, CancellationToken.None).ConfigureAwait(false);
                 Assert.That(slewed, Is.True, "mediator slew should confirm arrival at the target");
 
                 var settled = ((ITelescopeMediator)svc).GetCurrentPosition();

@@ -49,7 +49,7 @@ namespace OpenAstroAra.Test {
         private static Mock<ITelescopeMediator> Mount() {
             var mount = new Mock<ITelescopeMediator>();
             mount.Setup(m => m.GetInfo()).Returns(new TelescopeInfo { Connected = true, AtPark = false });
-            mount.Setup(m => m.SlewToCoordinatesAsync(It.IsAny<Coordinates>(), It.IsAny<CancellationToken>())).ReturnsAsync(true);
+            mount.Setup(m => m.SlewToCoordinatesAsync(It.IsAny<Coordinates>(), It.IsAny<MoveAsker>(), It.IsAny<CancellationToken>())).ReturnsAsync(true);
             return mount;
         }
 
@@ -103,7 +103,7 @@ namespace OpenAstroAra.Test {
             Assert.That(seen, Is.Not.Null, "the step never centred: a blind slew lands wherever the mount's pointing model says");
             Assert.That(seen!.RA, Is.EqualTo(target.Coordinates.RA).Within(1e-9));
             Assert.That(seen.Dec, Is.EqualTo(target.Coordinates.Dec).Within(1e-9));
-            mount.Verify(m => m.SlewToCoordinatesAsync(It.IsAny<Coordinates>(), It.IsAny<CancellationToken>()), Times.Never,
+            mount.Verify(m => m.SlewToCoordinatesAsync(It.IsAny<Coordinates>(), It.IsAny<MoveAsker>(), It.IsAny<CancellationToken>()), Times.Never,
                 "the centring executor owns the slew; a second blind slew first would only add a goto");
         }
 
@@ -128,7 +128,7 @@ namespace OpenAstroAra.Test {
 
             await item.Execute(NoProgress, CancellationToken.None);
 
-            mount.Verify(m => m.SlewToCoordinatesAsync(It.IsAny<Coordinates>(), It.IsAny<CancellationToken>()), Times.Once);
+            mount.Verify(m => m.SlewToCoordinatesAsync(It.IsAny<Coordinates>(), It.IsAny<MoveAsker>(), It.IsAny<CancellationToken>()), Times.Once);
             centering.VerifyNoOtherCalls();
         }
 
@@ -156,7 +156,7 @@ namespace OpenAstroAra.Test {
 
             await item.Execute(NoProgress, CancellationToken.None);
 
-            mount.Verify(m => m.SlewToCoordinatesAsync(It.IsAny<Coordinates>(), It.IsAny<CancellationToken>()), Times.Once);
+            mount.Verify(m => m.SlewToCoordinatesAsync(It.IsAny<Coordinates>(), It.IsAny<MoveAsker>(), It.IsAny<CancellationToken>()), Times.Once);
             centering.VerifyNoOtherCalls();
         }
 
@@ -170,7 +170,7 @@ namespace OpenAstroAra.Test {
 
             await item.Execute(NoProgress, CancellationToken.None);
 
-            mount.Verify(m => m.SlewToCoordinatesAsync(It.IsAny<Coordinates>(), It.IsAny<CancellationToken>()), Times.Once);
+            mount.Verify(m => m.SlewToCoordinatesAsync(It.IsAny<Coordinates>(), It.IsAny<MoveAsker>(), It.IsAny<CancellationToken>()), Times.Once);
         }
 
         [Test]

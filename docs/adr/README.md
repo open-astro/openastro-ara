@@ -102,3 +102,4 @@ referred to by its slug until it is written, and numbered then.
 - [A Refusal is declared once](0022-a-refusal-is-declared-once.md)
 - [The Sequencer owns its equipment seam, and a missing capability refuses](0023-the-sequencer-owns-its-equipment-seam.md)
 - [Rig Occupancy is one register in the daemon](0025-rig-occupancy-is-one-register.md)
+- [Move Admission is one module in the Telescope service](0026-move-admission-is-one-module.md)

@@ -14,6 +14,7 @@
 
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
+using OpenAstroAra.Equipment.Interfaces.Mediator;
 using NUnit.Framework;
 using OpenAstroAra.Server.Contracts;
 using OpenAstroAra.Server.Contracts.Refusals;
@@ -43,8 +44,8 @@ namespace OpenAstroAra.Test {
 
             Assert.That(refusal!.Cause, Is.EqualTo(RefusalCatalog.MountClockNotVerified));
             Assert.That(fake.LeaseCalls, Is.Empty, "a refused start must not acquire the lease");
-            mount.Verify(m => m.FindHome(It.IsAny<System.IProgress<OpenAstroAra.Core.Model.ApplicationStatus>>(), It.IsAny<CancellationToken>()), Times.Never);
-            mount.Verify(m => m.SlewToCoordinatesAsync(It.IsAny<OpenAstroAra.Astrometry.Coordinates>(), It.IsAny<CancellationToken>()), Times.Never);
+            mount.Verify(m => m.FindHome(It.IsAny<System.IProgress<OpenAstroAra.Core.Model.ApplicationStatus>>(), MoveAsker.Session, It.IsAny<CancellationToken>()), Times.Never);
+            mount.Verify(m => m.SlewToCoordinatesAsync(It.IsAny<OpenAstroAra.Astrometry.Coordinates>(), It.IsAny<MoveAsker>(), It.IsAny<CancellationToken>()), Times.Never);
             mount.Verify(m => m.MoveAxis(It.IsAny<OpenAstroAra.Core.Enums.TelescopeAxes>(), It.IsAny<double>()), Times.Never);
         }
 

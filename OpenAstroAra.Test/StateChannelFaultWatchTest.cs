@@ -365,7 +365,7 @@ namespace OpenAstroAra.Test {
 
             var target = new Coordinates(Angle.ByHours(5.5), Angle.ByDegree(20.0), Epoch.JNOW);
             await Assert.ThrowsAsync<SequenceEntityFailedException>(() =>
-                ((ITelescopeMediator)svc).SlewToCoordinatesAsync(target, CancellationToken.None));
+                ((ITelescopeMediator)svc).SlewToCoordinatesAsync(target, MoveAsker.Session, CancellationToken.None));
 
             lock (faults) {
                 Assert.That(faults, Has.Count.GreaterThanOrEqualTo(1), "the failed slew published a fault");
@@ -402,7 +402,7 @@ namespace OpenAstroAra.Test {
 
             var target = new Coordinates(Angle.ByHours(5.5), Angle.ByDegree(20.0), Epoch.JNOW);
             var ex = await Assert.ThrowsAsync<SequenceEntityFailedException>(() =>
-                ((ITelescopeMediator)svc).SlewToCoordinatesAsync(target, CancellationToken.None));
+                ((ITelescopeMediator)svc).SlewToCoordinatesAsync(target, MoveAsker.Session, CancellationToken.None));
             Assert.That(ex!.Message, Does.Contain("was not confirmed settled within the"));
 
             lock (faults) {

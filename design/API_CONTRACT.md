@@ -1205,7 +1205,7 @@ and dragged the fitted minimum up and sideways. Dropped probes stay in `probes` 
 
 **Reasoning:** rig night 2026-10-18: a Planning GoTo was accepted mid-dither, the guider stopped (stop-guiding-when-slewing) and the run parked awaiting the user, with nothing to say a run was active. Pausing is the safe outcome; the user should be told first.
 
-**Spec ref:** `OpenAstroAra.Server/openapi.yaml#/paths/~1api~1v1~1equipment~1telescope~1slew`; `Endpoints/EquipmentEndpoints.cs` (`SlewAsync`, `SlewDuringRunRefusal`), `Services/SequencerService.cs` / `PlaceholderSequenceServices.cs` (`ActiveRunIdsAsync`); tests `EquipmentEndpointsSlewTest`, `SequencerServiceTest`, client `equipment_mount_panel_test`.
+**Spec ref:** `OpenAstroAra.Server/openapi.yaml#/paths/~1api~1v1~1equipment~1telescope~1slew`; `Endpoints/EquipmentEndpoints.cs` (`SlewAsync`), `Services/MoveAdmission.cs` (`MountHeldRefusal`, #2139/#2140), `Services/RigOccupancy.cs` (`Holders(RigHolding.Mount)`, `RegisterSession`; #2140); tests `EquipmentEndpointsSlewTest`, `SequencerServiceTest`, client `equipment_mount_panel_test`.
 
 **Related:** CHANGELOG [Unreleased]; #1364 rig checklist.
 
@@ -1845,7 +1845,7 @@ The push applies the same limits to values already saved: a bad value is left ou
 
 **Reasoning:** a GoTo under the horizon points the telescope at the ground or a building. The check is the one the Resume refinement and the re-center already used (`HorizonGuard`), so the three callers cannot disagree about where the horizon is.
 
-**Spec ref:** `Services/HorizonGuard.cs`, `Endpoints/EquipmentEndpoints.cs` (`SlewAsync`), `Contracts/Refusals/RefusalCatalog.cs`. Tests `GotoHorizonRefusalTest`, `RefusalHandlerTest`; client `lib/services/refusal.dart`.
+**Spec ref:** `Services/HorizonGuard.cs`, `Services/MoveAdmission.cs` (`LimitRefusal`), `Services/TelescopeService.cs` (`SlewAdmittedAsync`; #2139), `Contracts/Refusals/RefusalCatalog.cs`. Tests `GotoHorizonRefusalTest`, `RefusalHandlerTest`; client `lib/services/refusal.dart`.
 
 **Related:** #2044, #1847, ADR 0022
 
@@ -1921,7 +1921,7 @@ The push applies the same limits to values already saved: a bad value is left ou
 
 **Reasoning:** on 2026-11-19 four GoTos from the Mount panel were refused by the mount ("SlewToCoordinatesAsync requires Tracking to be true") and Ara showed no reason. Two of them were at hour angle ≈ −11.1 h, counterweight-up on the HAE29C, and only the tracking refusal stopped them. Turning tracking on removes that accidental barrier, so the counterweight check ships with it. Above the pole a target near the meridian also has φ near 90°, but that is the normal meridian-flip zone, so only targets below the pole are checked.
 
-**Spec ref:** `Services/CounterweightGuard.cs`, `Services/TelescopeService.cs` (`SlewInBackground`), `Endpoints/EquipmentEndpoints.cs` (`SlewAsync`), `Contracts/Refusals/RefusalCatalog.cs`. Tests `GotoCounterweightRefusalTest`, `TelescopeRestGotoTrackingTest`, `RefusalHandlerTest`; client `lib/services/refusal.dart`.
+**Spec ref:** `Services/CounterweightGuard.cs`, `Services/TelescopeService.cs` (`SlewInBackground`), `Services/MoveAdmission.cs` (`LimitRefusal`), `Services/TelescopeService.cs` (`SlewAdmittedAsync`; #2139), `Contracts/Refusals/RefusalCatalog.cs`. Tests `GotoCounterweightRefusalTest`, `TelescopeRestGotoTrackingTest`, `RefusalHandlerTest`; client `lib/services/refusal.dart`.
 
 **Related:** #2073, #2048, #2070, ADR 0022
 
@@ -1973,7 +1973,7 @@ The push applies the same limits to values already saved: a bad value is left ou
 
 **Reasoning:** the review of the Polar Align motion-safety cluster (#2048 ARA-2, #2066, #2067) found the one window left where Polar Align could start motion after a stop: the per-move abort reading, Emergency Stop latching only at its first AbortSlew (after up to two 10 s rungs), and the safety park parking around a running routine. Stop still answers after its unwind (no immediate 202), as #2086 chose.
 
-**Spec ref:** `Services/EmergencyStopService.cs` (`FenceMountQuietly`), `Services/TelescopeService.cs` (`FenceMotion`, `AbortReasonSince`, `BumpAbortEpochUnlessAbortedSince`, `MoveAxisAsync`), `Services/PolarAlignService.MountStop.cs` (`ThrowIfStoppedFromOutside`, `StopForTakeoverAsync`, `IsMovingMount`), `Services/SafetyReactionService.cs` and `Services/FaultReactionService.cs` (`StopPolarAlignQuietlyAsync`), `Services/PolarAlignService.Aligner.cs` (`CorrectOnceAsync`), `Endpoints/EquipmentEndpoints.cs` (`ThrowIfPolarAlignMovesTheMount`). Tests `PolarAlignServiceTest.ExternalStop.cs`, `EmergencyStopServiceTest`, `SafetyReactionServiceTest`, `FaultReactionServiceTest`, `TelescopeMoveAxisLeaseTest`, `TelescopeRestGotoTrackingTest`, `EquipmentEndpointsSlewTest`, `EquipmentEndpointsMoveAxisTest`.
+**Spec ref:** `Services/EmergencyStopService.cs` (`FenceMountQuietly`), `Services/TelescopeService.cs` (`FenceMotion`, `AbortReasonSince`, `BumpAbortEpochUnlessAbortedSince`, `MoveAxisAsync`), `Services/PolarAlignService.MountStop.cs` (`ThrowIfStoppedFromOutside`, `StopForTakeoverAsync`, `IsMovingMount`), `Services/SafetyReactionService.cs` and `Services/FaultReactionService.cs` (`StopPolarAlignQuietlyAsync`), `Services/PolarAlignService.Aligner.cs` (`CorrectOnceAsync`), `Services/MoveAdmission.cs` (`ThrowIfPolarAlignMovesTheMount`), `Services/TelescopeService.cs` (`ThrowUnlessPersonAdmitted`; #2139). Tests `PolarAlignServiceTest.ExternalStop.cs`, `EmergencyStopServiceTest`, `SafetyReactionServiceTest`, `FaultReactionServiceTest`, `TelescopeMoveAxisLeaseTest`, `TelescopeRestGotoTrackingTest`, `EquipmentEndpointsSlewTest`, `EquipmentEndpointsMoveAxisTest`.
 
 **Related:** #2048, #2066, #2067, #2086, #2089, ADR 0022
 
@@ -2093,7 +2093,7 @@ The push applies the same limits to values already saved: a bad value is left ou
 
 **Reasoning:** #2048 ARA-2 and ARA-7. A GoTo accepted while Polar Align solved a frame between its turns ran beside the next turn: two commands drove the RA motor at once, and the turn was measured on a mount the GoTo was moving. Holding the owner only while a motor runs left that window open; Joey chose the whole run. A guider that starts guiding by its own controls would chase the turn.
 
-**Spec ref:** `Services/IMountMotionControl.cs` (`MotionOwner`, `AcquireMotion`, `MotionOwners`), `Services/TelescopeService.MotionOwner.cs`, `Services/TelescopeService.Mediator.cs` (`RunMountCommandAsync`, `Sync`, `MeridianFlip`), `Services/TelescopeService.cs` (`SlewInBackground`), `Services/ShutdownLadder.cs` (`EndPolarAlignFirstAsync`), `Services/PolarAlignService.MotionOwner.cs` (`EnsureMountSteadyAsync`, `ThrowIfBusyAtStart`, `AcquireMountForRun`), `Services/PolarAlignService.cs` (`StartRunAsync`, `EndRoutineAsync`, `RunRoutineAsync`), `Endpoints/EquipmentEndpoints.cs` (`ThrowIfPolarAlignMovesTheMount`), `Endpoints/PlateSolveEndpoints.cs` (`CenterAsync`), `Contracts/Refusals/RefusalCatalog.cs`.
+**Spec ref:** `Services/IMountMotionControl.cs` (`MotionOwner`, `AcquireMotion`, `MotionOwners`), `Services/TelescopeService.MotionOwner.cs`, `Services/TelescopeService.Mediator.cs` (`RunMountCommandAsync`, `Sync`, `MeridianFlip`), `Services/TelescopeService.cs` (`SlewInBackground`), `Services/ShutdownLadder.cs` (`EndPolarAlignFirstAsync`), `Services/PolarAlignService.MotionOwner.cs` (`EnsureMountSteadyAsync`, `ThrowIfBusyAtStart`, `AcquireMountForRun`), `Services/PolarAlignService.cs` (`StartRunAsync`, `EndRoutineAsync`, `RunRoutineAsync`), `Services/MoveAdmission.cs` (`ThrowIfPolarAlignMovesTheMount`), `Services/TelescopeService.cs` (`ThrowUnlessPersonAdmitted`; #2139), `Endpoints/PlateSolveEndpoints.cs` (`CenterAsync`), `Contracts/Refusals/RefusalCatalog.cs`.
 
 **Related:** #2066, #2065, #2048, #2097, ADR 0022; tests `PolarAlignServiceTest` (`Polar_Align_holds_the_motion_owner_for_the_whole_run_and_a_GoTo_meanwhile_is_refused`, `A_GoTo_accepted_mid_solve_does_not_run_beside_the_next_turn`, `A_run_that_fails_by_itself_gives_the_motion_owner_back`, `M21_*`, `M10_*`, `A_mount_moved_between_the_two_readings_*`, `A_guider_that_starts_guiding_mid_run_*`, `A_start_on_a_slewing_mount_*`, `Polar_Align_reads_its_start_pose_only_once_it_holds_the_mount`, `A_Stop_of_a_stuck_run_*`, `A_Start_that_drains_a_run_*`, `The_two_readings_before_a_turn_*`), `TelescopeMotionOwnerTest`, `TelescopeMeridianFlipSlewTest` (`A_flip_while_Polar_Align_holds_the_mount_*`), `EquipmentEndpointsSlewTest`, `CenteringEndpointTest`, `GuideCaptureSeamTest`, `RefusalHandlerTest`.
 
@@ -2136,3 +2136,15 @@ The push applies the same limits to values already saved: a bad value is left ou
 **Spec ref:** `Contracts/EquipmentDtos.cs` (`GuiderStateDto`), `Services/GuiderService.cs` (`GetAsync`), `Equipment/MyGuider/PHD2/PHD2Guider.cs` (`ReadCalibrationTargetAsync`), `Equipment/MyGuider/PHD2/PHD2Guider.LiveView.cs` (`ReadProfileSetupAsync`). Tests `GuiderFakeIntegrationTest`; client `models/guider_status_test`. `openapi.yaml` does not list `GuiderStateDto`, so it does not change.
 
 **Related:** #1895, #1875, #1884, ADR 0009 (rule 1), 0014, 0020
+
+## 2026-11-25 — #2140 position limits bind every asker; a person's move asks what holds the mount; `mount_parked`
+
+**Endpoint(s) or area:** `POST /api/v1/equipment/telescope/slew`, `/park`, `/home` (409 `run_in_progress`, new 409 `mount_held`, new 409 `mount_parked` on `/home`); the sequencer's GoTo, Center and the meridian flip (no endpoint: the instruction fails, and a Warning notification in the Sequence category is posted).
+
+**Decision:** the lowest altitude (`below-horizon-limit`) and the counterweight (`counterweight-limit`) now refuse a Session's GoTo, a Center and a meridian flip too, not only a person's GoTo: the instruction fails carrying the Refusal, a notice says why ("GoTo refused — the target is below the horizon limit" / "— past the counterweight limit"), and the flip's flight check refuses with the Refusal's text and cause token. The safety and fault parks, the shutdown park and Emergency Stop are never refused by a position limit; no position limit binds a park or a home. A person's GoTo, park and home are refused while anything holds the mount in Rig Occupancy (a Session, a polar alignment, a Center or End Night; not Live View or the camera routines): a Session answers `run_in_progress`, and `force` skips it, only for a GoTo; any other holder answers `mount_held`, which `force` does not skip, so the client does not offer to force it. The text names the holder ("a sequence is running: …", "centering is running and holds the mount, so the GoTo was not sent. Stop it first."). A person's Find Home from a parked mount answers 409 `mount_parked`; a park on a parked mount is accepted. The client keys on the titles, not the texts.
+
+**Reasoning:** #2140 (Diego, 2026-11-21): a limit the person set protects the rig only when every asker is bound by it. The open points were settled by the user on 2026-11-25 (the position check #2070 stays on park and home; "the mount is held" binds only a person; `force` skips only a sequence; a home from park is refused).
+
+**Spec ref:** `Services/MoveAdmission.cs` (`RulesFor`, `LimitRefusal`, `MountHeldRefusal`), `Services/TelescopeService.cs` (`ThrowUnlessPersonAdmitted`, `FindHomeAsync`), `Services/TelescopeService.Mediator.cs` (`ThrowIfPastALimitAsync`, `RunMountCommandAsync`), `Services/MeridianFlipExecutor.cs` (`PreFlipFlightCheck`), `Endpoints/EquipmentEndpoints.cs`. Tests `MoveAdmissionTableTest`, `PositionLimitsTest`, `EquipmentEndpointsSlewTest`, `MeridianFlipExecutorTest`. `openapi.yaml` is unchanged: the 409s were already declared.
+
+**Related:** #2140, #2139, #2141, #2070, #2073, #2044, ADR 0025, 0026

@@ -129,6 +129,7 @@ public sealed partial class CenteringService : ICenteringService, IDisposable {
         };
 
         var parameter = new CenterSolveParameter {
+            Asker = MoveAsker.Center,
             Coordinates = target,
             Threshold = settings.Threshold, // centering tolerance (arcmin); loop converges below this
             FocalLength = focalLength,

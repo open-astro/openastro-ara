@@ -168,7 +168,7 @@ namespace OpenAstroAra.Test {
                 ProfileService.SetupGet(p => p.ActiveProfile.TelescopeSettings.FocalLength).Returns(800);
                 ProfileService.SetupGet(p => p.ActiveProfile.CameraSettings.PixelSize).Returns(3.8);
 
-                Telescope.Setup(t => t.SlewToCoordinatesAsync(It.IsAny<Coordinates>(), It.IsAny<CancellationToken>()))
+                Telescope.Setup(t => t.SlewToCoordinatesAsync(It.IsAny<Coordinates>(), It.IsAny<MoveAsker>(), It.IsAny<CancellationToken>()))
                     .Callback(() => Calls.Add("slew"))
                     .ReturnsAsync(true);
 
@@ -237,8 +237,8 @@ namespace OpenAstroAra.Test {
             // never left it. The slew must come first, to the plan's own coordinates.
             var h = new RotateHarness(rotationTolerance: 0.5, 350.0, 10.0);
             Coordinates? slewedTo = null;
-            h.Telescope.Setup(t => t.SlewToCoordinatesAsync(It.IsAny<Coordinates>(), It.IsAny<CancellationToken>()))
-                .Callback<Coordinates, CancellationToken>((c, _) => { slewedTo = c; h.Calls.Add("slew"); })
+            h.Telescope.Setup(t => t.SlewToCoordinatesAsync(It.IsAny<Coordinates>(), It.IsAny<MoveAsker>(), It.IsAny<CancellationToken>()))
+                .Callback<Coordinates, MoveAsker, CancellationToken>((c, _, _) => { slewedTo = c; h.Calls.Add("slew"); })
                 .ReturnsAsync(true);
             using var sut = h.CreateSUT();
 
@@ -252,7 +252,7 @@ namespace OpenAstroAra.Test {
         [Test]
         public async Task CenterAndRotate_fails_without_solving_when_the_slew_fails() {
             var h = new RotateHarness(rotationTolerance: 0.5, solvedAngles: 0.0);
-            h.Telescope.Setup(t => t.SlewToCoordinatesAsync(It.IsAny<Coordinates>(), It.IsAny<CancellationToken>()))
+            h.Telescope.Setup(t => t.SlewToCoordinatesAsync(It.IsAny<Coordinates>(), It.IsAny<MoveAsker>(), It.IsAny<CancellationToken>()))
                 .ReturnsAsync(false);
             using var sut = h.CreateSUT();
 
@@ -277,7 +277,7 @@ namespace OpenAstroAra.Test {
         [Test]
         public async Task Center_fails_without_solving_when_the_slew_fails() {
             var h = new RotateHarness(rotationTolerance: 0.5, solvedAngles: 0.0);
-            h.Telescope.Setup(t => t.SlewToCoordinatesAsync(It.IsAny<Coordinates>(), It.IsAny<CancellationToken>()))
+            h.Telescope.Setup(t => t.SlewToCoordinatesAsync(It.IsAny<Coordinates>(), It.IsAny<MoveAsker>(), It.IsAny<CancellationToken>()))
                 .ReturnsAsync(false);
             using var sut = h.CreateSUT();
 

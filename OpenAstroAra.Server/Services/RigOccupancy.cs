@@ -64,7 +64,8 @@ public sealed class RigOccupancy {
 
     /// <summary>Adds a routine. <paramref name="name"/> reads in a reason: "{name} is running". The first running
     /// routine in registration order names the refusal, so register the widest one (the Session) first: a centering
-    /// that a Session runs then reads as the Session.</summary>
+    /// that a Session runs then reads as the Session in <see cref="Holder"/>. <see cref="Holders"/> lists both, and a
+    /// person's move (#2140) names the centering.</summary>
     /// <param name="stop">#2142 — ends the routine and returns once it has ended or can no longer move anything: its
     /// return is the routine's confirmation, so it must not return earlier (the register bounds it). Its first argument
     /// names the ladder (a <see cref="MountStopReasons"/> value). Null: no ladder stops it through the register.</param>
@@ -174,11 +175,14 @@ public sealed class RigOccupancy {
 
     /// <summary>The name of the first running routine that holds any of <paramref name="holding"/>, or null when
     /// none does.</summary>
-    public string? Holder(RigHolding holding = RigHolding.Any) {
+    public string? Holder(RigHolding holding = RigHolding.Any) => Holders(holding).FirstOrDefault();
+
+    /// <summary>#2140 — the names of every running routine that holds any of <paramref name="holding"/>, in registration
+    /// order (a forced GoTo past a Session must still see a Center that runs beside it).</summary>
+    public IEnumerable<string> Holders(RigHolding holding = RigHolding.Any) {
         foreach (var routine in _routines) {
-            if ((routine.Holds & holding) != 0 && routine.IsRunning()) return routine.Name;
+            if ((routine.Holds & holding) != 0 && routine.IsRunning()) yield return routine.Name;
         }
-        return null;
     }
 
     /// <summary>#2142 — stops every running routine that holds any of <paramref name="holding"/> and has a stop, the

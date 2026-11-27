@@ -54,7 +54,7 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Telescope {
 
         public override async Task Execute(IProgress<ApplicationStatus> progress, CancellationToken token) {
             await guiderMediator.StopGuiding(token);
-            await telescopeMediator.FindHome(progress, token);
+            await telescopeMediator.FindHome(progress, MoveAsker.Session, token);
         }
 
         public bool Validate() {

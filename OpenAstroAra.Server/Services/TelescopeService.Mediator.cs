@@ -28,6 +28,7 @@ using OpenAstroAra.Equipment.Interfaces;
 using OpenAstroAra.Equipment.Interfaces.Mediator;
 using OpenAstroAra.Profile.Interfaces;
 using OpenAstroAra.Server.Contracts;
+using OpenAstroAra.Server.Contracts.Refusals;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
@@ -44,9 +45,9 @@ namespace OpenAstroAra.Server.Services;
 /// <c>FindHome</c>, <c>SlewScopeToRaDec</c>) drive the live Alpaca mount instead of the
 /// <c>HeadlessTelescopeMediator</c> stub.
 ///
-/// The long-running ops (<see cref="SlewToCoordinatesAsync(Coordinates, CancellationToken)"/>,
+/// The long-running ops (<see cref="SlewToCoordinatesAsync(Coordinates, MoveAsker, CancellationToken)"/>,
 /// <see cref="ParkTelescope"/>, <see cref="UnparkTelescope"/>,
-/// <see cref="FindHome(IProgress{ApplicationStatus}, CancellationToken)"/>) drive the device and
+/// <see cref="FindHome(IProgress{ApplicationStatus}, MoveAsker, CancellationToken)"/>) drive the device and
 /// block on a bounded wait for their terminal condition (settled-on-target, AtPark, !AtPark, AtHome),
 /// returning <c>true</c> only when reached — through the shared device-command module (ADR 0011),
 /// as the focuser/rotator/dome mediators do. The tracking writes are prompt synchronous calls.
@@ -290,12 +291,13 @@ public sealed partial class TelescopeService : ITelescopeMediator {
         }
     }
 
-    public Task<bool> SlewToCoordinatesAsync(Coordinates coords, CancellationToken token) {
+    public Task<bool> SlewToCoordinatesAsync(Coordinates coords, MoveAsker asker, CancellationToken token) {
         ArgumentNullException.ThrowIfNull(coords);
+        _ = MoveAdmission.RulesFor(asker, MoveKind.Slew); // #2139 — an asker with no slew row cannot ask for one
         return GotoThenSettleAsync();
 
         async Task<bool> GotoThenSettleAsync() {
-            var arrived = await GotoAsync(coords, token).ConfigureAwait(false);
+            var arrived = await GotoAsync(coords, asker, token).ConfigureAwait(false);
             if (arrived) {
                 await PostSlewSettleAsync(token).ConfigureAwait(false);
             }
@@ -305,11 +307,14 @@ public sealed partial class TelescopeService : ITelescopeMediator {
 
     // The goto alone: drive the slew and wait for arrival, no settle. The flip goto uses it directly —
     // MeridianFlipExecutor settles after it with MeridianFlipSettings.SettleTime. #2075 — every
-    // mediator slew (sequence, centering, meridian flip, Polar Align) is range-checked here, after the
+    // mediator slew (sequence, centering, meridian flip) is range-checked here, after the
     // epoch transform: RA is wrapped into [0, 24) and a Dec outside ±90° or a non-finite coordinate is
-    // refused before anything reaches the mount. There is no horizon check here; the callers that need
-    // one (the REST GoTo, TargetRecenter, the resume refinement) apply HorizonGuard themselves.
-    private Task<bool> GotoAsync(Coordinates coords, CancellationToken token) {
+    // refused before anything reaches the mount. #2139 — each check runs where Move Admission's table binds the asker
+    // (record 0026). #2140 — this replaces the old "no horizon check here" note: a Session's, Center's and the flip's GoTo
+    // are checked for the position limits too (lowest altitude, counterweight); a refusal fails the instruction carrying the
+    // Refusal and posts a notice. Target recenter and the resume refinement still ask the horizon up front and skip.
+    private Task<bool> GotoAsync(Coordinates coords, MoveAsker asker, CancellationToken token) {
+        var parkedBinds = MoveAdmission.Binds(asker, MoveKind.Slew, MoveRule.Parked);
         ITelescopeDevice client;
         bool parked;
         lock (_gate) {
@@ -323,7 +328,7 @@ public sealed partial class TelescopeService : ITelescopeMediator {
             client = live;
             parked = _runtime.Parked;
         }
-        if (parked) {
+        if (parked && parkedBinds) {
             // ASCOM mounts throw on slew-while-parked; pre-empt with a clean failure (the instruction
             // has already surfaced the parked warning to the user).
             LogMountOpRejectedParked("telescope.slew");
@@ -332,9 +337,12 @@ public sealed partial class TelescopeService : ITelescopeMediator {
         return SlewCoreAsync();
 
         async Task<bool> SlewCoreAsync() {
-            // #2071 — a sequencer slew, Center, the polar-alignment slews and the flip goto all come
+            // #2140 — the position limits, before the clock wait and before anything is sent.
+            await ThrowIfPastALimitAsync(asker, coords, "telescope.slew").ConfigureAwait(false);
+            // #2071 — a sequencer slew, Center and the flip goto all come
             // here: refuse before anything is sent while the mount's clock is not verified.
-            if (await MountClockRefusalAfterPushAsync(token).ConfigureAwait(false) is { } clockRefusal) {
+            if (MoveAdmission.Binds(asker, MoveKind.Slew, MoveRule.Clock)
+                    && await MountClockRefusalAfterPushAsync(token).ConfigureAwait(false) is { } clockRefusal) {
                 LogMountOpRejectedClock("telescope.slew", clockRefusal);
                 throw new SequenceEntityFailedException(clockRefusal);
             }
@@ -348,14 +356,16 @@ public sealed partial class TelescopeService : ITelescopeMediator {
                 client = live;
                 parked = _runtime.Parked;
             }
-            if (parked) {
+            if (parked && parkedBinds) {
                 LogMountOpRejectedParked("telescope.slew");
                 return false;
             }
             // #2070 — a goto from a position model that is not trusted (a false zero after a power loss)
             // drives the tube to the wrong place: fail the instruction before anything is sent. It throws,
             // like the unknown-system refusal below, so a blind SlewScopeToRaDec shows it.
-            await ThrowIfPoseUnverifiedForSequenceAsync(client, "telescope.slew", token).ConfigureAwait(false);
+            if (MoveAdmission.Binds(asker, MoveKind.Slew, MoveRule.Pose)) {
+                await ThrowIfPoseUnverifiedForSequenceAsync(client, "telescope.slew", token).ConfigureAwait(false);
+            }
             // #1124 — a slew right after connect can beat the first refresh: read the system now
             // rather than guess. Still unknown → fail the instruction without sending anything
             // (SlewScopeToRaDec's blind slew ignores a false return, so a refusal must throw to be seen;
@@ -378,7 +388,8 @@ public sealed partial class TelescopeService : ITelescopeMediator {
             // already reaches the caller as this exception type through RunMountCommandAsync.
             var targetRa = WrapRaHours(target.RA);
             var targetDec = target.Dec;
-            if (SlewTargetRefusal(targetRa, targetDec, "telescope.slew") is string refusal) {
+            if (MoveAdmission.Binds(asker, MoveKind.Slew, MoveRule.Range)
+                    && SlewTargetRefusal(targetRa, targetDec, "telescope.slew") is string refusal) {
                 LogSlewTargetRefused("telescope.slew", refusal);
                 throw new SequenceEntityFailedException(refusal);
             }
@@ -387,7 +398,7 @@ public sealed partial class TelescopeService : ITelescopeMediator {
                 SlewWatch.NoteSlewTarget(targetRa, targetDec); // §57.8 — slew_started carries the intent
             }
             try {
-                return await RunMountCommandAsync(SlewCommandPolicy, "telescope.slew",
+                return await RunMountCommandAsync(SlewCommandPolicy, "telescope.slew", (asker, MoveKind.Slew),
                     c => {
                         TryEnableTracking(c);
                         // Async goto: returns immediately, Slewing goes true; the settle-wait
@@ -430,21 +441,21 @@ public sealed partial class TelescopeService : ITelescopeMediator {
         }
     }
 
-    public Task<bool> ParkTelescope(IProgress<ApplicationStatus> progress, CancellationToken token) =>
+    public Task<bool> ParkTelescope(IProgress<ApplicationStatus> progress, MoveAsker asker, CancellationToken token) =>
         // TryEnableTracking before Park here too (not just the REST path): some mounts (iOptron) won't
         // park from a stationary state, so an end-of-sequence auto-park would silently no-op otherwise.
-        RunMountCommandAsync(CommandPolicy, "telescope.park", c => { TryEnableTracking(c); c.Park(); },
+        RunMountCommandAsync(CommandPolicy, "telescope.park", (asker, MoveKind.Park), c => { TryEnableTracking(c); c.Park(); },
             c => ReadAtPark(c) && !ReadSlewing(c), token);
 
     public Task<bool> UnparkTelescope(IProgress<ApplicationStatus> progress, CancellationToken token) =>
         // !Slewing matters here too: a motorised unpark can clear AtPark the moment the command is
         // accepted while the mount is still moving to its unpark position — returning early would
         // let a back-to-back slew/tracking change land mid-motion.
-        RunMountCommandAsync(CommandPolicy, "telescope.unpark", c => c.Unpark(),
+        RunMountCommandAsync(CommandPolicy, "telescope.unpark", move: null, c => c.Unpark(),
             c => !ReadAtPark(c) && !ReadSlewing(c), token);
 
-    public Task<bool> FindHome(IProgress<ApplicationStatus> progress, CancellationToken token) =>
-        RunMountCommandAsync(CommandPolicy, "telescope.findhome", c => c.FindHome(),
+    public Task<bool> FindHome(IProgress<ApplicationStatus> progress, MoveAsker asker, CancellationToken token) =>
+        RunMountCommandAsync(CommandPolicy, "telescope.findhome", (asker, MoveKind.Home), c => c.FindHome(),
             c => ReadAtHome(c) && !ReadSlewing(c), token);
 
     public long TrackingWriteCount => Interlocked.Read(ref _trackingWrites);
@@ -546,10 +557,22 @@ public sealed partial class TelescopeService : ITelescopeMediator {
 
     // ADR 0011 — park/unpark/findhome/goto through the command module. The connected check stays here
     // (not connected = false, nothing sent: the instruction's Validate has already blocked this).
-    private async Task<bool> RunMountCommandAsync(DeviceCommandPolicy policy, string op, Action<ITelescopeDevice> action, Func<ITelescopeDevice, bool> isDone, CancellationToken ct) {
+    // #2139 — move: who moves the mount and how, explicit (null only for an unpark, which is not a move Move Admission
+    // admits); the owner and position checks run where the table binds the asker (record 0026).
+    private async Task<bool> RunMountCommandAsync(DeviceCommandPolicy policy, string op, (MoveAsker Asker, MoveKind Kind)? move, Action<ITelescopeDevice> action, Func<ITelescopeDevice, bool> isDone, CancellationToken ct) {
+        bool Binds(MoveRule rule) => move is { } m && MoveAdmission.Binds(m.Asker, m.Kind, rule);
+        if (move is { } asked) {
+            _ = MoveAdmission.RulesFor(asked.Asker, asked.Kind); // an asker with no row for this move cannot ask for it
+        }
         var client = ConnectedClientOrNull();
         if (client is null) {
             return false;
+        }
+        // #2140 — a Find Home from a parked mount is refused before the module runs (the mount would throw, an op fault);
+        // it throws, so a Find Home instruction shows it. A park on a parked mount does nothing and goes ahead.
+        if (move is { Kind: MoveKind.Home } && Binds(MoveRule.Parked) && IsParkedNow()) {
+            LogMountOpRejectedParked(op);
+            throw new SequenceEntityFailedException("The mount is parked: unpark it before Find Home.");
         }
         // #2066 (ARA-2) — Polar Align holds the mount for its whole run: a sequencer, Center or flip GoTo, a Park Scope or
         // Find Home instruction, an end-of-sequence park or a failed flip's safe rest would run beside its next turn
@@ -558,7 +581,7 @@ public sealed partial class TelescopeService : ITelescopeMediator {
         // the owner in one step, right before the send: a routine that took the mount while this GoTo read the pose or
         // the coordinate system still refuses it, and none can take it while the move goes out. The shutdown ladder's
         // Find Home and park end Polar Align through its takeover first; the safety and fault parks do not come here.
-        using var dispatch = op switch {
+        using var dispatch = !Binds(MoveRule.MotionOwner) ? null : op switch {
             "telescope.slew" => BeginMotionDispatchOrThrow(op, "GoTo"),
             "telescope.park" => BeginMotionDispatchOrThrow(op, "park"),
             "telescope.findhome" => BeginMotionDispatchOrThrow(op, "Find Home"),
@@ -569,7 +592,7 @@ public sealed partial class TelescopeService : ITelescopeMediator {
         long? motion = op is "telescope.slew" or "telescope.park" or "telescope.findhome" ? NoteMotionDispatched(abortEpoch: null) : null;
         // #2070 — a park or a model Home from a position that is not trusted is refused before the module
         // runs: inside it the refusal would publish an op fault, and op faults escalate to an abort-and-park.
-        if (op is "telescope.park" or "telescope.findhome") {
+        if (op is "telescope.park" or "telescope.findhome" && Binds(MoveRule.Pose)) {
             try {
                 await ThrowIfPoseUnverifiedForSequenceAsync(client, op, ct,
                     // A refused park (a plan's Park Scope at the end of the night) must not leave the mount tracking
@@ -883,16 +906,24 @@ public sealed partial class TelescopeService : ITelescopeMediator {
         }
         // #2066 (ARA-2) — before the pier-side write, which starts the flip slew on some mounts: while Polar Align holds
         // the mount the flip is refused here, not at its GoTo after the write (which checks again before it is sent).
-        ThrowIfMotionOwned("telescope.flip", "meridian flip");
+        // #2139 — each check where Move Admission's table binds the flip (record 0026).
+        const MoveAsker flip = MoveAsker.MeridianFlip;
+        if (MoveAdmission.Binds(flip, MoveKind.Slew, MoveRule.MotionOwner)) {
+            ThrowIfMotionOwned("telescope.flip", "meridian flip");
+        }
         // #2075 — refuse an out-of-range flip target BEFORE the pier-side write: some mounts start
         // moving on that write, and the goto's own guard runs only after it.
-        if (SlewTargetRefusal(targetCoordinates.RA, targetCoordinates.Dec, "telescope.flip") is string refusal) {
+        if (MoveAdmission.Binds(flip, MoveKind.Slew, MoveRule.Range)
+                && SlewTargetRefusal(targetCoordinates.RA, targetCoordinates.Dec, "telescope.flip") is string refusal) {
             LogSlewTargetRefused("telescope.flip", refusal);
             throw new SequenceEntityFailedException(refusal);
         }
+        // #2140 — the position limits, before the pier-side write too (the flip executor also asks in its flight check).
+        await ThrowIfPastALimitAsync(flip, targetCoordinates, "telescope.flip").ConfigureAwait(false);
         // #2071 — before the pier-side hint: some mounts start the flip slew on that write. Waits for a
         // clock push in flight like the goto does, so a time sync landing at the flip does not abort it.
-        if (await MountClockRefusalAfterPushAsync(token).ConfigureAwait(false) is { } clockRefusal) {
+        if (MoveAdmission.Binds(flip, MoveKind.Slew, MoveRule.Clock)
+                && await MountClockRefusalAfterPushAsync(token).ConfigureAwait(false) is { } clockRefusal) {
             LogMountOpRejectedClock("telescope.flip", clockRefusal);
             throw new SequenceEntityFailedException(clockRefusal);
         }
@@ -903,11 +934,13 @@ public sealed partial class TelescopeService : ITelescopeMediator {
             return false;
         }
         // #2070 — before the pier-side write: some mounts start the flip slew on that write alone.
-        await ThrowIfPoseUnverifiedForSequenceAsync(client, "telescope.flip", token).ConfigureAwait(false);
+        if (MoveAdmission.Binds(flip, MoveKind.Slew, MoveRule.Pose)) {
+            await ThrowIfPoseUnverifiedForSequenceAsync(client, "telescope.flip", token).ConfigureAwait(false);
+        }
         if (_profileService?.ActiveProfile?.MeridianFlipSettings.UseSideOfPier == true) {
             await CommandDestinationPierSideAsync(client, targetCoordinates, token).ConfigureAwait(false);
         }
-        var slewed = await GotoAsync(targetCoordinates, token).ConfigureAwait(false);
+        var slewed = await GotoAsync(targetCoordinates, flip, token).ConfigureAwait(false);
         RefreshCacheOnce();
         return slewed;
     }
@@ -981,6 +1014,52 @@ public sealed partial class TelescopeService : ITelescopeMediator {
         }
     }
 
+    private bool IsParkedNow() {
+        lock (_gate) {
+            return _runtime.Parked;
+        }
+    }
+
+    /// <summary>#2140 — the position-limit Refusal for a mediator GoTo or flip (record 0026): the instruction fails carrying
+    /// it (inside a <see cref="SequenceEntityFailedException"/>, so the block's error setting decides what is next), and a
+    /// notice says why, the same kind as "target is low". Nothing is sent to the mount.</summary>
+    private async Task ThrowIfPastALimitAsync(MoveAsker asker, Coordinates target, string op) {
+        if (MoveAdmission.LimitRefusal(asker, _profileStore, target, MountAlignmentMode, _logger) is not { } limit) {
+            return;
+        }
+        LogSlewTargetRefused(op, limit.Message);
+        await NotifyLimitRefusedQuietlyAsync(limit).ConfigureAwait(false);
+        throw new SequenceEntityFailedException(limit.Message, limit);
+    }
+
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "The notice is advisory: a notification store fault must not hide the refusal itself. Logged, never rethrown.")]
+    private async Task NotifyLimitRefusedQuietlyAsync(RefusalException limit) {
+        if (_notificationResolver?.Invoke() is not { } notifications) {
+            return;
+        }
+        try {
+            await notifications.CreateAsync(new NotificationDto(
+                Id: Guid.NewGuid(),
+                PostedUtc: DateTimeOffset.UtcNow,
+                Severity: NotificationSeverity.Warning,
+                Category: NotificationCategory.Sequence,
+                Title: limit.Cause == RefusalCatalog.BelowHorizonLimit ? "GoTo refused — the target is below the horizon limit" : "GoTo refused — past the counterweight limit",
+                Message: limit.Message + " Nothing was sent to the mount; the sequence's error setting decides what comes next.",
+                Read: false,
+                Dismissed: false,
+                DismissedUtc: null,
+                Payload: null,
+                RelatedEntityType: null,
+                RelatedEntityId: null), CancellationToken.None).ConfigureAwait(false);
+        } catch (Exception ex) {
+            LogLimitNoticeFailed(ex);
+        }
+    }
+
+    [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Warning, Message = "The notice for a GoTo refused by a position limit could not be posted")]
+    private partial void LogLimitNoticeFailed(Exception ex);
+
     // ── Unconsumed mediator surface — documented no-op stubs ─────────────────────────────────────
     // No registered headless instruction reaches these: MoveAxis/PulseGuide are interactive-GUI /
     // guider-calibration aids; the topocentric slews back SlewScopeToAltAz (not registered); custom
@@ -991,10 +1070,10 @@ public sealed partial class TelescopeService : ITelescopeMediator {
     public void PulseGuide(GuideDirections direction, int duration) { }
 
     [Obsolete("Use SlewToTopocentricCoordinates instead.")]
-    public Task<bool> SlewToCoordinatesAsync(TopocentricCoordinates coords, CancellationToken token) =>
+    public Task<bool> SlewToCoordinatesAsync(TopocentricCoordinates coords, MoveAsker asker, CancellationToken token) =>
         Task.FromResult(false);
 
-    public Task<bool> SlewToTopocentricCoordinates(TopocentricCoordinates coords, CancellationToken token) =>
+    public Task<bool> SlewToTopocentricCoordinates(TopocentricCoordinates coords, MoveAsker asker, CancellationToken token) =>
         Task.FromResult(false);
 
     public bool SetCustomTrackingRate(SiderealShiftTrackingRate rate) => false;

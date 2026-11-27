@@ -180,7 +180,7 @@ namespace OpenAstroAra.Test {
             // #2087 review: a §42.3 reconnect just before a sequencer slew starts a clock push; the slew must wait
             // for it, not fail the step.
             using var rig = await HeldPushAsync();
-            var slew = ((ITelescopeMediator)rig.Svc).SlewToCoordinatesAsync(Target(5), CancellationToken.None);
+            var slew = ((ITelescopeMediator)rig.Svc).SlewToCoordinatesAsync(Target(5), MoveAsker.Session, CancellationToken.None);
             await Task.Delay(100);
             Assert.That(slew.IsCompleted, Is.False, "the slew waits for the push in flight instead of failing the step");
             Assert.That(rig.Device.Slews, Is.Zero);
@@ -226,7 +226,7 @@ namespace OpenAstroAra.Test {
             // window it must re-read it and send the goto to the new device.
             using var rig = await HeldPushAsync();
             var old = rig.Device;
-            var slew = ((ITelescopeMediator)rig.Svc).SlewToCoordinatesAsync(Target(5), CancellationToken.None);
+            var slew = ((ITelescopeMediator)rig.Svc).SlewToCoordinatesAsync(Target(5), MoveAsker.Session, CancellationToken.None);
 
             await ReconnectThenReleaseAsync(rig, slew);
             Assert.That(await slew, Is.True);
@@ -247,7 +247,7 @@ namespace OpenAstroAra.Test {
                 }
             });
             var old = rig.Device;
-            var slew = ((ITelescopeMediator)rig.Svc).SlewToCoordinatesAsync(Target(5), CancellationToken.None);
+            var slew = ((ITelescopeMediator)rig.Svc).SlewToCoordinatesAsync(Target(5), MoveAsker.Session, CancellationToken.None);
 
             await rig.Svc.DisconnectAsync(null, CancellationToken.None);
             await rig.Svc.ConnectAsync(new ConnectRequestDto(Mount), null, CancellationToken.None);
@@ -379,8 +379,9 @@ namespace OpenAstroAra.Test {
             var (svc, device) = await UnverifiedAsync();
             using var _ = svc;
             device.ReportsArrival = true;
-            Assert.That(await svc.ParkTelescope(new Progress<ApplicationStatus>(), CancellationToken.None), Is.True);
-            Assert.That(await svc.FindHome(new Progress<ApplicationStatus>(), CancellationToken.None), Is.True);
+            // Home first: a home from a parked mount is refused (#2140).
+            Assert.That(await svc.FindHome(new Progress<ApplicationStatus>(), MoveAsker.Session, CancellationToken.None), Is.True);
+            Assert.That(await svc.ParkTelescope(new Progress<ApplicationStatus>(), MoveAsker.Session, CancellationToken.None), Is.True);
             Assert.That((device.Parks, device.Homes), Is.EqualTo((1, 1)));
         }
 
@@ -388,7 +389,7 @@ namespace OpenAstroAra.Test {
         public async Task A_sequencer_GoTo_fails_its_step_and_sends_nothing() {
             var (svc, device) = await UnverifiedAsync();
             using var _ = svc;
-            var failed = await Assert.ThrowsAsync<SequenceEntityFailedException>(() => ((ITelescopeMediator)svc).SlewToCoordinatesAsync(Target(5), CancellationToken.None));
+            var failed = await Assert.ThrowsAsync<SequenceEntityFailedException>(() => ((ITelescopeMediator)svc).SlewToCoordinatesAsync(Target(5), MoveAsker.Session, CancellationToken.None));
             Assert.That(failed!.Message, Does.Contain("Mount clock not verified"));
             Assert.That(device.Slews, Is.Zero);
         }

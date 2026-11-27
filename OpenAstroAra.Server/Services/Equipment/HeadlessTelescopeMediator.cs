@@ -71,14 +71,14 @@ public sealed class HeadlessTelescopeMediator : ITelescopeMediator {
     public void PulseGuide(GuideDirections direction, int duration) { }
     public Task<bool> Sync(Coordinates coordinates) => Task.FromResult(false);
 
-    public Task<bool> SlewToCoordinatesAsync(Coordinates coords, CancellationToken token) =>
+    public Task<bool> SlewToCoordinatesAsync(Coordinates coords, MoveAsker asker, CancellationToken token) =>
         Task.FromResult(false);
 
     [Obsolete("Use SlewToTopocentricCoordinates instead.")]
-    public Task<bool> SlewToCoordinatesAsync(TopocentricCoordinates coords, CancellationToken token) =>
+    public Task<bool> SlewToCoordinatesAsync(TopocentricCoordinates coords, MoveAsker asker, CancellationToken token) =>
         Task.FromResult(false);
 
-    public Task<bool> SlewToTopocentricCoordinates(TopocentricCoordinates coords, CancellationToken token) =>
+    public Task<bool> SlewToTopocentricCoordinates(TopocentricCoordinates coords, MoveAsker asker, CancellationToken token) =>
         Task.FromResult(false);
 
     public Task<bool> MeridianFlip(Coordinates targetCoordinates, CancellationToken token) =>
@@ -93,7 +93,7 @@ public sealed class HeadlessTelescopeMediator : ITelescopeMediator {
     public Coordinates GetCurrentPosition() =>
         new Coordinates(Angle.ByDegree(0), Angle.ByDegree(0), Epoch.J2000);
 
-    public Task<bool> ParkTelescope(IProgress<ApplicationStatus> progress, CancellationToken token) =>
+    public Task<bool> ParkTelescope(IProgress<ApplicationStatus> progress, MoveAsker asker, CancellationToken token) =>
         Task.FromResult(false);
 
     public Task<bool> UnparkTelescope(IProgress<ApplicationStatus> progress, CancellationToken token) =>
@@ -101,7 +101,7 @@ public sealed class HeadlessTelescopeMediator : ITelescopeMediator {
 
     public Task WaitForSlew(CancellationToken token) => Task.CompletedTask;
 
-    public Task<bool> FindHome(IProgress<ApplicationStatus> progress, CancellationToken token) =>
+    public Task<bool> FindHome(IProgress<ApplicationStatus> progress, MoveAsker asker, CancellationToken token) =>
         Task.FromResult(false);
 
     public void StopSlew() { }

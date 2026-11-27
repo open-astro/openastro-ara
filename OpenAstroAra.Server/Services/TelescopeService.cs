@@ -15,6 +15,7 @@
 using ASCOM.Common.DeviceInterfaces;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using OpenAstroAra.Astrometry;
 using OpenAstroAra.Equipment.Interfaces.Mediator;
 using OpenAstroAra.Profile.Interfaces;
 using OpenAstroAra.Server.Contracts;
@@ -148,8 +149,14 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
     public TelescopeService(ILogger<TelescopeService>? logger = null, EquipmentEventPublisher? events = null,
             IEquipmentFaultSink? faults = null, IWsBroadcaster? ws = null, IProfileService? profileService = null,
             Func<IGuiderMediator?>? guiderResolver = null, IProfileStore? profileStore = null, IMountPoseStore? poseStore = null,
-            Func<ITimeSyncService?>? timeSyncResolver = null) {
+            Func<ITimeSyncService?>? timeSyncResolver = null, Func<RigOccupancy?>? occupancyResolver = null,
+            Func<IPolarAlignService?>? polarAlignResolver = null, Func<INotificationService?>? notificationResolver = null) {
         _profileStore = profileStore;
+        // #2139, #2140 — Move Admission's person rules: what holds the mount (Rig Occupancy) and Polar Align turning it; and
+        // the notice a GoTo refused by a position limit posts. All resolved lazily (built after the mount).
+        _occupancyResolver = occupancyResolver;
+        _polarAlignResolver = polarAlignResolver;
+        _notificationResolver = notificationResolver;
         _poseStore = poseStore;
         // #2071 — the time-sync service, resolved lazily like the guider. Without it the mount-clock gate is off.
         _timeSyncResolver = timeSyncResolver;
@@ -227,8 +234,45 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
         ForgetMountClockLocked(); // #2071 — every session sets and checks the mount's clock again
     }
 
+    private readonly Func<RigOccupancy?>? _occupancyResolver;
+    private readonly Func<IPolarAlignService?>? _polarAlignResolver;
+    private readonly Func<INotificationService?>? _notificationResolver;
+
+    /// <summary>A person's GoTo or sync (the REST endpoint). #2139 — a GoTo is checked by Move Admission's person row
+    /// (record 0026), in the order the endpoint and this service checked it before: Polar Align moving and the motion
+    /// owner, the mount held (<see cref="MountHeldException"/>), the range, the horizon, the counterweight, then the
+    /// connection, the clock and the position. A sync is not a move: it keeps its own checks (the range, the clock; the
+    /// endpoint checks Polar Align and the owner for it).</summary>
     public Task<OperationAcceptedDto> SlewAsync(SlewRequestDto request, string? idempotencyKey, CancellationToken ct) {
         ArgumentNullException.ThrowIfNull(request);
+        if (request.Sync == true) {
+            // A sync is not a move (#2139 leaves it out): the endpoint checks Polar Align and the owner for it, as before,
+            // and the send drops it if a routine took the mount since.
+            return SlewAdmittedAsync(request, idempotencyKey, ct);
+        }
+        ThrowUnlessPersonAdmitted(MoveKind.Slew, "slew", forced: request.Force == true);
+        return SlewAdmittedAsync(request, idempotencyKey, ct);
+    }
+
+    /// <summary>#2139, #2140 — a person's park, home or GoTo: Polar Align turning the mount, a routine holding its motion
+    /// owner, then anything that holds the mount in Rig Occupancy (record 0025; <paramref name="forced"/> skips only a
+    /// Session, for a GoTo), where the person row binds them, before the connection check.</summary>
+    private void ThrowUnlessPersonAdmitted(MoveKind kind, string what, bool forced = false) {
+        if (MoveAdmission.Binds(MoveAsker.Person, kind, MoveRule.PolarAlignMoving)) {
+            MoveAdmission.ThrowIfPolarAlignMovesTheMount(_polarAlignResolver?.Invoke(), what);
+        }
+        if (MoveAdmission.Binds(MoveAsker.Person, kind, MoveRule.MotionOwner)) {
+            MoveAdmission.ThrowIfPolarAlignMovesTheMount(null, what, this);
+        }
+        if (MoveAdmission.Binds(MoveAsker.Person, kind, MoveRule.MountHeld)
+                && MoveAdmission.MountHeldRefusal(_occupancyResolver?.Invoke()?.Holders(RigHolding.Mount) ?? [], forced, kind) is { } held) {
+            throw held;
+        }
+    }
+
+    private Task<OperationAcceptedDto> SlewAdmittedAsync(SlewRequestDto request, string? idempotencyKey, CancellationToken ct) {
+        var sync = request.Sync ?? false;
+        bool Binds(MoveRule rule) => sync || MoveAdmission.Binds(MoveAsker.Person, MoveKind.Slew, rule);
         // Dispose check first, then argument range, then connection state — aligned with the other
         // device services.
         ITelescopeDevice? client;
@@ -236,22 +280,28 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
             ObjectDisposedException.ThrowIf(_lifecycle.IsDisposed, this);
             client = _lifecycle.Live;
         }
-        if (IsCoordinateOutOfRange(request.RightAscensionHours, request.DeclinationDegrees)) {
+        if (Binds(MoveRule.Range) && IsCoordinateOutOfRange(request.RightAscensionHours, request.DeclinationDegrees)) {
             throw new ArgumentOutOfRangeException(nameof(request), request,
                 "RightAscensionHours must be in [0, 24) and DeclinationDegrees in [-90, 90].");
+        }
+        if (!sync && !IsCoordinateOutOfRange(request.RightAscensionHours, request.DeclinationDegrees)) {
+            // #2044, #2073 — the target's limits, after its range (an out-of-range target keeps the range answer).
+            var target = new Coordinates(request.RightAscensionHours, request.DeclinationDegrees, Epoch.J2000, Coordinates.RAType.Hours);
+            if (MoveAdmission.LimitRefusal(MoveAsker.Person, _profileStore, target, MountAlignmentMode, _logger) is { } limit) {
+                throw limit;
+            }
         }
         if (client is null) {
             throw new InvalidOperationException("telescope is not connected");
         }
         // #2071 — a GoTo or a Sync on a wrong mount clock points at (or bakes in) the wrong sky.
-        var clockRefusal = MountClockMotionRefusal();
+        var clockRefusal = Binds(MoveRule.Clock) ? MountClockMotionRefusal() : null;
         if (clockRefusal is not null && !MountClockSettling()) {
             LogMountOpRejectedClock(request.Sync == true ? "telescope.sync" : "telescope.slew", clockRefusal);
             throw new RefusalException(RefusalCatalog.MountClockNotVerified, clockRefusal);
         }
         var ra = request.RightAscensionHours;
         var dec = request.DeclinationDegrees;
-        var sync = request.Sync ?? false;
         if (clockRefusal is not null) {
             // #2071 — a clock push is running (the app's time sync just after it connects), or a host clock step is
             // about to start one: wait for it, as a sequencer GoTo does, instead of refusing a GoTo the push is about
@@ -308,7 +358,9 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
         try {
             // #2070 — before the guider stops: a refused GoTo leaves everything as it was. force does not bypass it.
             // It runs before SlewInBackground's TryEnableTracking (#2073), so a refused GoTo turns nothing on.
-            await ThrowIfPoseUnverifiedAsync(client, "slew", ct).ConfigureAwait(false);
+            if (MoveAdmission.Binds(MoveAsker.Person, MoveKind.Slew, MoveRule.Pose)) {
+                await ThrowIfPoseUnverifiedAsync(client, "slew", ct).ConfigureAwait(false);
+            }
             await StopGuidingBeforeMountMoveAsync("slew").ConfigureAwait(false);
         } catch {
             NoteMotionFailed(motion, client);
@@ -388,13 +440,17 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
 
     // The safety and fault parks: never yield to the motion owner (they end Polar Align through its takeover first).
     public Task<OperationAcceptedDto> ParkAsync(ParkRequestDto request, string? idempotencyKey, CancellationToken ct) =>
-        ParkAsync(request, idempotencyKey, yieldToOwner: false, ct);
+        ParkAsync(request, idempotencyKey, MoveAsker.SafetyPark, ct);
 
     // #2066 (ARA-2) — the user's park (POST /park): counted in the motion dispatch, as a REST GoTo is.
-    public Task<OperationAcceptedDto> ParkUnlessMotionOwnedAsync(ParkRequestDto request, string? idempotencyKey, CancellationToken ct) =>
-        ParkAsync(request, idempotencyKey, yieldToOwner: true, ct);
+    public Task<OperationAcceptedDto> ParkUnlessMotionOwnedAsync(ParkRequestDto request, string? idempotencyKey, CancellationToken ct) {
+        ThrowUnlessPersonAdmitted(MoveKind.Park, "park");
+        return ParkAsync(request, idempotencyKey, MoveAsker.Person, ct);
+    }
 
-    private Task<OperationAcceptedDto> ParkAsync(ParkRequestDto request, string? idempotencyKey, bool yieldToOwner, CancellationToken ct) {
+    // #2139 — the asker's park row decides the position check and whether the park yields to the motion owner.
+    private Task<OperationAcceptedDto> ParkAsync(ParkRequestDto request, string? idempotencyKey, MoveAsker asker, CancellationToken ct) {
+        var yieldToOwner = MoveAdmission.Binds(asker, MoveKind.Park, MoveRule.MotionOwner);
         // No ArgumentNullException.ThrowIfNull(request): the /park endpoint substitutes
         // `request ?? new ParkRequestDto()`, so request is never null here, and the Reason field is
         // unused by the park itself — the param is kept only for the interface contract.
@@ -405,17 +461,19 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
         // #2073 — read before the pose check and the guider stop, as the GoTo does: a Stop Mount or emergency
         // stop that lands after this request must win over its tracking enable and park. #2066 — a move from here on.
         var (motion, abortEpoch) = NoteMotionRequested();
-        return ParkAfterGuidingStoppedAsync(client, idempotencyKey, abortEpoch, motion, yieldToOwner, ct);
+        return ParkAfterGuidingStoppedAsync(client, idempotencyKey, abortEpoch, motion, asker, yieldToOwner, ct);
     }
 
     [SuppressMessage("Reliability", "CA2000:Dispose objects before losing scope",
         Justification = "#2066 — the dispatch scope is handed to the background send, which disposes it when the move is sent or dropped; a throw before the hand-off disposes it here.")]
-    private async Task<OperationAcceptedDto> ParkAfterGuidingStoppedAsync(ITelescopeDevice client, string? idempotencyKey, long abortEpoch, long motion, bool yieldToOwner, CancellationToken ct) {
+    private async Task<OperationAcceptedDto> ParkAfterGuidingStoppedAsync(ITelescopeDevice client, string? idempotencyKey, long abortEpoch, long motion, MoveAsker asker, bool yieldToOwner, CancellationToken ct) {
         try {
             // #2070 — a park drives to a position the mount's model computes: refused while that model is
             // not trusted, before the leases end or the guider stops. The safety and fault parks fall back to
             // stopping tracking on this refusal.
-            await ThrowIfPoseUnverifiedAsync(client, "park", ct).ConfigureAwait(false);
+            if (MoveAdmission.Binds(asker, MoveKind.Park, MoveRule.Pose)) {
+                await ThrowIfPoseUnverifiedAsync(client, "park", ct).ConfigureAwait(false);
+            }
         } catch {
             NoteMotionFailed(motion, client);
             throw;
@@ -465,8 +523,15 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
         return Task.FromResult(Accepted("telescope.unpark", idempotencyKey));
     }
 
+    /// <summary>A person's Find Home (the REST endpoint), checked by Move Admission's person row (#2139, record 0026).</summary>
     public Task<OperationAcceptedDto> FindHomeAsync(string? idempotencyKey, CancellationToken ct) {
+        ThrowUnlessPersonAdmitted(MoveKind.Home, "home");
         var client = RequireConnectedClient(); // synchronous throw when not connected / disposed, as before
+        // #2140 — a park on a parked mount does nothing; a Find Home from it is refused (the mount would throw).
+        if (MoveAdmission.Binds(MoveAsker.Person, MoveKind.Home, MoveRule.Parked) && IsParkedNow()) {
+            LogMountOpRejectedParked("telescope.findhome");
+            throw new MountParkedException("The mount is parked: unpark it before Find Home.");
+        }
         var (motion, abortEpoch) = NoteMotionRequested(); // #2066 — read at the request, and a move from here on, as Park does
         return FindHomeAfterGuidingStoppedAsync(client, idempotencyKey, abortEpoch, motion, ct);
     }
@@ -477,13 +542,16 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
         try {
             // #2070 — FindHome goes to Home by the mount's model on today's drivers (AlpacaBridge's iOptron
             // sends :MH#, a no-op at a false zero), so it is refused while the position is unverified.
-            await ThrowIfPoseUnverifiedAsync(client, "findhome", ct).ConfigureAwait(false);
+            if (MoveAdmission.Binds(MoveAsker.Person, MoveKind.Home, MoveRule.Pose)) {
+                await ThrowIfPoseUnverifiedAsync(client, "findhome", ct).ConfigureAwait(false);
+            }
         } catch {
             NoteMotionFailed(motion, client);
             throw;
         }
         // #2066 (ARA-2) — the user's Find Home (nothing else calls this) is counted in the dispatch as the user's park is.
-        var dispatch = BeginRestMotionDispatchOrRefuse("telescope.findhome", "home", motion, client);
+        var dispatch = MoveAdmission.Binds(MoveAsker.Person, MoveKind.Home, MoveRule.MotionOwner)
+            ? BeginRestMotionDispatchOrRefuse("telescope.findhome", "home", motion, client) : null;
         try {
             // #2066 — like a park, a Find Home ends any routine that drives the motors (Polar Align), and ends the leases: a
             // renewal it refuses must not leave a lease to run out and send MoveAxis 0 in the middle of the homing.
@@ -517,7 +585,7 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
                 });
             }, CancellationToken.None);
         } catch {
-            dispatch.Dispose();
+            dispatch?.Dispose();
             NoteMotionFailed(motion, client);
             throw;
         }
@@ -1173,8 +1241,11 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
             // #2066 (ARA-2) — the owner was checked when the GoTo or sync was accepted; Polar Align may have taken the
             // mount since (a GoTo waits up to 3 s for the guider to stop). Checked again and counted in one step with the
             // owner, so Polar Align cannot take the mount while this goes out, and it is dropped once Polar Align has it.
-            using var dispatch = TryBeginMotionDispatch(out var owner);
-            if (dispatch is null) {
+            // #2139 — where the person row binds the motion owner (a sync keeps its own check, as before).
+            string? owner = null;
+            using var dispatch = sync || MoveAdmission.Binds(MoveAsker.Person, MoveKind.Slew, MoveRule.MotionOwner)
+                ? TryBeginMotionDispatch(out owner) : null;
+            if (owner is not null) {
                 if (motion is long owned) {
                     NoteMotionFailed(owned, client); // #2066 — dropped: it moved nothing, so a kept-back second abort may go out
                 }

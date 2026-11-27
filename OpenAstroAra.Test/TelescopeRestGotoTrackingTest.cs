@@ -493,7 +493,7 @@ namespace OpenAstroAra.Test {
                         svc!.FenceMotion("user_request"); // a Stop Mount
                         // The sequencer's slew goes out before A's PUT returns: everything it reads first is cached, so it
                         // reaches its send synchronously; its PUT follows A's.
-                        slewB = svc.SlewToCoordinatesAsync(new Coordinates(Angle.ByHours(6.0), Angle.ByDegree(6.0), Epoch.J2000), CancellationToken.None);
+                        slewB = svc.SlewToCoordinatesAsync(new Coordinates(Angle.ByHours(6.0), Angle.ByDegree(6.0), Epoch.J2000), MoveAsker.Session, CancellationToken.None);
                     }
                     return null;
                 });
@@ -601,7 +601,7 @@ namespace OpenAstroAra.Test {
         // wait about 10 s). B's PUT waits for that abort, so the abort cannot stop B.
         [Test]
         public async Task A_sequencer_slew_still_in_its_checks_is_not_aborted_by_the_raced_GoTo() {
-            await using var race = await HeldChecksRace.StartAsync(svc => svc.SlewToCoordinatesAsync(SlewBTarget, CancellationToken.None));
+            await using var race = await HeldChecksRace.StartAsync(svc => svc.SlewToCoordinatesAsync(SlewBTarget, MoveAsker.Session, CancellationToken.None));
 
             var slewB = await race.RunAsync();
 
@@ -645,7 +645,7 @@ namespace OpenAstroAra.Test {
                 }
                 // A has decided to abort again and is about to send it: B starts now, and is given time to reach the mount
                 // first if nothing holds it back.
-                slewB = Task.Run(() => svc!.SlewToCoordinatesAsync(SlewBTarget, CancellationToken.None));
+                slewB = Task.Run(() => svc!.SlewToCoordinatesAsync(SlewBTarget, MoveAsker.Session, CancellationToken.None));
                 SpinWait.SpinUntil(() => box.Puts.Count(p => p.Path.EndsWith("/" + GotoVerb, StringComparison.Ordinal)) >= 2, TimeSpan.FromSeconds(1));
             };
             svc = await ConnectedAsync(box, log);
@@ -723,7 +723,7 @@ namespace OpenAstroAra.Test {
         // the user's stop.
         [Test]
         public async Task A_sequencer_slew_its_checks_refuse_still_leaves_the_raced_GoTo_aborted() {
-            await using var race = await HeldChecksRace.StartAsync(svc => svc.SlewToCoordinatesAsync(SlewBTarget, CancellationToken.None), systemReads: false);
+            await using var race = await HeldChecksRace.StartAsync(svc => svc.SlewToCoordinatesAsync(SlewBTarget, MoveAsker.Session, CancellationToken.None), systemReads: false);
 
             var slewB = await race.RunAsync();
 
@@ -756,8 +756,8 @@ namespace OpenAstroAra.Test {
                         svc!.FenceMotion("user_request"); // a Stop Mount
                         // The pose check is cached, so the move reaches its send synchronously; its PUT follows A's.
                         moveB = move == "park"
-                            ? svc.ParkTelescope(new Progress<ApplicationStatus>(), CancellationToken.None)
-                            : svc.FindHome(new Progress<ApplicationStatus>(), CancellationToken.None);
+                            ? svc.ParkTelescope(new Progress<ApplicationStatus>(), MoveAsker.Session, CancellationToken.None)
+                            : svc.FindHome(new Progress<ApplicationStatus>(), MoveAsker.Session, CancellationToken.None);
                     } else if (path.EndsWith("/" + move, StringComparison.Ordinal)) {
                         Volatile.Write(ref arrived, 1);
                     }
@@ -795,7 +795,7 @@ namespace OpenAstroAra.Test {
                     svc.PoseTrust.Observe(atHome: false, slewing: false, decDeg: 20.0, now + MountPoseTrust.QuietWindow + TimeSpan.FromSeconds(1));
                     // The refused park stops tracking first; that PUT queues behind A's, so the refusal settles the park
                     // after A's PUT returned and kept its second abort back for it.
-                    parkB = svc.ParkTelescope(new Progress<ApplicationStatus>(), CancellationToken.None);
+                    parkB = svc.ParkTelescope(new Progress<ApplicationStatus>(), MoveAsker.Session, CancellationToken.None);
                 } else if (path.EndsWith("/tracking", StringComparison.Ordinal)) {
                     Thread.Sleep(300); // the tracking-off write on the wire while A's return is handled
                 }

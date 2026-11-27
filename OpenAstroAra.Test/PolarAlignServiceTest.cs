@@ -180,8 +180,8 @@ namespace OpenAstroAra.Test {
             // The reported pointing follows slews, so the routine reads the mount's own RA turn.
             var position = new Coordinates(0.0, 85.0, Epoch.JNOW, Coordinates.RAType.Degrees);
             mount.Setup(m => m.GetCurrentPosition()).Returns(() => position);
-            mount.Setup(m => m.SlewToCoordinatesAsync(It.IsAny<Coordinates>(), It.IsAny<CancellationToken>()))
-                .Callback<Coordinates, CancellationToken>((target, _) => position = target)
+            mount.Setup(m => m.SlewToCoordinatesAsync(It.IsAny<Coordinates>(), It.IsAny<MoveAsker>(), It.IsAny<CancellationToken>()))
+                .Callback<Coordinates, MoveAsker, CancellationToken>((target, _, _) => position = target)
                 .ReturnsAsync(true);
             SimulateMotors(mount, () => position, c => position = c);
             mount.Setup(m => m.WaitForSlew(It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
@@ -432,8 +432,8 @@ namespace OpenAstroAra.Test {
 
             Assert.That(refusal!.Cause, Is.EqualTo(OpenAstroAra.Server.Contracts.Refusals.RefusalCatalog.MountPositionUnverified));
             Assert.That(fake.LeaseCalls, Is.Empty, "a refused start must not acquire the lease");
-            mount.Verify(m => m.FindHome(It.IsAny<IProgress<ApplicationStatus>>(), It.IsAny<CancellationToken>()), Times.Never);
-            mount.Verify(m => m.SlewToCoordinatesAsync(It.IsAny<Coordinates>(), It.IsAny<CancellationToken>()), Times.Never);
+            mount.Verify(m => m.FindHome(It.IsAny<IProgress<ApplicationStatus>>(), It.IsAny<MoveAsker>(), It.IsAny<CancellationToken>()), Times.Never);
+            mount.Verify(m => m.SlewToCoordinatesAsync(It.IsAny<Coordinates>(), It.IsAny<MoveAsker>(), It.IsAny<CancellationToken>()), Times.Never);
             mount.Verify(m => m.MoveAxis(It.IsAny<TelescopeAxes>(), It.IsAny<double>()), Times.Never);
         }
 
@@ -571,7 +571,7 @@ namespace OpenAstroAra.Test {
             Assert.That(status.CurrentErrorArcmin, Is.Not.Null.And.EqualTo(1.0).Within(0.2));
             Assert.That(status.FramesCaptured, Is.GreaterThanOrEqualTo(3), "all three seed frames captured");
 
-            mount.Verify(m => m.SlewToCoordinatesAsync(It.IsAny<Coordinates>(), It.IsAny<CancellationToken>()),
+            mount.Verify(m => m.SlewToCoordinatesAsync(It.IsAny<Coordinates>(), It.IsAny<MoveAsker>(), It.IsAny<CancellationToken>()),
                 Times.Never, "the seed turns with the RA motor, never a GoTo");
             mount.Verify(m => m.MoveAxis(TelescopeAxes.Primary, 0), Times.Exactly(2), "the seed performs exactly two RA turns");
             mount.Verify(m => m.MoveAxis(TelescopeAxes.Secondary, It.IsAny<double>()), Times.Never, "the Dec motor never runs off Home");
@@ -1221,8 +1221,8 @@ namespace OpenAstroAra.Test {
             // asks of a start (within 3° is refused).
             var position = new Coordinates(0.0, 85.0, Epoch.JNOW, Coordinates.RAType.Degrees);
             mount.Setup(m => m.GetCurrentPosition()).Returns(() => position);
-            mount.Setup(m => m.SlewToCoordinatesAsync(It.IsAny<Coordinates>(), It.IsAny<CancellationToken>()))
-                .Callback<Coordinates, CancellationToken>((target, _) => position = target)
+            mount.Setup(m => m.SlewToCoordinatesAsync(It.IsAny<Coordinates>(), It.IsAny<MoveAsker>(), It.IsAny<CancellationToken>()))
+                .Callback<Coordinates, MoveAsker, CancellationToken>((target, _, _) => position = target)
                 .ReturnsAsync(true);
             SimulateMotors(mount, () => position, c => position = c);
             var fake = NewFake();
@@ -1274,11 +1274,11 @@ namespace OpenAstroAra.Test {
             var position = new Coordinates(0.0, Math.CopySign(85.0, latitudeDeg), Epoch.JNOW, Coordinates.RAType.Degrees);
             var targets = new List<Coordinates>();
             mount.Setup(m => m.GetCurrentPosition()).Returns(() => position);
-            mount.Setup(m => m.SlewToCoordinatesAsync(It.IsAny<Coordinates>(), It.IsAny<CancellationToken>()))
-                .Callback<Coordinates, CancellationToken>((target, _) => { position = target; targets.Add(target); })
+            mount.Setup(m => m.SlewToCoordinatesAsync(It.IsAny<Coordinates>(), It.IsAny<MoveAsker>(), It.IsAny<CancellationToken>()))
+                .Callback<Coordinates, MoveAsker, CancellationToken>((target, _, _) => { position = target; targets.Add(target); })
                 .ReturnsAsync(true);
             var gotos = 0;
-            mount.Setup(m => m.SlewToCoordinatesAsync(It.IsAny<Coordinates>(), It.IsAny<CancellationToken>()))
+            mount.Setup(m => m.SlewToCoordinatesAsync(It.IsAny<Coordinates>(), It.IsAny<MoveAsker>(), It.IsAny<CancellationToken>()))
                 .Callback(() => gotos++).ReturnsAsync(true);
             SimulateMotors(mount, () => position, c => position = c, stopped: targets.Add);
             var seedC = Solved(Turn(camera, axis, 20.0));
@@ -1624,8 +1624,8 @@ namespace OpenAstroAra.Test {
             var position = new Coordinates(0.0, 85.0, Epoch.JNOW, Coordinates.RAType.Degrees);
             mount.Setup(m => m.GetCurrentPosition()).Returns(() => position);
             SimulateMotors(mount, () => position, c => position = c, stopped: _ => { lock (calls) { calls.Add("slew"); } });
-            mount.Setup(m => m.SlewToCoordinatesAsync(It.IsAny<Coordinates>(), It.IsAny<CancellationToken>()))
-                .Returns<Coordinates, CancellationToken>((target, _) => {
+            mount.Setup(m => m.SlewToCoordinatesAsync(It.IsAny<Coordinates>(), It.IsAny<MoveAsker>(), It.IsAny<CancellationToken>()))
+                .Returns<Coordinates, MoveAsker, CancellationToken>((target, _, _) => {
                     lock (calls) { calls.Add("slew"); }
                     if (parked) {
                         return Task.FromResult(false); // the mediator refuses a slew while parked
@@ -1705,8 +1705,8 @@ namespace OpenAstroAra.Test {
                 }
                 return position;
             });
-            mount.Setup(m => m.SlewToCoordinatesAsync(It.IsAny<Coordinates>(), It.IsAny<CancellationToken>()))
-                .Callback<Coordinates, CancellationToken>((target, _) => {
+            mount.Setup(m => m.SlewToCoordinatesAsync(It.IsAny<Coordinates>(), It.IsAny<MoveAsker>(), It.IsAny<CancellationToken>()))
+                .Callback<Coordinates, MoveAsker, CancellationToken>((target, _, _) => {
                     calls.Record($"slew tracking={state}");
                     position = target;
                 })
@@ -2408,8 +2408,8 @@ namespace OpenAstroAra.Test {
             });
             var position = new Coordinates(0.0, PoleMountDecDeg, Epoch.JNOW, Coordinates.RAType.Degrees);
             mount.Setup(m => m.GetCurrentPosition()).Returns(() => position);
-            mount.Setup(m => m.SlewToCoordinatesAsync(It.IsAny<Coordinates>(), It.IsAny<CancellationToken>())).ReturnsAsync(true);
-            mount.Setup(m => m.FindHome(It.IsAny<IProgress<ApplicationStatus>>(), It.IsAny<CancellationToken>())).ReturnsAsync(true);
+            mount.Setup(m => m.SlewToCoordinatesAsync(It.IsAny<Coordinates>(), It.IsAny<MoveAsker>(), It.IsAny<CancellationToken>())).ReturnsAsync(true);
+            mount.Setup(m => m.FindHome(It.IsAny<IProgress<ApplicationStatus>>(), It.IsAny<MoveAsker>(), It.IsAny<CancellationToken>())).ReturnsAsync(true);
             SimulateMotors(mount, () => position, c => position = c, stopped: c => motorStops?.Enqueue(c));
             mount.Setup(m => m.WaitForSlew(It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
             mount.Setup(m => m.SetTrackingEnabled(It.IsAny<bool>())).Returns((bool on) => {
@@ -2424,8 +2424,8 @@ namespace OpenAstroAra.Test {
 
         /// <summary>#2048 — the routine never sends the mount Home, never slews it and never unparks it.</summary>
         private static void NoHomeNoGoTo(Mock<ITelescopeMediator> mount) {
-            mount.Verify(m => m.FindHome(It.IsAny<IProgress<ApplicationStatus>>(), It.IsAny<CancellationToken>()), Times.Never, "no Find Home");
-            mount.Verify(m => m.SlewToCoordinatesAsync(It.IsAny<Coordinates>(), It.IsAny<CancellationToken>()), Times.Never, "no GoTo");
+            mount.Verify(m => m.FindHome(It.IsAny<IProgress<ApplicationStatus>>(), It.IsAny<MoveAsker>(), It.IsAny<CancellationToken>()), Times.Never, "no Find Home");
+            mount.Verify(m => m.SlewToCoordinatesAsync(It.IsAny<Coordinates>(), It.IsAny<MoveAsker>(), It.IsAny<CancellationToken>()), Times.Never, "no GoTo");
             mount.Verify(m => m.UnparkTelescope(It.IsAny<IProgress<ApplicationStatus>>(), It.IsAny<CancellationToken>()), Times.Never, "no unpark");
         }
 

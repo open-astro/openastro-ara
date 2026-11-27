@@ -89,7 +89,7 @@ namespace OpenAstroAra.Test {
             telescope.Setup(t => t.GetInfo()).Returns(new TelescopeInfo {
                 Connected = true, CanPark = true, AtPark = false, TrackingEnabled = true,
             });
-            telescope.Setup(t => t.ParkTelescope(It.IsAny<IProgress<ApplicationStatus>>(), It.IsAny<CancellationToken>()))
+            telescope.Setup(t => t.ParkTelescope(It.IsAny<IProgress<ApplicationStatus>>(), It.IsAny<MoveAsker>(), It.IsAny<CancellationToken>()))
                 .ReturnsAsync(true);
 
             coolerCalls = new List<(bool, double?)>();
@@ -162,7 +162,7 @@ namespace OpenAstroAra.Test {
                 "the summary notification marks the ladder's completion");
 
             guider.Verify(g => g.StopGuiding(It.IsAny<CancellationToken>()), Times.Once);
-            telescope.Verify(t => t.ParkTelescope(It.IsAny<IProgress<ApplicationStatus>>(), It.IsAny<CancellationToken>()), Times.Once);
+            telescope.Verify(t => t.ParkTelescope(It.IsAny<IProgress<ApplicationStatus>>(), It.IsAny<MoveAsker>(), It.IsAny<CancellationToken>()), Times.Once);
             filterWheel.Verify(f => f.DisconnectAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Once);
             focuser.Verify(f => f.DisconnectAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Once);
             rotator.Verify(f => f.DisconnectAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Once);
@@ -365,7 +365,7 @@ namespace OpenAstroAra.Test {
             sut.NotifyRunPausedAwaitingUser(SeqId, RunId);
             await WaitUntilAsync(() => { lock (published) return published.Count > 0; }, "ladder completes");
 
-            telescope.Verify(t => t.ParkTelescope(It.IsAny<IProgress<ApplicationStatus>>(), It.IsAny<CancellationToken>()), Times.Never);
+            telescope.Verify(t => t.ParkTelescope(It.IsAny<IProgress<ApplicationStatus>>(), It.IsAny<MoveAsker>(), It.IsAny<CancellationToken>()), Times.Never);
             telescope.Verify(t => t.SetTrackingEnabled(false), Times.Once);
             Assert.That(published[0].Message, Does.Contain("tracking stopped"));
         }
@@ -375,7 +375,7 @@ namespace OpenAstroAra.Test {
             // r1 — the 90 s park cap fires as an OperationCanceledException, not
             // a false return; the fallback must still run (a tracking,
             // unattended mount is the exact outcome this feature prevents).
-            telescope.Setup(t => t.ParkTelescope(It.IsAny<IProgress<ApplicationStatus>>(), It.IsAny<CancellationToken>()))
+            telescope.Setup(t => t.ParkTelescope(It.IsAny<IProgress<ApplicationStatus>>(), It.IsAny<MoveAsker>(), It.IsAny<CancellationToken>()))
                 .ThrowsAsync(new OperationCanceledException("park timed out"));
             using var sut = CreateSUT();
             sut.NotifyRunPausedAwaitingUser(SeqId, RunId);
@@ -395,7 +395,7 @@ namespace OpenAstroAra.Test {
             sut.NotifyRunPausedAwaitingUser(SeqId, RunId);
             await WaitUntilAsync(() => { lock (published) return published.Count > 0; }, "ladder completes");
 
-            telescope.Verify(t => t.ParkTelescope(It.IsAny<IProgress<ApplicationStatus>>(), It.IsAny<CancellationToken>()), Times.Never);
+            telescope.Verify(t => t.ParkTelescope(It.IsAny<IProgress<ApplicationStatus>>(), It.IsAny<MoveAsker>(), It.IsAny<CancellationToken>()), Times.Never);
             telescope.Verify(t => t.SetTrackingEnabled(false), Times.Once);
             Assert.That(published[0].Message, Does.Contain("tracking stop attempted"));
         }
